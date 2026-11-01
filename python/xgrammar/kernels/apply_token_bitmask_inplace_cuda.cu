@@ -21,6 +21,8 @@
 #include <cuda_runtime.h>
 #include <torch/extension.h>
 #include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
+#include <c10/cuda/CUDAException.h>
 // clang-format on
 
 #ifndef CUDART_INF_FP16
@@ -96,6 +98,16 @@ __global__ void __launch_bounds__(THREADS_PER_THREAD_BLOCK) LogitsBitmaskKernel(
       continue;
     }
 
+    if (block_offset + offset + kAlignment > vocab_size) {
+#pragma unroll
+      for (int i = 0; i < kAlignment; i++) {
+        if (block_offset + offset + i < vocab_size && ((bitmask_val >> i) & 1)) {
+          logits_gmem_ptr[offset + i] = NegativeInfinity<T>();
+        }
+      }
+      continue;
+    }
+
     if (bitmask_val == kPackedMask) {
       *reinterpret_cast<PackedT*>(logits_gmem_ptr + offset) = PackedNegativeInfinity<T, PackedT>();
       continue;
@@ -127,6 +139,9 @@ void ApplyTokenBitmaskInplaceDispatchToBitsPerThread(
     int32_t bitmask_stride,
     int32_t num_rows
 ) {
+  if (num_rows == 0 || vocab_size == 0) {
+    return;
+  }
   constexpr int kAlignment = sizeof(PackedT) / sizeof(T);
   const int32_t num_blocks_per_row = CeilDiv(2048 / THREADS_PER_THREAD_BLOCK * 128, num_rows);
   const int32_t num_bits_per_thread =
@@ -156,6 +171,7 @@ void ApplyTokenBitmaskInplaceDispatchToBitsPerThread(
         logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride
     );
   }
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 template <typename T>
@@ -168,7 +184,8 @@ void ApplyTokenBitmaskInplaceDispatchToPackedT(
     int32_t bitmask_stride,
     int32_t num_rows
 ) {
-  if (logits_stride % (sizeof(float4) / sizeof(T)) == 0) {
+  if (reinterpret_cast<uintptr_t>(logits) % alignof(float4) == 0 &&
+      logits_stride % (sizeof(float4) / sizeof(T)) == 0) {
     ApplyTokenBitmaskInplaceDispatchToBitsPerThread<T, float4>(
         logits, bitmask, indices, vocab_size, logits_stride, bitmask_stride, num_rows
     );
@@ -180,9 +197,13 @@ void ApplyTokenBitmaskInplaceDispatchToPackedT(
 }
 
 void ApplyTokenBitmaskInplace(
-    at::Tensor logits, at::Tensor bitmask, at::optional<at::Tensor> indices = at::nullopt
+    at::Tensor logits,
+    at::Tensor bitmask,
+    at::optional<at::Tensor> indices = at::nullopt,
+    at::optional<int64_t> vocab_size = at::nullopt
 ) {
   TORCH_CHECK(logits.is_cuda(), "logits must be a CUDA tensor.");
+  const c10::cuda::CUDAGuard device_guard(logits.device());
   TORCH_CHECK(logits.dim() == 1 || logits.dim() == 2, "logits must be a 1D or 2D tensor.");
   std::pair<int32_t, int32_t> logits_shape =
       logits.dim() == 2
@@ -192,6 +213,9 @@ void ApplyTokenBitmaskInplace(
           : std::make_pair(1, static_cast<int32_t>(logits.size(0)));
 
   TORCH_CHECK(bitmask.is_cuda(), "bitmask must be a CUDA tensor.");
+  TORCH_CHECK(
+      bitmask.device() == logits.device(), "logits and bitmask must be on the same device."
+  );
   TORCH_CHECK(bitmask.dim() == 1 || bitmask.dim() == 2, "bitmask must be a 1D or 2D tensor.");
   std::pair<int32_t, int32_t> bitmask_shape =
       bitmask.dim() == 2
@@ -202,24 +226,25 @@ void ApplyTokenBitmaskInplace(
 
   TORCH_CHECK(bitmask.dtype() == torch::kInt32, "bitmask must be of type int32.");
 
+  TORCH_CHECK(logits.stride(-1) == 1, "logits's last dimension must have stride 1");
+  TORCH_CHECK(bitmask.stride(-1) == 1, "bitmask's last dimension must have stride 1");
+
+  const int64_t detected_vocab_size =
+      std::min<int64_t>(logits_shape.second, int64_t(bitmask_shape.second) * BITS_PER_BLOCK);
+  const int64_t logical_vocab_size = vocab_size.value_or(detected_vocab_size);
   TORCH_CHECK(
-      (logits_shape.second + BITS_PER_BLOCK - 1) / BITS_PER_BLOCK >= bitmask_shape.second,
-      "The provided logits's vocab size should be no less than the bitmask's vocab size "
-      "(converted from bitmask size). But got vocab size ",
-      logits_shape.second,
-      " vs bitmask size ",
-      bitmask_shape.second
+      logical_vocab_size >= 0 && logical_vocab_size <= detected_vocab_size,
+      "vocab_size must be between 0 and ",
+      detected_vocab_size,
+      ", but got ",
+      logical_vocab_size
   );
-
-  TORCH_CHECK(logits.dim() == 1 or logits.stride(1) == 1, "logits's stride(1) must be 1");
-  TORCH_CHECK(bitmask.dim() == 1 or bitmask.stride(1) == 1, "bitmask's stride(1) must be 1");
-
-  int vocab_size = std::min(logits_shape.second, bitmask_shape.second * BITS_PER_BLOCK);
 
   int32_t num_rows = logits_shape.first;
   int32_t* indices_ptr = nullptr;
   if (indices) {
     TORCH_CHECK(indices->is_cuda(), "indices must be a CUDA tensor.");
+    TORCH_CHECK(indices->device() == logits.device(), "indices must be on the logits device.");
     TORCH_CHECK(indices->is_contiguous(), "indices must be contiguous.");
     TORCH_CHECK(indices->dim() == 1, "indices must be a 1D tensor.");
     TORCH_CHECK(indices->dtype() == torch::kInt32, "indices must be of type int32.");
@@ -238,7 +263,7 @@ void ApplyTokenBitmaskInplace(
           logits.data_ptr<float>(),
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
-          vocab_size,
+          logical_vocab_size,
           logits.stride(0),
           bitmask.stride(0),
           num_rows
@@ -250,7 +275,7 @@ void ApplyTokenBitmaskInplace(
           reinterpret_cast<__half*>(logits.data_ptr<torch::Half>()),
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
-          vocab_size,
+          logical_vocab_size,
           logits.stride(0),
           bitmask.stride(0),
           num_rows
@@ -262,7 +287,7 @@ void ApplyTokenBitmaskInplace(
           reinterpret_cast<__nv_bfloat16*>(logits.data_ptr<torch::BFloat16>()),
           bitmask.data_ptr<int32_t>(),
           indices_ptr,
-          vocab_size,
+          logical_vocab_size,
           logits.stride(0),
           bitmask.stride(0),
           num_rows
@@ -277,7 +302,8 @@ void ApplyTokenBitmaskInplace(
 
 TORCH_LIBRARY_FRAGMENT(TORCH_EXTENSION_NAME, m) {
   m.def(
-      "apply_token_bitmask_inplace_cuda(Tensor logits, Tensor bitmask, Tensor? indices=None) -> ()"
+      "apply_token_bitmask_inplace_cuda(Tensor(a!) logits, Tensor bitmask, Tensor? indices=None, "
+      "int? vocab_size=None) -> ()"
   );
 }
 
