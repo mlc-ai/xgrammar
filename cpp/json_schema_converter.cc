@@ -1213,7 +1213,11 @@ Result<NullSpec, SchemaError> SchemaParser::ParseNull(const picojson::object&) {
 }
 
 Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "minContains", "maxContains"});
+  WarnUnsupportedKeywords(schema, {"uniqueItems"});
+  // "maxContains" without "contains" has no effect (draft 2020-12).
+  if (!schema.count("contains")) {
+    WarnUnsupportedKeywords(schema, {"maxContains"});
+  }
   ArraySpec spec;
 
   if (schema.count("prefixItems")) {
@@ -1296,6 +1300,59 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
       );
     }
     spec.max_items = schema.at("maxItems").get<int64_t>();
+  }
+  if (schema.count("contains")) {
+    auto contains_value = schema.at("contains");
+    if (!contains_value.is<picojson::object>() && !contains_value.is<bool>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kInvalidSchema, "contains must be an object or a boolean"
+      );
+    }
+    if (contains_value.is<bool>() && !contains_value.get<bool>()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "contains: false requires that no element matches, which is not supported"
+      );
+    }
+    if (schema.count("maxContains")) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "maxContains together with contains is not yet supported"
+      );
+    }
+    if (!spec.prefix_items.empty()) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "contains together with prefixItems is not yet supported"
+      );
+    }
+    if (spec.max_items != -1) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema, "contains together with maxItems is not yet supported"
+      );
+    }
+    if (!spec.allow_additional_items || spec.max_items == 0) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsatisfiableSchema,
+          "contains has no element position to match in this array schema"
+      );
+    }
+    // minContains: 0 makes "contains" optional (draft 2020-12); treat it as absent.
+    int64_t min_contains = schema.count("minContains") ? schema.at("minContains").get<int64_t>() : 1;
+    if (min_contains >= 1) {
+      constexpr int64_t kMaxMinContains = 128;
+      if (min_contains > kMaxMinContains) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsupportedSchema,
+            "minContains must not exceed " + std::to_string(kMaxMinContains) +
+                " when contains is present"
+        );
+      }
+      auto contains_result = Parse(contains_value, "contains");
+      if (contains_result.IsErr()) return ResultErr(std::move(contains_result).UnwrapErr());
+      spec.contains = std::move(contains_result).Unwrap();
+      spec.min_contains = min_contains;
+    }
   }
   // Item counts become int32 repetition bounds, see ParseString for the rationale.
   constexpr int64_t kMaxBound = std::numeric_limits<int32_t>::max();
@@ -2810,6 +2867,10 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
   if (spec.allow_additional_items && spec.additional_items) {
     additional_rule_id = CreateRule(spec.additional_items, rule_name + "_additional");
   }
+  int32_t contains_rule_id = -1;
+  if (spec.contains) {
+    contains_rule_id = CreateRule(spec.contains, rule_name + "_contains");
+  }
   indent_manager_.EndIndent();
 
   int32_t left_bracket = ByteString("[");
@@ -2821,6 +2882,55 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
       return empty_array;
     }
     int32_t additional = RuleRef(additional_rule_id);
+    if (spec.contains) {
+      // req_j: an element sequence still needing j contains-matches. Each element
+      // is any item (need unchanged) or a contains item (need decreases).
+      int32_t k = static_cast<int32_t>(spec.min_contains);
+      int32_t contains_item = RuleRef(contains_rule_id);
+      int64_t remaining_min = std::max(int64_t{0}, spec.min_items - spec.min_contains);
+      std::vector<int32_t> req0_options;
+      req0_options.push_back(Empty());
+      req0_options.push_back(Sequence(
+          {additional,
+           Repeat(
+               rule_name + "_req0_tail",
+               Sequence({middle_separator, additional}),
+               0,
+               -1
+           )}
+      ));
+      int32_t req0_rule = builder_.AddEmptyRuleWithHint(rule_name + "_req0");
+      builder_.UpdateRuleBody(req0_rule, Choice(req0_options));
+      std::vector<int32_t> req(static_cast<size_t>(k) + 1);
+      req[0] = req0_rule;
+      for (int32_t j = 1; j <= k; ++j) {
+        req[static_cast<size_t>(j)] =
+            builder_.AddEmptyRuleWithHint(rule_name + "_req" + std::to_string(j));
+      }
+      for (int32_t j = 1; j <= k; ++j) {
+        std::vector<int32_t> branches;
+        branches.push_back(Sequence({additional, middle_separator, RuleRef(req[static_cast<size_t>(j)])}));
+        branches.push_back(
+            Sequence({contains_item, middle_separator, RuleRef(req[static_cast<size_t>(j - 1)])})
+        );
+        if (j == 1) {
+          branches.push_back(contains_item);
+        }
+        builder_.UpdateRuleBody(req[static_cast<size_t>(j)], Choice(branches));
+      }
+      int32_t rest = remaining_min == 0
+                         ? Empty()
+                         : Repeat(
+                               rule_name + "_rest",
+                               Sequence({middle_separator, additional}),
+                               static_cast<int32_t>(remaining_min),
+                               -1
+                           );
+      return Sequence(
+          {left_bracket, start_separator, RuleRef(req[static_cast<size_t>(k)]), rest,
+           end_separator, right_bracket}
+      );
+    }
     int32_t tail = Repeat(
         rule_name + "_items",
         Sequence({middle_separator, additional}),
