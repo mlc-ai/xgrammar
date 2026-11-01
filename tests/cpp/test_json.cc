@@ -5,6 +5,9 @@
 #include <string>
 #include <vector>
 
+#include "support/logging.h"
+#include "test_utils.h"
+
 namespace xgrammar {
 namespace {
 
@@ -50,6 +53,42 @@ TEST(JSONTest, JSONSchemaCarriageReturnWhitespaceModes) {
   );
   EXPECT_TRUE(MatchesEntireString(capped, "{\r\n\"value\"\r:\t3\n\r}"));
   EXPECT_FALSE(MatchesEntireString(capped, "{\r\n\r\"value\": 3}"));
+}
+
+TEST(JSONTest, JSONSchemaNumberMultipleOf) {
+  // type:number + multipleOf must be enforced (or rejected at compile time when the
+  // combination is unsupported), never silently dropped (issue #996, number row).
+  GrammarCompiler compiler(TokenizerInfo(std::vector<std::string>{}), 1, false);
+
+  // Unbounded number with an integer divisor: enforce divisibility.
+  constexpr const char* kSchema = R"({"type": "number", "multipleOf": 2})";
+  auto compiled = compiler.CompileJSONSchema(kSchema);
+  EXPECT_TRUE(MatchesEntireString(compiled, "4"));
+  EXPECT_TRUE(MatchesEntireString(compiled, "0"));
+  EXPECT_TRUE(MatchesEntireString(compiled, "-6"));
+  EXPECT_TRUE(MatchesEntireString(compiled, "4.0"));
+  EXPECT_TRUE(MatchesEntireString(compiled, "4.00"));
+  EXPECT_FALSE(MatchesEntireString(compiled, "3"));
+  EXPECT_FALSE(MatchesEntireString(compiled, "4.5"));
+  EXPECT_FALSE(MatchesEntireString(compiled, "-3"));
+  EXPECT_FALSE(MatchesEntireString(compiled, "4."));
+
+  // number without multipleOf keeps the full number grammar (incl. exponents).
+  constexpr const char* kPlain = R"({"type": "number"})";
+  auto plain = compiler.CompileJSONSchema(kPlain);
+  EXPECT_TRUE(MatchesEntireString(plain, "3"));
+  EXPECT_TRUE(MatchesEntireString(plain, "4.5"));
+  EXPECT_TRUE(MatchesEntireString(plain, "1e3"));
+
+  // Unsupported combinations fail closed instead of dropping the constraint.
+  constexpr const char* kWithBounds = R"({"type": "number", "multipleOf": 2, "minimum": 0})";
+  XGRAMMAR_EXPECT_THROW(compiler.CompileJSONSchema(kWithBounds), LogFatalError, "multipleOf");
+
+  constexpr const char* kFractional = R"({"type": "number", "multipleOf": 0.5})";
+  XGRAMMAR_EXPECT_THROW(compiler.CompileJSONSchema(kFractional), LogFatalError, "multipleOf");
+
+  constexpr const char* kTooLarge = R"({"type": "number", "multipleOf": 2000})";
+  XGRAMMAR_EXPECT_THROW(compiler.CompileJSONSchema(kTooLarge), LogFatalError, "multipleOf");
 }
 
 }  // namespace

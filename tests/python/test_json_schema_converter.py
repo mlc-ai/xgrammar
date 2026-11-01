@@ -634,14 +634,28 @@ def test_integer_multiple_of(
 
 
 @pytest.mark.parametrize(
+    "schema, accepted_instances, rejected_instances",
+    [
+        ({"type": "number", "multipleOf": 2}, [2, 0, -4, 4.0, 4.00], [3, 4.5, -3]),
+        ({"type": "number", "multipleOf": 1}, [0, 1, -1, 2.0], [1.5]),
+        ({"type": "number", "multipleOf": 7}, [0, 7, -21, 14.0], [8, 7.5]),
+        ({"type": "number"}, [3, 4.5], []),
+    ],
+)
+def test_number_multiple_of(
+    schema: Dict[str, Any],
+    accepted_instances: List[Union[int, float]],
+    rejected_instances: List[Union[int, float]],
+):
+    for instance in accepted_instances:
+        check_schema_with_instance(schema, instance, is_accepted=True)
+    for instance in rejected_instances:
+        check_schema_with_instance(schema, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize(
     "schema, warning_message, accepted_instances, rejected_instances",
     [
-        (
-            {"type": "number", "multipleOf": 2},
-            "multipleOf is not supported for type:number; ignoring multipleOf",
-            [3, 5.5],
-            [],
-        ),
         (
             {"type": "integer", "multipleOf": 2.5},
             "multipleOf for type:integer must be an integer; ignoring multipleOf",
@@ -691,6 +705,18 @@ def test_multiple_of_unsupported_warns_and_ignores(
         ({"type": "integer", "multipleOf": -2}, "multipleOf must be greater than 0"),
         ({"type": "number", "multipleOf": "x"}, "Value must be a number"),
         ({"type": "number", "multipleOf": 0}, "multipleOf must be greater than 0"),
+        (
+            {"type": "number", "multipleOf": 2, "minimum": 0},
+            "multipleOf for type:number is not yet supported together with",
+        ),
+        (
+            {"type": "number", "multipleOf": 0.5},
+            "multipleOf for type:number is only supported for integer divisors",
+        ),
+        (
+            {"type": "number", "multipleOf": 2000},
+            "multipleOf for type:number is only supported for integer divisors",
+        ),
         (
             {"type": "integer", "minimum": 5, "maximum": 6, "multipleOf": 7},
             "range contains no multipleOf value",
