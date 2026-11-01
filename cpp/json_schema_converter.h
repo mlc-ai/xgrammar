@@ -80,6 +80,8 @@ struct ArraySpec {
   SchemaSpecPtr additional_items;  // nullptr means not allowed
   int64_t min_items = 0;
   int64_t max_items = -1;  // -1 means no limit
+  SchemaSpecPtr contains;
+  int64_t min_contains = 0;  // 0: no "contains"; otherwise at least 1 (draft 2020-12)
 
   std::string ToString() const;
 };
