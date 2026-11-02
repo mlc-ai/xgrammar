@@ -541,7 +541,7 @@ class JSONSchemaConverter {
   // Trie over property names, for key patterns that exclude specific properties
   struct TrieNode {
     bool is_terminal = false;
-    std::map<uint8_t, TrieNode> children;
+    std::map<int32_t, TrieNode> children;  // Keyed by codepoint.
   };
   int32_t BuildTrieBody(const TrieNode& node, const std::string& rule_name);
 

@@ -33,6 +33,7 @@
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
+#include "support/encoding.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
 
@@ -2221,9 +2222,8 @@ int32_t JSONSchemaConverter::BuildTrieBody(const TrieNode& node, const std::stri
   );
   choices.push_back(Sequence({ByteString("\\"), RuleRef(kBasicEscape), RuleRef(kBasicStringSub)}));
   for (const auto& [character, child] : node.children) {
-    choices.push_back(Sequence(
-        {ByteString(std::string(1, static_cast<char>(character))), BuildTrieBody(child, rule_name)}
-    ));
+    choices.push_back(Sequence({ByteString(CharToUTF8(character)), BuildTrieBody(child, rule_name)})
+    );
   }
   return Choice(choices);
 }
@@ -2251,7 +2251,9 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
   TrieNode root;
   for (const auto& prop : properties) {
     TrieNode* cur = &root;
-    for (unsigned char c : prop.name) {
+    // Key the trie by codepoint: BuildTrieBody excludes the children from a character class, whose
+    // members are codepoints, so a UTF-8 lead byte would exclude an unrelated Latin-1 character.
+    for (TCodepoint c : ParseUTF8(prop.name.c_str(), true)) {
       cur = &cur->children[c];
     }
     cur->is_terminal = true;
