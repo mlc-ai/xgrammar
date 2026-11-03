@@ -1252,7 +1252,12 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
           "contains: false requires that no element match, which is not supported"
       );
     }
-    spec.min_items = std::max(spec.min_items, static_cast<int64_t>(1));
+    // 'contains' defaults minContains to 1. An explicit minContains (including
+    // 0, which empties are allowed to satisfy) overrides that default and is
+    // applied above; only synthesize the default when the keyword is absent.
+    if (!schema.count("minContains")) {
+      spec.min_items = std::max(spec.min_items, static_cast<int64_t>(1));
+    }
   }
   if (schema.count("maxItems")) {
     if (!schema.at("maxItems").is<int64_t>() || schema.at("maxItems").get<int64_t>() < 0) {

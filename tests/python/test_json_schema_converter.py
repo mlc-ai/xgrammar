@@ -3227,6 +3227,15 @@ def test_contains_implies_min_one_non_strict():
     check_schema_with_instance(schema, "[1, 2]", is_accepted=True, strict_mode=False)
 
 
+def test_contains_with_explicit_min_contains_zero():
+    # Explicit minContains overrides the implicit minContains=1 that 'contains'
+    # carries: minContains=0 means no element is required to match, so [] is
+    # valid even though the schema carries 'contains'.
+    schema = {"type": "array", "contains": {"type": "integer"}, "minContains": 0}
+    check_schema_with_instance(schema, "[]", is_accepted=True, strict_mode=False)
+    check_schema_with_instance(schema, "[1]", is_accepted=True, strict_mode=False)
+
+
 def test_contains_strict_mode_raises_instead_of_only_empty():
     # Regression for issue #833: strict mode (unevaluatedItems=false) cannot
     # satisfy a bare 'contains' on a shapeless array; it must raise the
