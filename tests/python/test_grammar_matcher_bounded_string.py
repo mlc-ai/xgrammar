@@ -513,6 +513,7 @@ def _mask_seconds_per_token(compiled: xgr.CompiledGrammar, info, token_ids: list
     return best
 
 
+@pytest.mark.thread_unsafe(reason="timing: concurrent copies of the test skew the ratio")
 @pytest.mark.parametrize("max_length", [200, 8000])
 def test_bounded_string_with_escapes_costs_about_an_unbounded_string(max_length: int) -> None:
     """Allowing escapes must not push a bounded string off the counted fast path.
