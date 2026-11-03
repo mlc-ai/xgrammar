@@ -2436,12 +2436,15 @@ int32_t JSONSchemaConverter::ExcludingString(
     const std::string& regex,
     const std::string& rule_name,
     bool close_json_string,
-    const std::vector<std::string>& excluded_keys
+    const std::vector<std::string>& excluded_keys,
+    const std::vector<std::string>& additional_excludes
 ) {
   auto parsed = GrammarFSMBuilder::Regex(regex, false);
   XGRAMMAR_CHECK(parsed.IsOk()) << "Cannot build the FSM of " << regex << ": "
                                 << std::move(parsed).UnwrapErr().what();
-  auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, excludes_});
+  auto excludes = excludes_;
+  excludes.insert(excludes.end(), additional_excludes.begin(), additional_excludes.end());
+  auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, std::move(excludes)});
   XGRAMMAR_CHECK(exclusion.has_value()) << "Invalid JSONSchemaFormat.excludes";
   auto intersected = FSMWithStartEnd::Intersect(std::move(parsed).Unwrap(), *exclusion);
   XGRAMMAR_CHECK(intersected.IsOk()) << "Cannot intersect JSONSchemaFormat.excludes: "
@@ -2594,7 +2597,8 @@ int32_t JSONSchemaConverter::ExcludingString(
       bool single_ascii = codepoints.size() == 1 && codepoints[0].lower == codepoints[0].upper &&
                           codepoints[0].upper <= 0x7f;
       // Keep self-loops local for the compiler's speculative string-mask fast path.
-      if (!excluded_keys.empty() && !single_ascii && target != state) {
+      if ((!excluded_keys.empty() || !additional_excludes.empty()) && !single_ascii &&
+          target != state) {
         std::vector<int32_t> key{target};
         key.reserve(1 + codepoints.size() * 2);
         for (const auto& range : codepoints) {
@@ -3948,7 +3952,24 @@ void XMLToolCallingConverter::AddBasicRules() {
   builder_.UpdateRuleBody(kXMLObject, GenerateObject(xml_object_spec, kXMLObject));
   AddCache(kObjectCacheKey, builder_.GetRuleId(kXMLObject));
 
-  // Add XML variable name rule
+  // DSML parameter names are raw quoted attributes, not ASCII identifiers. Keep protocol
+  // markers out of dynamic names: decoders may interpret them as structure even inside an
+  // attribute. These exclusions are key-specific and must not constrain argument values.
+  if (json_format_ == JSONFormat::kDeepSeekXML || json_format_ == JSONFormat::kDeepSeekV41XML) {
+    builder_.UpdateRuleBody(
+        kXMLVariableName,
+        ExcludingString(
+            "[^\"\\x00-\\x1f\\x7f]+",
+            kXMLVariableName,
+            false,
+            {},
+            {"<｜", "</｜", "<think>", "</think>"}
+        )
+    );
+    return;
+  }
+
+  // Preserve the identifier contract of the other XML dialects.
   builder_.UpdateRuleBody(
       kXMLVariableName,
       !excludes_.empty()

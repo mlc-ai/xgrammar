@@ -443,16 +443,16 @@ class JSONSchemaConverter {
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
   /*!
-   * \brief Rules matching the regex (one of the converter's own ASCII string bodies) minus
-   * every string containing one of excludes_, and minus excluded_keys as whole strings. With
-   * close_json_string the closing quote is appended after the filtering, so it is never part of
-   * an exclusion.
+   * \brief Rules matching the regex minus every string containing one of excludes_ or
+   * additional_excludes, and minus excluded_keys as whole strings. With close_json_string the
+   * closing quote is appended after the filtering, so it is never part of an exclusion.
    */
   int32_t ExcludingString(
       const std::string& regex,
       const std::string& rule_name,
       bool close_json_string,
-      const std::vector<std::string>& excluded_keys = {}
+      const std::vector<std::string>& excluded_keys = {},
+      const std::vector<std::string>& additional_excludes = {}
   );
   bool IsAllowedString(const std::string& text) const;
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
