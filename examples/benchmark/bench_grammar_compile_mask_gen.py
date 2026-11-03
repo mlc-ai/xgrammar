@@ -35,7 +35,7 @@ def xgrammar_exec(
 ):
     # Logits processing
     matcher.fill_next_token_bitmask(bitmask)
-    xgr.apply_token_bitmask_inplace(logits, bitmask)
+    xgr.apply_token_bitmask_inplace(logits, bitmask.to(logits.device))
     # Update state
     assert matcher.accept_token(token_id)
     return
@@ -140,7 +140,7 @@ if __name__ == "__main__":
             try:
                 if backend == "xgrammar":
                     worker = xgrammar_build(schema, xgrammar_grammar_compiler)
-                    bitmask = xgr.allocate_token_bitmask(worker.vocab_size)
+                    bitmask = xgr.allocate_token_bitmask(1, vocab_size)
                 elif backend == "outlines":
                     worker = outlines_build(schema, outlines_tokenizer)
                 elif backend == "lmformatenforcer":

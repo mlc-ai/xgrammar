@@ -1151,7 +1151,12 @@ EBNFParser::MacroIR::NodePtr EBNFParser::ParseMacroValue() {
     Consume();
     return std::make_unique<MacroIR::Node>(MacroIR::IdentifierNode{name});
   } else if (Peek().type == TokenType::LParen) {
-    // Tuple value
+    // Tuple value. Nested tuples recurse once per layer, so guard the depth the same way the
+    // ordinary parenthesis path does to avoid a stack overflow on deeply nested input.
+    nest_layer_guard_++;
+    if (nest_layer_guard_ > max_nest_layer_) {
+      ReportParseError("Nest layer exceeded the maximum limit", -1);
+    }
     Consume();  // Consume (
 
     MacroIR::TupleNode tuple;
@@ -1175,6 +1180,7 @@ EBNFParser::MacroIR::NodePtr EBNFParser::ParseMacroValue() {
     }
 
     Consume();  // Consume )
+    nest_layer_guard_--;
     return std::make_unique<MacroIR::Node>(std::move(tuple));
   } else {
     ReportParseError("Expect string, integer, boolean, or tuple in macro argument");

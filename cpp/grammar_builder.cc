@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <utility>
 #include <vector>
@@ -55,6 +56,11 @@ Grammar GrammarBuilder::Get(int32_t root_rule_id) {
 }
 
 int32_t GrammarBuilder::AddGrammarExpr(const GrammarExpr& grammar_expr) {
+  // Offsets into grammar_expr_data_ are stored as int32.
+  XGRAMMAR_CHECK(
+      grammar_->grammar_expr_data_.size() + 2 + grammar_expr.data_len <=
+      static_cast<size_t>(std::numeric_limits<int32_t>::max())
+  ) << "The grammar is too large: the grammar expr data exceeds 2^31 elements";
   grammar_->grammar_expr_indptr_.push_back(grammar_->grammar_expr_data_.size());
   grammar_->grammar_expr_data_.push_back(static_cast<int32_t>(grammar_expr.type));
   grammar_->grammar_expr_data_.push_back(grammar_expr.data_len);

@@ -22,6 +22,7 @@
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
+#include "../support/encoding.h"
 #include "../support/utils.h"
 #include "../testing.h"
 #include "python_methods.h"
@@ -174,6 +175,30 @@ class GrammarObj : public ffi::Object {
   TVM_FFI_DECLARE_OBJECT_INFO_FINAL("xgrammar.tvm_ffi_binding.Grammar", GrammarObj, ffi::Object);
 };
 
+static std::vector<NamedGrammar> NamedGrammarsFromViews(
+    ffi::AnyView names_view, ffi::AnyView values_view
+) {
+  auto names = names_view.cast<ffi::Array<ffi::Any>>();
+  auto values = values_view.cast<ffi::Array<ffi::Any>>();
+  if (names.size() != values.size()) {
+    throw XGrammarError("Named grammar names and values must have the same length");
+  }
+  std::vector<NamedGrammar> named_grammars;
+  named_grammars.reserve(static_cast<size_t>(names.size()));
+  for (int64_t i = 0; i < static_cast<int64_t>(names.size()); ++i) {
+    std::string name = names[i].cast<ffi::String>();
+    ffi::AnyView value = values[i];
+    if (const auto* grammar_obj = value.as<GrammarObj>()) {
+      named_grammars.push_back({std::move(name), grammar_obj->value});
+    } else if (value.as<ffi::String>()) {
+      named_grammars.push_back({std::move(name), std::string(value.cast<ffi::String>())});
+    } else {
+      throw XGrammarError("Named grammar values must be Grammar or Lark strings");
+    }
+  }
+  return named_grammars;
+}
+
 class CompiledGrammarObj : public ffi::Object {
  public:
   CompiledGrammar value;
@@ -196,13 +221,15 @@ class GrammarCompilerObj : public ffi::Object {
       ffi::ObjectRef tokenizer_ref,
       int64_t max_threads,
       bool cache_enabled,
-      int64_t max_memory_bytes
+      int64_t max_memory_bytes,
+      bool enable_dynamic_compilation = false
   )
       : value(
             tokenizer_ref.as<TokenizerInfoObj>()->value,
             static_cast<int>(max_threads),
             cache_enabled,
-            max_memory_bytes
+            max_memory_bytes,
+            enable_dynamic_compilation
         ) {}
 
   static constexpr bool _type_mutable = true;
@@ -397,24 +424,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
               tokenizer_info =
                   tokenizer_info_view.cast<ffi::ObjectRef>().as<TokenizerInfoObj>()->value;
             }
-            auto named_grammar_names = named_grammar_names_view.cast<ffi::Array<ffi::Any>>();
-            auto named_grammar_values = named_grammar_values_view.cast<ffi::Array<ffi::Any>>();
-            if (named_grammar_names.size() != named_grammar_values.size()) {
-              throw XGrammarError("Named grammar names and values must have the same length");
-            }
-            std::vector<NamedGrammar> named_grammars;
-            named_grammars.reserve(static_cast<size_t>(named_grammar_names.size()));
-            for (int64_t i = 0; i < static_cast<int64_t>(named_grammar_names.size()); ++i) {
-              std::string name = named_grammar_names[i].cast<ffi::String>();
-              ffi::AnyView value = named_grammar_values[i];
-              if (const auto* grammar_obj = value.as<GrammarObj>()) {
-                named_grammars.push_back({std::move(name), grammar_obj->value});
-              } else if (value.as<ffi::String>()) {
-                named_grammars.push_back({std::move(name), std::string(value.cast<ffi::String>())});
-              } else {
-                throw XGrammarError("Named grammar values must be Grammar or Lark strings");
-              }
-            }
+            auto named_grammars =
+                NamedGrammarsFromViews(named_grammar_names_view, named_grammar_values_view);
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(
                 Grammar::FromLark(lark_string, tokenizer_info, named_grammars)
             ));
@@ -502,9 +513,9 @@ TVM_FFI_STATIC_INIT_BLOCK() {
         XGRAMMAR_FFI_TRY_END();
       });
 
-  // GrammarCompiler: init(tokenizer_info, max_threads, cache_enabled, max_memory_bytes)
+  // Python supplies False when enable_dynamic_compilation is omitted.
   refl::ObjectDef<GrammarCompilerObj>()
-      .def(refl::init<O, int64_t, bool, int64_t>())
+      .def(refl::init<O, int64_t, bool, int64_t, bool>())
       .def(
           "compile_json_schema",
           [](GrammarCompilerObj* o,
@@ -550,6 +561,21 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           [](GrammarCompilerObj* o, ffi::String regex) {
             return ffi::ObjectRef(ffi::make_object<CompiledGrammarObj>(o->value.CompileRegex(regex))
             );
+          }
+      )
+      .def(
+          "compile_lark",
+          [](GrammarCompilerObj* o,
+             ffi::String lark_string,
+             ffi::AnyView named_grammar_names_view,
+             ffi::AnyView named_grammar_values_view) {
+            XGRAMMAR_FFI_TRY_BEGIN();
+            auto named_grammars =
+                NamedGrammarsFromViews(named_grammar_names_view, named_grammar_values_view);
+            return ffi::ObjectRef(ffi::make_object<CompiledGrammarObj>(
+                o->value.CompileLark(lark_string, named_grammars)
+            ));
+            XGRAMMAR_FFI_TRY_END();
           }
       )
       .def(
@@ -723,7 +749,25 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       )
       .def(
           "find_jump_forward_string",
-          [](GrammarMatcherObj* o) { return ffi::String(o->value.FindJumpForwardString()); }
+          [](GrammarMatcherObj* o) {
+            // The forced bytes can stop inside a multi-byte character (e.g. "é" | "è" share only
+            // their first byte) or start inside one (after a token that split a character). A
+            // Python str cannot hold a partial character, so return the longest prefix of whole
+            // characters; any prefix of the jump-forward string is itself a valid jump-forward.
+            std::string jump_forward = o->value.FindJumpForwardString();
+            jump_forward.resize(ValidUTF8PrefixLength(jump_forward));
+            return ffi::String(jump_forward);
+          }
+      )
+      .def(
+          "find_jump_forward_tokens",
+          [](const GrammarMatcherObj* o) {
+            ffi::Array<int64_t> result;
+            for (int32_t token_id : o->value.FindJumpForwardTokens()) {
+              result.push_back(token_id);
+            }
+            return result;
+          }
       )
       .def(
           "rollback",
@@ -903,8 +947,10 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "xgrammar.tvm_ffi_binding.testing._is_rule_fsm_accept_string",
           [](O grammar_ref, int64_t rule_id, ffi::String input) {
             const auto& grammar = grammar_ref.as<GrammarObj>()->value;
-            XGRAMMAR_CHECK(rule_id >= 0 && rule_id < grammar->NumRules())
-                << "Rule id is out of range: " << rule_id;
+            XGRAMMAR_CHECK(
+                rule_id >= 0 && rule_id < static_cast<int64_t>(grammar->per_rule_fsms.size())
+            ) << "Rule id is out of range or the grammar has no per-rule FSMs: "
+              << rule_id;
             const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
             XGRAMMAR_CHECK(rule_fsm.has_value())
                 << "Rule " << rule_id << " does not have a finite-state machine";

@@ -7,7 +7,7 @@ from typing import List, Optional, Union
 
 import pytest
 import torch
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import (
@@ -69,8 +69,8 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         '{"id": 1,"name": "Example"}',
         [
             # fmt: off
-            31989, 31912, 270, 270, 270, 31973, 31846, 31846, 31948, 31915, 270, 270, 270, 270,
-            270, 31973, 31846, 31846, 263, 263, 263, 263, 263, 263, 263, 263, 31974, 31999,
+            31988, 31909, 274, 274, 274, 31970, 31841, 31841, 31944, 31912, 274, 274, 274, 274, 274,
+            31970, 31841, 31841, 266, 266, 266, 266, 266, 266, 266, 266, 31970, 31999,
             # fmt: on
         ],
     ),
@@ -80,9 +80,9 @@ tokenizer_path__input_str__expected_rejected_sizes = [
         '{"id": 1,"name": "Example哈哈"}',
         [
             # fmt: off
-            128235, 127497, 4744, 4744, 4744, 127849, 126399, 126399, 126760, 127499, 4744, 4744,
-            4744, 4744, 4744, 127849, 126399, 126399, 4694, 4694, 4694, 4694, 4694, 4694, 4694,
-            4694, 128066, 128111, 4694, 128066, 128111, 4694, 127873, 128255,
+            128233, 127441, 4742, 4742, 4742, 127790, 126329, 126329, 126702, 127443, 4742, 4742,
+            4742, 4742, 4742, 127790, 126329, 126329, 4689, 4689, 4689, 4689, 4689, 4689, 4689,
+            4689, 128066, 128111, 4689, 128066, 128111, 4689, 127815, 128255,
             # fmt: on
         ],
     ),
@@ -97,7 +97,7 @@ tokenizer_path__input_str__expected_rejected_sizes = [
 def test_fill_next_token_bitmask(
     tokenizer_path: str, input_str: str, expected_rejected_sizes: Optional[List[int]]
 ):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matcher = _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
 
@@ -370,6 +370,10 @@ def test_is_completed():
     # In this mode, completed and terminated are the same
     assert matcher2.is_completed()
     assert matcher2.is_terminated()
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher2.fill_next_token_bitmask(bitmask)
+    assert stop_token_id in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher2.accept_token(stop_token_id)
 
 
 def test_fork_initial_state():
@@ -484,6 +488,38 @@ sub_rule ::= "b"
     assert matcher.find_jump_forward_string() == "bb"
 
 
+@pytest.mark.parametrize(
+    "grammar_ebnf, expected",
+    [
+        # Both alternatives start with the byte 0xC3, so only that byte is forced.
+        ('root ::= "é" | "è"', ""),
+        ('root ::= "aé" | "aè"', "a"),
+        ("root ::= [é-ê]", ""),
+        ('root ::= "aé"', "aé"),
+    ],
+)
+def test_get_jump_forward_string_partial_utf8(grammar_ebnf: str, expected: str):
+    tokenizer_info = xgr.TokenizerInfo(["é", "è", "a", "</s>"], stop_token_ids=[3])
+    compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar_ebnf)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    assert matcher.find_jump_forward_string() == expected
+
+
+def test_get_jump_forward_string_after_split_character():
+    # A byte-level vocabulary in which "é" (C3 A9) is split across two tokens.
+    tokenizer_info = xgr.TokenizerInfo(
+        [b"\xc3", b"\xa9", b"a", b"</s>"], xgr.VocabType.RAW, stop_token_ids=[3]
+    )
+    compiled_grammar = xgr.GrammarCompiler(tokenizer_info).compile_grammar('root ::= "éa"')
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    assert matcher.find_jump_forward_string() == "éa"
+    assert matcher.accept_token(0)
+    # The forced bytes now start inside "é".
+    assert matcher.find_jump_forward_string() == ""
+    assert matcher.accept_token(1)
+    assert matcher.find_jump_forward_string() == "a"
+
+
 def test_vocab_size():
     vocab = [
         # fmt: off
@@ -513,7 +549,7 @@ tokenizer_path_override_stop_tokens = [
     "tokenizer_path, override_stop_tokens", tokenizer_path_override_stop_tokens
 )
 def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[int]):
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info_1 = xgr.TokenizerInfo.from_huggingface(
         tokenizer, stop_token_ids=override_stop_tokens
     )
@@ -528,10 +564,208 @@ def test_override_stop_tokens(tokenizer_path: str, override_stop_tokens: List[in
     assert matcher_2.stop_token_ids == override_stop_tokens
 
 
+@pytest.mark.parametrize(
+    "extra_vocab",
+    [[], ["\n", "\r", "\t", "\x00", "\x01", "\x02"]],
+    ids=["rejected-set", "accepted-set"],
+)
+def test_override_stop_tokens_mask_until_json_complete(extra_vocab: List[str]):
+    # Control characters are invalid inside a JSON string. Adding enough of them makes the
+    # compiler store the accepted set; without them, it stores the rejected set.
+    vocab = ["</s>", "<stop>", "text", '"}'] + extra_vocab
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        json_grammar, tokenizer_info, override_stop_tokens=[1]
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    # The compiler treats <stop> as valid string content, but the matcher treats it as EOS.
+    assert matcher.accept_string('{"name":"')
+    assert not matcher.is_completed()
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 1 in rejected_tokens
+    assert 2 not in rejected_tokens
+    assert not matcher.accept_token(1)
+
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(3)
+    assert matcher.is_completed()
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 1 not in rejected_tokens
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+
+def test_override_stop_tokens_allowed_when_grammar_complete():
+    # Most tokens match a*, selecting the rejected-set path. The overridden stop token's text
+    # does not match, but it must still be allowed once the grammar can terminate.
+    tokenizer_info = xgr.TokenizerInfo(["</s>", "<stop>", "a", "aa", "aaa"], stop_token_ids=[0])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "a"*', tokenizer_info, override_stop_tokens=[1]
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    assert matcher.accept_token(2)
+    assert matcher.is_completed()
+    matcher.fill_next_token_bitmask(bitmask)
+    rejected_tokens = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert 1 not in rejected_tokens
+    assert matcher.accept_token(1, debug_print=True)
+    assert matcher.is_terminated()
+
+
+def test_stop_token_as_grammar_terminal():
+    # An overridden stop token stays in the compiler's matchable vocabulary.
+    vocab = ["</s>", "<|return|>", "ok"]
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[0])
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    def allows_stop_token(matcher: xgr.GrammarMatcher) -> bool:
+        matcher.fill_next_token_bitmask(bitmask)
+        return 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "ok" "<|return|>"', tokenizer_info, override_stop_tokens=[1]
+    )
+    assert not allows_stop_token(matcher)
+    assert not matcher.accept_token(1, debug_print=True)
+    assert matcher.accept_token(2)
+    assert allows_stop_token(matcher)
+    assert matcher.accept_token(1, debug_print=True)
+    assert matcher.is_terminated()
+    matcher.rollback(1)
+    assert not matcher.is_terminated()
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+    # Partial byte matches must be undone; empty tokens must not newly complete the grammar.
+    for stop_text, suffix in [("STOPx", "STOPz"), ("", "tail")]:
+        info = xgr.TokenizerInfo(["</s>", stop_text, "ok"], stop_token_ids=[1])
+        probe = _get_matcher_from_grammar_and_tokenizer_info(f'root ::= "ok" "{suffix}"', info)
+        assert probe.accept_token(2)
+        probe.fill_next_token_bitmask(bitmask)
+        assert 1 in _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+        assert not probe.accept_token(1)
+        assert probe.accept_string(suffix)
+        assert probe.is_completed()
+
+
+@pytest.mark.parametrize(
+    "grammar,without_stop",
+    [('root ::= "ok" Token(1)', True), ('root ::= "ok" (Token(1) "tail" | "STOP")', False)],
+    ids=["atomic-complete", "atomic-then-bytes"],
+)
+def test_stop_token_terminal_matching_paths(grammar: str, without_stop: bool):
+    tokenizer_info = xgr.TokenizerInfo(["</s>", "STOP", "ok"], stop_token_ids=[1])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        grammar, tokenizer_info, terminate_without_stop_token=without_stop
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    assert matcher.accept_token(2)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.is_completed()
+    assert matcher.accept_token(1, debug_print=True)
+    assert matcher.is_completed()
+    assert matcher.is_terminated()
+    assert not matcher.accept_token(2)
+    with pytest.raises(RuntimeError, match="terminated"):
+        matcher.fill_next_token_bitmask(bitmask)
+
+
+def test_padded_stop_token_terminal_trial():
+    tokenizer_info = xgr.TokenizerInfo(["ok"], vocab_size=2, stop_token_ids=[])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= "ok"', tokenizer_info, override_stop_tokens=[1]
+    )
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert not matcher.accept_token(1)
+    assert matcher.accept_token(0)
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 1 not in _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert matcher.accept_token(1)
+    assert matcher.is_terminated()
+
+
+@pytest.mark.parametrize(
+    "grammar,stop_text,expected,override_stop,without_stop",
+    [
+        (
+            'root[capture="result"] ::= "<" (ExcludeToken(1) | "hello!")',
+            "<hellX",
+            True,
+            True,
+            False,
+        ),
+        ('root ::= "<" ExcludeToken(1) "tail"', "<hi", False, False, True),
+        ('root ::= "<hi" "tail"', "<hi", False, False, True),
+        (
+            'root ::= "<" ExcludeToken(1) | limited ">"\nlimited[max_chars=1] ::= "x"',
+            "<hi",
+            False,
+            False,
+            False,
+        ),
+    ],
+    ids=[
+        "rewind-partial-byte-path-and-captures",
+        "incomplete-fallback",
+        "incomplete-byte-content-without-stop-termination",
+        "character-budget-fallback-guard",
+    ],
+)
+def test_stop_token_mid_token_exclude_probe(
+    grammar, stop_text, expected, override_stop, without_stop
+):
+    info = xgr.TokenizerInfo(
+        [stop_text, "<end>", "tail", "<eos>"], stop_token_ids=[3] if override_stop else [0]
+    )
+    kwargs = {"override_stop_tokens": [0]} if override_stop else {}
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        grammar, info, terminate_without_stop_token=without_stop, **kwargs
+    )
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    initial_state = matcher._debug_print_internal_state()
+    for _ in range(3):
+        matcher.fill_next_token_bitmask(bitmask)
+        assert (0 not in _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)) == expected
+        assert matcher._debug_print_internal_state() == initial_state
+        assert matcher.get_captures() == []
+    assert matcher.accept_token(0) == expected
+    if expected:
+        assert matcher.is_completed() and matcher.is_terminated()
+        captures = [("result", stop_text.encode())] if 'capture="result"' in grammar else []
+        assert matcher.get_captures() == captures
+        matcher.rollback(1)
+        assert matcher._debug_print_internal_state() == initial_state
+        assert matcher.get_captures() == []
+        assert matcher.accept_token(0)
+        assert matcher.get_captures() == captures
+    else:
+        assert matcher._debug_print_internal_state() == initial_state
+
+
+def test_stop_token_atomic_success_blocks_mid_token_fallback():
+    info = xgr.TokenizerInfo(["<hi", "<end>", "tail"], stop_token_ids=[0])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(
+        'root ::= Token(0) "tail" | "<" ExcludeToken(1)', info, terminate_without_stop_token=True
+    )
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    initial_state = matcher._debug_print_internal_state()
+    matcher.fill_next_token_bitmask(bitmask)
+    assert 0 in _get_masked_tokens_from_bitmask(bitmask, info.vocab_size)
+    assert not matcher.accept_token(0)
+    assert matcher._debug_print_internal_state() == initial_state
+
+
 @pytest.mark.hf_token_required
 def test_fill_next_token_bitmask_errors():
     # llama 3.1 8b
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_tokenizer(
         "meta-llama/Meta-Llama-3-8B-Instruct", use_fast=True, trust_remote_code=True
     )
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -812,11 +1046,11 @@ def test_batch_fill_next_token_bitmask_pressure():
     input_str = '{"id": 1,"name": "Example"}'
     rejected_token_size = [
         # fmt: off
-            31989, 31912, 270, 270, 270, 31973, 31846, 31846, 31948, 31915, 270, 270, 270, 270,
-            270, 31973, 31846, 31846, 263, 263, 263, 263, 263, 263, 263, 263, 31974, 31999,
+            31988, 31909, 274, 274, 274, 31970, 31841, 31841, 31944, 31912, 274, 274, 274, 274, 274,
+            31970, 31841, 31841, 266, 266, 266, 266, 266, 266, 266, 266, 31970, 31999,
         # fmt: on
     ]
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matchers = [
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
@@ -845,11 +1079,11 @@ def test_batch_fill_next_token_bitmask_pressure_single_thread():
     input_str = '{"id": 1,"name": "Example"}'
     rejected_token_size = [
         # fmt: off
-            31989, 31912, 270, 270, 270, 31973, 31846, 31846, 31948, 31915, 270, 270, 270, 270,
-            270, 31973, 31846, 31846, 263, 263, 263, 263, 263, 263, 263, 263, 31974, 31999,
+            31988, 31909, 274, 274, 274, 31970, 31841, 31841, 31944, 31912, 274, 274, 274, 274, 274,
+            31970, 31841, 31841, 266, 266, 266, 266, 266, 266, 266, 266, 31970, 31999,
         # fmt: on
     ]
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matchers = [
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
@@ -878,11 +1112,11 @@ def test_batch_fill_next_token_bitmask_pressure_shuffled():
     input_str = '{"id": 1,"name": "Example"}'
     rejected_token_size = [
         # fmt: off
-            31989, 31912, 270, 270, 270, 31973, 31846, 31846, 31948, 31915, 270, 270, 270, 270,
-            270, 31973, 31846, 31846, 263, 263, 263, 263, 263, 263, 263, 263, 31974, 31999,
+            31988, 31909, 274, 274, 274, 31970, 31841, 31841, 31944, 31912, 274, 274, 274, 274, 274,
+            31970, 31841, 31841, 266, 266, 266, 266, 266, 266, 266, 266, 31970, 31999,
         # fmt: on
     ]
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     matchers = [
         _get_matcher_from_grammar_and_tokenizer_info(json_grammar, tokenizer_info)
@@ -905,6 +1139,30 @@ def test_batch_fill_next_token_bitmask_pressure_shuffled():
             len(rejected_token_ids),
             rejected_token_size[i],
         )
+
+
+def test_override_stop_tokens_out_of_range_raises():
+    # Stop token ids are written into the token bitmask, so an id outside the vocabulary must be
+    # rejected instead of corrupting memory.
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "c"], vocab_size=8)
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(xgr.Grammar.from_regex("a+"))
+    with pytest.raises(RuntimeError):
+        xgr.GrammarMatcher(compiled, override_stop_tokens=[2**28])
+
+
+def test_batch_fill_next_token_bitmask_terminated_matcher_raises():
+    # An error raised by a matcher inside the thread pool must surface on the calling thread instead
+    # of terminating the process.
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "</s>"], stop_token_ids=[2])
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(xgr.Grammar.from_regex("a"))
+    terminated = xgr.GrammarMatcher(compiled)
+    assert terminated.accept_token(0)
+    assert terminated.accept_token(2)
+    assert terminated.is_terminated()
+    matchers = [xgr.GrammarMatcher(compiled), terminated]
+    bitmask = xgr.allocate_token_bitmask(len(matchers), tokenizer_info.vocab_size)
+    with pytest.raises(RuntimeError):
+        xgr.BatchGrammarMatcher(2).batch_fill_next_token_bitmask(matchers, bitmask)
 
 
 if __name__ == "__main__":

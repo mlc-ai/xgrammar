@@ -7,10 +7,10 @@ from typing import Any, List, Tuple
 
 import pytest
 from pydantic import BaseModel, RootModel
-from transformers import AutoTokenizer  # type: ignore
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
-from xgrammar.testing import _is_grammar_accept_string
+from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
 
 
 def construct_grammar():
@@ -42,9 +42,16 @@ def construct_compiled_grammar():
     return grammar_compiler.compile_grammar(grammar), tokenizer_info
 
 
+def _set_path(obj, path, value):
+    """Set obj[path[0]][path[1]]... = value on a parsed JSON object."""
+    for key in path[:-1]:
+        obj = obj[key]
+    obj[path[-1]] = value
+
+
 def test_get_serialization_version():
     """Test the version of the serialized JSON string."""
-    assert xgr.get_serialization_version() == "v16"
+    assert xgr.get_serialization_version() == "v18"
 
 
 def test_serialize_grammar():
@@ -66,9 +73,10 @@ def test_serialize_grammar():
         "root_rule_id": 1,
         "complete_fsm": None,
         "per_rule_fsms": [],
+        "has_token_edges": False,
         "allow_empty_rule_ids": [],
         "optimized": False,
-        "__VERSION__": "v16",
+        "__VERSION__": "v18",
     }
     # The fsms are the same one, but the start state and end states are different.
     assert json.loads(serialized) == expected_json
@@ -92,14 +100,15 @@ def test_serialize_grammar_exception():
         "allow_empty_rule_ids": [],
         "complete_fsm": None,
         "per_rule_fsms": [],
-        "__VERSION__": "v16",
+        "has_token_edges": False,
+        "__VERSION__": "v18",
     }
 
     expected_json["__VERSION__"] = "v1"  # Change version to trigger error
     with pytest.raises(xgr.DeserializeVersionError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
 
-    expected_json["__VERSION__"] = "v16"
+    expected_json["__VERSION__"] = "v18"
     expected_json.pop("rules")  # Remove required field to trigger error
     with pytest.raises(xgr.DeserializeFormatError):
         xgr.Grammar.deserialize_json(json.dumps(expected_json))
@@ -151,7 +160,7 @@ def test_serialize_tokenizer_info():
         '"decoded_vocab":["1","212","a","A","b","\\u00e4\\u00b8\\u0080","-","aBc","abc"],'
         '"sorted_decoded_vocab":[[6,"-"],[3,"A"],[2,"a"],[7,"aBc"],[8,"abc"],[4,"b"],[5,"\\u00e4\\u00b8\\u0080"]],'
         '"trie_subtree_nodes_range":[1,2,5,4,5,6,7],'
-        '"__VERSION__":"v16"}'
+        '"__VERSION__":"v18"}'
     )
     assert json.loads(serialized) == json.loads(expected_json)
 
@@ -196,6 +205,30 @@ def test_serialize_tokenizer_info_functional():
     assert matcher_original.accept_string(test_input) == matcher_recovered.accept_string(test_input)
 
 
+def test_serialize_tokenizer_info_token_grammar_functional():
+    """Test binary vocab preservation and token masks after deserialization."""
+    original_tokenizer_info = xgr.TokenizerInfo(
+        [b"\x00", b"a", b"</s>"], vocab_type=xgr.VocabType.RAW, vocab_size=4, stop_token_ids=[2]
+    )
+    recovered_tokenizer_info = xgr.TokenizerInfo.deserialize_json(
+        original_tokenizer_info.serialize_json()
+    )
+
+    assert recovered_tokenizer_info.decoded_vocab == original_tokenizer_info.decoded_vocab
+
+    grammar = xgr.Grammar.from_ebnf("root ::= Token(1)\n")
+    compiled_grammar = xgr.GrammarCompiler(
+        recovered_tokenizer_info, cache_enabled=False
+    ).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled_grammar)
+    token_bitmask = xgr.allocate_token_bitmask(1, recovered_tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(token_bitmask)
+    rejected_token_ids = _get_masked_tokens_from_bitmask(
+        token_bitmask, recovered_tokenizer_info.vocab_size
+    )
+    assert rejected_token_ids == [0, 2, 3]
+
+
 def test_serialize_compiled_grammar():
     """Test CompiledGrammar serialization produces expected JSON string. We verify the adaptive
     token mask part separately.
@@ -222,12 +255,13 @@ def test_serialize_compiled_grammar():
             "complete_fsm": {
                 "edges": {
                     "data_": [[128, 191, 1], [128, 191, 3], [0, 47, 3], [58, 127, 3],
-                        [192, 223, 1],[224, 239, 0],[240, 247, 4],[-2, 0, 5],
-                        [128, 191, 0],[97, 97, 8],[-2, 0, 6]],
-                    "indptr_":[0, 1, 2, 7, 8, 9, 9, 10, 11, 11]
+                        [194, 223, 1],[224, 224, 4],[225, 239, 0],[240, 240, 5],
+                        [241, 243, 7],[244, 244, 6],[-2, 0, 8],[160, 191, 1],
+                        [144, 191, 0],[128, 143, 0],[128, 191, 0],[97, 97, 11],[-2, 0, 9]],
+                    "indptr_":[0, 1, 2, 10, 11, 12, 13, 14, 15, 15, 16, 17, 17]
                 },
                 "edge_aux_data": [],
-                "edge_num": 11,
+                "edge_num": 17,
             },
             "per_rule_fsms": [
                 [
@@ -235,33 +269,36 @@ def test_serialize_compiled_grammar():
                     {
                             "edges": {
                                 "data_": [[128, 191, 1], [128, 191, 3], [0, 47, 3], [58, 127, 3],
-                                    [192, 223, 1],[224, 239, 0],[240, 247, 4],[-2, 0, 5],
-                                    [128, 191, 0],[97, 97, 8],[-2, 0, 6]],
-                                "indptr_":[0, 1, 2, 7, 8, 9, 9, 10, 11, 11]
+                                    [194, 223, 1],[224, 224, 4],[225, 239, 0],[240, 240, 5],
+                                    [241, 243, 7],[244, 244, 6],[-2, 0, 8],[160, 191, 1],
+                                    [144, 191, 0],[128, 143, 0],[128, 191, 0],[97, 97, 11],[-2, 0, 9]],
+                                "indptr_":[0, 1, 2, 10, 11, 12, 13, 14, 15, 15, 16, 17, 17]
                             },
                             "edge_aux_data": [],
-                            "edge_num": 11,
+                            "edge_num": 17,
                         },
-                        2, [2, 5], False, 11
-                    ], 9, 6
+                        2, [2, 8], False, 17
+                    ], 15, 9
                 ],
                 [
                     [
                         {
                             "edges": {
                                 "data_": [[128, 191, 1], [128, 191, 3], [0, 47, 3], [58, 127, 3],
-                                    [192, 223, 1],[224, 239, 0],[240, 247, 4],[-2, 0, 5],
-                                    [128, 191, 0],[97, 97, 8],[-2, 0, 6]],
-                                "indptr_":[0, 1, 2, 7, 8, 9, 9, 10, 11, 11]
+                                    [194, 223, 1],[224, 224, 4],[225, 239, 0],[240, 240, 5],
+                                    [241, 243, 7],[244, 244, 6],[-2, 0, 8],[160, 191, 1],
+                                    [144, 191, 0],[128, 143, 0],[128, 191, 0],[97, 97, 11],[-2, 0, 9]],
+                                "indptr_":[0, 1, 2, 10, 11, 12, 13, 14, 15, 15, 16, 17, 17]
                             },
                             "edge_aux_data": [],
-                            "edge_num": 11,
+                            "edge_num": 17,
                         },
-                        7, [8], False, 11,
+                        10, [11], False, 17,
                     ], 2, 3
                 ]
             ],
             # fmt: on
+            "has_token_edges": False,
             "optimized": True,
         },
         "tokenizer_metadata": {
@@ -270,7 +307,7 @@ def test_serialize_compiled_grammar():
             "add_prefix_space": True,
             "stop_token_ids": [0, 1],
         },
-        "__VERSION__": "v16",
+        "__VERSION__": "v18",
     }
 
     class AdaptiveTokenMask(BaseModel):
@@ -332,7 +369,7 @@ def test_serialize_compiled_grammar_functional():
 @pytest.mark.hf_token_required
 def test_serialize_compiled_grammar_with_hf_tokenizer():
     """Test CompiledGrammar serialization with a real HuggingFace tokenizer."""
-    tokenizer = AutoTokenizer.from_pretrained(
+    tokenizer = load_tokenizer(
         "meta-llama/Llama-3.1-8B-Instruct", use_fast=True, trust_remote_code=True
     )
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
@@ -417,6 +454,117 @@ def test_serialized_output_survives_pickle():
     )
     assert result.returncode == 0, f"returncode={result.returncode}\n{result.stderr[-2000:]}"
     assert "PICKLE_OK" in result.stdout
+
+
+# The reflection-based deserializer restores fields verbatim, so corrupted ids and offsets used to
+# be dereferenced later and crash the process. They must be rejected at deserialization time.
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["root_rule_id"], 2**31 - 1),
+        (["grammar_expr_indptr"], [10**9]),
+        (["grammar_expr_data"], []),
+        (["rules", 0, 1], 10**6),  # body_expr_id
+        (["allow_empty_rule_ids"], [10**6]),
+    ],
+)
+def test_deserialize_grammar_rejects_out_of_range(path, value):
+    obj = json.loads(construct_grammar().serialize_json())
+    _set_path(obj, path, value)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.Grammar.deserialize_json(json.dumps(obj))
+
+
+def test_deserialize_grammar_rejects_rule_ref_out_of_range():
+    obj = json.loads(construct_grammar().serialize_json())
+    data, indptr = obj["grammar_expr_data"], obj["grammar_expr_indptr"]
+    # Every expr is stored as [type, length, data...]; type 4 is a rule reference.
+    rule_ref_starts = [start for start in indptr if data[start] == 4]
+    assert rule_ref_starts
+    data[rule_ref_starts[0] + 2] = 10**6
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.Grammar.deserialize_json(json.dumps(obj))
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["grammar", "per_rule_fsms"], []),  # optimized grammar without per-rule FSMs
+        (["grammar", "complete_fsm"], None),
+        (["grammar", "complete_fsm", "edges", "data_", 0, 2], 10**6),  # edge target
+        (["grammar", "complete_fsm", "edges", "indptr_"], [0]),  # CSR does not cover the data
+        (["grammar", "complete_fsm", "edge_num"], 0),
+        (["grammar", "per_rule_fsms", 0, 0, 1], 10**6),  # start state
+        (["grammar", "per_rule_fsms", 0, 0, 2], [10**6]),  # end states
+    ],
+)
+def test_deserialize_compiled_grammar_rejects_corrupted_fsm(path, value):
+    compiled_grammar, tokenizer_info = construct_compiled_grammar()
+    obj = json.loads(compiled_grammar.serialize_json())
+    _set_path(obj, path, value)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.CompiledGrammar.deserialize_json(json.dumps(obj), tokenizer_info)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"accepted_indices": [10**6]},
+        {"rejected_indices": [-1]},
+        {"uncertain_indices": [10**6]},
+        {"store_type": 7},
+        {"accepted_bitset": [64, 2]},  # declares 2 words but provides none
+        {"store_type": 2, "accepted_bitset": [1, 1, 0]},  # bitset smaller than vocab_size
+    ],
+)
+def test_deserialize_compiled_grammar_rejects_corrupted_mask(fields):
+    compiled_grammar, tokenizer_info = construct_compiled_grammar()
+    obj = json.loads(compiled_grammar.serialize_json())
+    obj["adaptive_token_mask_cache"][0][1].update(fields)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.CompiledGrammar.deserialize_json(json.dumps(obj), tokenizer_info)
+
+
+@pytest.mark.parametrize(
+    "path, value",
+    [
+        (["vocab_size"], 3),  # smaller than the number of real tokens
+        (["sorted_decoded_vocab", 0, 0], 10**6),
+        (["trie_subtree_nodes_range"], []),
+        (["stop_token_ids"], [10**6]),
+        (["special_token_ids"], [-1]),
+    ],
+)
+def test_deserialize_tokenizer_info_rejects_out_of_range(path, value):
+    obj = json.loads(construct_tokenizer_info().serialize_json())
+    _set_path(obj, path, value)
+    with pytest.raises(xgr.DeserializeFormatError):
+        xgr.TokenizerInfo.deserialize_json(json.dumps(obj))
+
+
+def test_deserialized_tokenizer_info_compiles_token_edges():
+    # token_id_to_sorted_vocab_index is derived data that is not serialized; compiling a grammar
+    # with Token() edges against a deserialized TokenizerInfo used to read the missing array.
+    tokenizer_info = construct_tokenizer_info()
+    recovered = xgr.TokenizerInfo.deserialize_json(tokenizer_info.serialize_json())
+    grammar = xgr.Grammar.from_ebnf('root ::= Token(2, 3) "a"\n')
+    masks = []
+    for info in (tokenizer_info, recovered):
+        matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_grammar(grammar))
+        mask = xgr.allocate_token_bitmask(1, info.vocab_size)
+        matcher.fill_next_token_bitmask(mask)
+        masks.append(mask.tolist())
+        assert matcher.accept_token(2)
+    assert masks[0] == masks[1]
+
+
+@pytest.mark.thread_unsafe
+def test_deserialize_deeply_nested_json_rejected():
+    # The JSON parser recurses once per nesting level; the depth is bounded by the maximum
+    # recursion depth and reported as an invalid JSON error.
+    with xgr.max_recursion_depth(50):
+        with pytest.raises(xgr.InvalidJSONError, match="Maximum recursion depth exceeded"):
+            xgr.Grammar.deserialize_json("[" * 60 + "]" * 60)
 
 
 if __name__ == "__main__":

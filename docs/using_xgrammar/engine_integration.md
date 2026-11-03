@@ -130,10 +130,17 @@ with independent states, duplicate the matcher with
 [`xgr.GrammarMatcher.fork`](xgrammar.GrammarMatcher.fork).
 
 **Jump-forward decoding.**
+[`xgr.GrammarMatcher.find_jump_forward_tokens`](xgrammar.GrammarMatcher.find_jump_forward_tokens)
+returns tokens for the grammar's forced continuation without changing the matcher or already
+accepted token boundaries. It greedily matches vocabulary tokens and withholds the last token
+if it is a strict prefix of a longer token. Accept the returned tokens with
+[`accept_token()`](xgrammar.GrammarMatcher.accept_token), append them to the output, and prefill
+them before sampling again. This tokenization may differ from the model tokenizer's encoding.
+An empty result means to resume normal decoding or handle completion as usual.
+
+For engines that handle tokenization themselves,
 [`xgr.GrammarMatcher.find_jump_forward_string`](xgrammar.GrammarMatcher.find_jump_forward_string)
-returns the longest string that certainly follows the current state under the grammar. The
-engine can append this string to the output directly without LLM decoding, saving decoding
-steps.
+returns the forced continuation as text.
 
 ## Real-World Integrations
 

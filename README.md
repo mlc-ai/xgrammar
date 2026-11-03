@@ -68,6 +68,31 @@ Please visit our [documentation](https://xgrammar.mlc.ai/docs/) to get started w
 - [Installation](https://xgrammar.mlc.ai/docs/start/installation)
 - [Quick start](https://xgrammar.mlc.ai/docs/start/quick_start)
 
+## Contributing and governance
+
+We welcome contributions of code, tests, documentation, bug reports, and reviews. See [CONTRIBUTING.md](CONTRIBUTING.md) to get started. All participants are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+[GOVERNANCE.md](GOVERNANCE.md) describes the current maintainers, technical decision process, and maintainer role changes. [CODEOWNERS](CODEOWNERS) lists the reviewers responsible for specific parts of the repository.
+
+## Releases
+
+XGrammar publishes versioned releases on [GitHub Releases](https://github.com/mlc-ai/xgrammar/releases) and Python packages on [PyPI](https://pypi.org/project/xgrammar/). Releases are made as needed when features, bug fixes, or compatibility updates are ready, without a fixed calendar schedule. Prereleases are identified separately from stable releases.
+
+For each release, a maintainer selects a reviewed commit from `main` and coordinates the following:
+
+1. Verify that the applicable automated tests and package builds pass for the release commit, and resolve failures that affect the release.
+2. Prepare release notes describing features, fixes, compatibility changes, and known limitations.
+3. Tag the release commit and publish a GitHub release. The [package workflow](.github/workflows/build_and_release.yaml) builds wheels and a source distribution and publishes them to PyPI when the GitHub release is published. Maintainers can also invoke that workflow manually.
+4. Check that the published packages and release notes are available, and follow up on reported regressions with fixes or a subsequent release.
+
+
+The Python package version is generated from Git tags by `setuptools-scm`; no
+manual version update in `pyproject.toml` is needed. For example, `v0.2.7` builds
+as `0.2.7`, and commits after a release get development versions. Builds from Git
+need full history and tags; published source distributions retain their version
+without Git. To publish manually, run the package workflow on a release tag;
+manual branch runs only build artifacts.
+
 ## Third-Party Bindings
 
 - **Rust**: [xgrammar-rs](https://github.com/trymirai/xgrammar-rs) — Community Rust bindings for XGrammar.

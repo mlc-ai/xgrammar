@@ -7,9 +7,12 @@
 
 #include <picojson.h>
 
+#include <algorithm>
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -153,6 +156,20 @@ class Compact2DArray {
 
   /*! \brief Get the number of rows in the Compact2DArray. */
   int32_t size() const { return static_cast<int32_t>(indptr_.size()) - 1; }
+
+  /*!
+   * \brief Check the CSR invariants after deserialization: indptr starts with 0, is non-decreasing
+   * and ends with the data size. Otherwise row accesses would read out of bounds.
+   * \return An error message if the invariants are violated.
+   */
+  std::optional<std::string> Validate() const {
+    if (indptr_.empty() || indptr_.front() != 0 ||
+        indptr_.back() != static_cast<int32_t>(data_.size()) ||
+        !std::is_sorted(indptr_.begin(), indptr_.end())) {
+      return "Invalid indptr: it must start with 0, be non-decreasing and end with the data size";
+    }
+    return std::nullopt;
+  }
 
   friend std::size_t MemorySize(const Compact2DArray<DataType>& arr) {
     return MemorySize(arr.data_) + MemorySize(arr.indptr_);

@@ -1,20 +1,23 @@
 """Validate builtin structural tags against official model renderers.
 
-Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4)
+Uses tokenizer.apply_chat_template (or encoding scripts for DeepSeek V3.2/V4/V4.1)
 and Cohere Melody for CMD5 to render model outputs, then checks that xgrammar
 structural tag grammars accept them. Requires encoding_dsv32.py and
-encoding_dsv4.py in the same directory.
+encoding_dsv4.py in the same directory. V4.1 uses a revision-pinned official encoder.
 """
 
+import importlib.util
 import json
 import os
 import sys
 from functools import lru_cache
 
 import pytest
+from tokenizer_utils import load_model_file, load_tokenizer
 
 sys.path.insert(0, os.path.dirname(__file__))
 
+import xgrammar as xgr
 from xgrammar import Grammar
 from xgrammar.builtin_structural_tag import get_model_structural_tag
 from xgrammar.testing import _is_grammar_accept_string
@@ -72,7 +75,6 @@ PARALLEL_TOOL_SCENARIOS = [(2, "auto", 2), (2, "required", 2)]
 # (stag_key, model_id, reasoning, template_kwargs)
 # Excluded:
 #   - Llama-4: pythonic tool call format, needs separate structural tag
-#   - gemma_4: tool calls use <|"|> quoting, not JSON
 #   - deepseek_r1 thinking=True: template drops <think> in history rendering,
 #     prompt diff extraction doesn't work
 #   - Kimi-K2-Thinking thinking=False: model always outputs <think></think>,
@@ -101,10 +103,15 @@ MODEL_CONFIGS = [
     ("deepseek_v3_2", "ENCODER:dsv32", True, {"thinking_mode": "thinking"}),
     ("deepseek_v3_2", "ENCODER:dsv32", False, {"thinking_mode": "chat"}),
     ("minimax", "MiniMaxAI/MiniMax-M2.5", True, {}),
+    ("minimax_m3", "MiniMaxAI/MiniMax-M3", "enabled", {"thinking_mode": "enabled"}),
+    ("minimax_m3", "MiniMaxAI/MiniMax-M3", "disabled", {"thinking_mode": "disabled"}),
+    ("minimax_m3", "MiniMaxAI/MiniMax-M3", "auto", {"thinking_mode": "adaptive"}),
     ("glm_4_7", "zai-org/GLM-4.7-Flash", True, {"enable_thinking": True}),
     ("glm_4_7", "zai-org/GLM-4.7-Flash", False, {"enable_thinking": False}),
     ("deepseek_v4", "ENCODER:dsv4", True, {"thinking_mode": "thinking"}),
     ("deepseek_v4", "ENCODER:dsv4", False, {"thinking_mode": "chat"}),
+    ("deepseek_v4_1", "ENCODER:dsv41", True, {"thinking_mode": "thinking"}),
+    ("deepseek_v4_1", "ENCODER:dsv41", False, {"thinking_mode": "chat"}),
     # Command A+'s Hugging Face template still emits CMD4 JSON action blocks. Use
     # Cohere's official Melody renderer, which is the source of truth for CMD5.
     ("cohere", "MELODY:cmd5", True, {"reasoning": True}),
@@ -116,11 +123,26 @@ MODEL_CONFIGS = [
         False,
         {"skip_think": True, "enable_thinking": False},
     ),
+    ("gemma_4", "google/gemma-4-E2B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-E2B-it", False, {"enable_thinking": False}),
+    ("gemma_4", "google/gemma-4-31B-it", True, {"enable_thinking": True}),
+    ("gemma_4", "google/gemma-4-31B-it", False, {"enable_thinking": False}),
 ]
 
 # Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
-# V3.2 encoder rejects it, the other templates drop the block entirely.
-SKIP_EMPTY_REASONING = {"ENCODER:dsv32", "MiniMaxAI/MiniMax-M2.5", "moonshotai/Kimi-K3"}
+# V3.2 encoder rejects it, the other templates (including Gemma-4's) drop the block entirely.
+SKIP_EMPTY_REASONING = {
+    "ENCODER:dsv32",
+    "MiniMaxAI/MiniMax-M2.5",
+    "moonshotai/Kimi-K3",
+    "google/gemma-4-E2B-it",
+    "google/gemma-4-31B-it",
+}
+
+# Templates that pre-render an empty thought block in the generation prompt when thinking
+# is disabled; history rendering omits it, so it is stripped before diffing.
+PRERENDERED_EMPTY_THOUGHT_MODELS = {"google/gemma-4-31B-it"}
+PRERENDERED_EMPTY_THOUGHT = "<|channel>thought\n<channel|>"
 
 # Models where tool call format in template doesn't match structural tag.
 SKIP_TOOLS = set()
@@ -138,6 +160,7 @@ STRIP_THINK_MODELS = {
     "deepseek-ai/DeepSeek-R1",
     "zai-org/GLM-4.7-Flash",
     "MiniMaxAI/MiniMax-M2.5",
+    "MiniMaxAI/MiniMax-M3",
     "Qwen/Qwen3.5-35B-A3B",
 }
 
@@ -152,19 +175,16 @@ EOS_SUFFIXES = {
     "qwen_3_coder": ["<|im_end|>"],
     "harmony": None,
     "minimax": ["[e~["],
+    "minimax_m3": ["[e~["],
     "glm_4_7": [],
     "deepseek_v3_2": ["<｜end▁of▁sentence｜>"],
     "deepseek_v4": ["<｜end▁of▁sentence｜>"],
+    "deepseek_v4_1": ["<｜end▁of▁sentence｜>"],
     "cohere": ["<|END_OF_TURN_TOKEN|>"],
     "exaone": ["[|endofturn|]"],
+    # <|tool_response> is the halt signal the template appends after a tool call.
+    "gemma_4": ["<turn|>", "<|tool_response>"],
 }
-
-
-@lru_cache(maxsize=None)
-def load_tokenizer(model_id):
-    from transformers import AutoTokenizer
-
-    return AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
 
 
 def make_tools(num_tools):
@@ -231,7 +251,7 @@ def strip_eos(output, stag_key, tokenizer=None):
 
 
 def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_kwargs):
-    tokenizer = load_tokenizer(model_id)
+    tokenizer = load_tokenizer(model_id, trust_remote_code=True)
     kwargs = dict(tokenize=False, **template_kwargs)
     if tools:
         kwargs["tools"] = tools
@@ -240,9 +260,17 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
         [USER_MSG, assistant_msg], add_generation_prompt=False, **kwargs
     )
 
+    if model_id in PRERENDERED_EMPTY_THOUGHT_MODELS and not full.startswith(prompt):
+        prompt = prompt.removesuffix(PRERENDERED_EMPTY_THOUGHT)
+
     if model_id in STRIP_THINK_MODELS and assistant_msg.get("reasoning_content") is not None:
         if not full.startswith(prompt):
-            base = prompt.removesuffix("<think>\n").removesuffix("<think>")
+            think_begin, think_end = (
+                ("<mm:think>", "</mm:think>")
+                if stag_key == "minimax_m3"
+                else ("<think>", "</think>")
+            )
+            base = prompt.removesuffix(think_begin + "\n").removesuffix(think_begin)
             assert full.startswith(base), (
                 f"Base mismatch.\nbase[-200:]={repr(base[-200:])}\n"
                 f"full[:len(base)+200]={repr(full[: len(base) + 200])}"
@@ -250,8 +278,8 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
             raw = full[len(base) :]
             raw = strip_eos(raw, stag_key, tokenizer)
             reasoning = assistant_msg["reasoning_content"]
-            if not raw.startswith("</think>"):
-                raw = "</think>" + raw
+            if not raw.startswith(think_end):
+                raw = think_end + raw
             return reasoning + raw
 
     assert full.startswith(prompt), (
@@ -262,9 +290,26 @@ def extract_output_tokenizer(model_id, stag_key, assistant_msg, tools, template_
     return strip_eos(output, stag_key, tokenizer)
 
 
+@lru_cache(maxsize=1)
+def load_deepseek_v41_encoder():
+    """Load the official, revision-pinned renderer (the release has no Jinja template)."""
+    path = load_model_file(
+        "deepseek-ai/DeepSeek-V4.1-Flash",
+        "encoding/encoding.py",
+        revision="dba1be0a40aa45a94ad051997016db3960a90277",
+    )
+    spec = importlib.util.spec_from_file_location("encoding_dsv41", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def extract_output_encoder(encoder_name, stag_key, assistant_msg, tools, template_kwargs):
     if encoder_name == "dsv32":
         from encoding_dsv32 import encode_messages, eos_token
+    elif encoder_name == "dsv41":
+        encoder = load_deepseek_v41_encoder()
+        encode_messages, eos_token = encoder.encode_messages, encoder.eos_token
     else:
         from encoding_dsv4 import encode_messages, eos_token
 
@@ -382,12 +427,12 @@ def generate_test_cases():
                 continue
             if num_tool_calls > 1 and model_id in SKIP_PARALLEL_TOOLS:
                 continue
-            if reasoning:
+            if reasoning not in (False, "disabled"):
                 cases.append(
                     (
                         stag_key,
                         model_id,
-                        True,
+                        reasoning,
                         REASONING_CONTENT,
                         num_tools,
                         tool_choice_str,
@@ -400,7 +445,7 @@ def generate_test_cases():
                         (
                             stag_key,
                             model_id,
-                            True,
+                            reasoning,
                             "",
                             num_tools,
                             tool_choice_str,
@@ -408,12 +453,12 @@ def generate_test_cases():
                             num_tool_calls,
                         )
                     )
-            else:
+            if reasoning in (False, "disabled", "auto"):
                 cases.append(
                     (
                         stag_key,
                         model_id,
-                        False,
+                        reasoning,
                         None,
                         num_tools,
                         tool_choice_str,
@@ -436,12 +481,14 @@ def case_id(case):
         num_tool_calls,
     ) = case
     model_short = model_id.split("/")[-1] if "/" in model_id else model_id.replace("ENCODER:", "")
-    if not reasoning:
+    if reasoning in (False, "disabled"):
         r_tag = "off"
     elif reasoning_content:
         r_tag = "on"
     else:
         r_tag = "empty"
+    if reasoning == "auto":
+        r_tag = "auto-" + r_tag if reasoning_content is not None else "auto-off"
     return f"{stag_key}-{model_short}-r{r_tag}-{num_tools}t-{tool_choice_str}-{num_tool_calls}calls"
 
 
@@ -471,11 +518,285 @@ def test_reasoning_stag(case):
         template_kwargs,
         num_tool_calls,
     ) = case
+    if stag_key == "gemma_4":
+        pytest.importorskip("transformers", minversion="5.5")
     tools = make_tools(num_tools)
     tool_choice = make_tool_choice(tool_choice_str, tools or [])
     assistant_msg = make_assistant_msg(stag_key, reasoning_content, num_tool_calls)
     model_output = extract_model_output(stag_key, model_id, assistant_msg, tools, template_kwargs)
     validate_output(stag_key, tools, tool_choice, reasoning, model_output)
+
+
+@pytest.mark.hf_token_required
+def test_minimax_m3_recursive_tool_arguments_alignment():
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "create_order",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "shipping": {
+                            "type": "object",
+                            "properties": {"city": {"type": "string"}},
+                            "required": ["city"],
+                        },
+                        "items": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "qty": {"type": "integer"},
+                                    "gift": {"type": "boolean"},
+                                },
+                                "required": ["qty", "gift"],
+                            },
+                        },
+                    },
+                    "required": ["shipping", "items"],
+                },
+            },
+        }
+    ]
+    assistant_msg = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_order",
+                    "arguments": {
+                        "shipping": {"city": "北京"},
+                        "items": [{"qty": 2, "gift": True}, {"qty": 1, "gift": False}],
+                    },
+                },
+            }
+        ],
+    }
+    model_output = extract_model_output(
+        "minimax_m3", "MiniMaxAI/MiniMax-M3", assistant_msg, tools, {"thinking_mode": "disabled"}
+    )
+    validate_output("minimax_m3", tools, "required", "disabled", model_output)
+
+
+@pytest.mark.parametrize(
+    "parameters, arguments, serialized_name",
+    (
+        pytest.param(
+            {"type": "object"}, {"meta": {"my-key": 1}}, 'name="my-key"', id="nested-dynamic"
+        ),
+        pytest.param(
+            {
+                "type": "object",
+                "properties": {"a&b": {"type": "integer"}},
+                "required": ["a&b"],
+                "additionalProperties": False,
+            },
+            {"a&b": 1},
+            'name="a&amp;b"',
+            id="declared-xml-sensitive",
+        ),
+    ),
+)
+@pytest.mark.skipif(sys.version_info < (3, 10), reason="cohere_melody requires Python >= 3.10")
+def test_cohere_melody_property_name_alignment(parameters, arguments, serialized_name):
+    """Cohere property names rendered by Melody align with the generated grammar."""
+    tools = [
+        {
+            "type": "function",
+            "function": {"name": "lookup", "description": "", "parameters": parameters},
+        }
+    ]
+    assistant_msg = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [
+            {
+                "id": "call_0",
+                "type": "function",
+                "function": {"name": "lookup", "arguments": arguments},
+            }
+        ],
+    }
+
+    model_output = extract_output_melody_cmd5(
+        assistant_msg, tools, template_kwargs={"reasoning": False}
+    )
+    assert serialized_name in model_output
+    validate_output(
+        "cohere", tools, tool_choice="required", reasoning=False, model_output=model_output
+    )
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "unconstrained"])
+def test_deepseek_v4_1_official_tokenizer_masks(reasoning, policy, schema_kind):
+    tokenizer = load_tokenizer(
+        "deepseek-ai/DeepSeek-V4.1-Flash", revision="dba1be0a40aa45a94ad051997016db3960a90277"
+    )
+    info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=129280)
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert info.stop_token_ids == [1]
+    assert tokenizer.encode("｜DSML｜", add_special_tokens=False) == [128825]
+    tool_choice = (
+        {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    )
+    schema = {
+        "type": "object",
+        "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+        "required": ["query", "limit"],
+        "additionalProperties": False,
+    }
+    tools = [
+        {"type": "function", "function": {"name": name, "parameters": schema}}
+        for name in ("search", "other")
+    ]
+    for tool in tools:
+        if schema_kind == "union":
+            tool["function"]["parameters"]["properties"] = {
+                "query": {"type": ["string", "null"]},
+                "limit": {"anyOf": [{"type": "integer"}, {"type": "string"}]},
+            }
+        elif schema_kind == "unconstrained":
+            tool["function"]["parameters"] = {}
+    stag = get_model_structural_tag(
+        "deepseek_v4_1", tools=tools, reasoning=reasoning, tool_choice=tool_choice
+    )
+    compiled = xgr.GrammarCompiler(info).compile_structural_tag(stag)
+    matcher = xgr.GrammarMatcher(compiled)
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    message = {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "Plan." if reasoning else "",
+        "tool_calls": [
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": (
+                        {"query": None, "limit": "two"}
+                        if schema_kind == "union" and name == "other"
+                        else {"query": "北京\n<code>", "limit": 2}
+                    ),
+                },
+            }
+            for name in (["search"] if policy == "forced" else ["search", "other"])
+        ],
+    }
+    output = extract_output_encoder(
+        "dsv41",
+        "deepseek_v4_1",
+        message,
+        tools,
+        {"thinking_mode": "thinking" if reasoning else "chat"},
+    )
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    for index, token_id in enumerate(token_ids + [tokenizer.eos_token_id]):
+        matcher.fill_next_token_bitmask(bitmask)
+        if policy != "auto" and index < len(token_ids):
+            assert not (int(bitmask[0, 0]) >> tokenizer.eos_token_id) & 1
+        assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, token_id
+        assert matcher.accept_token(token_id), token_id
+    assert matcher.is_terminated()
+
+
+_MIMO_CHECKPOINTS = [
+    ("XiaomiMiMo/MiMo-V2.6-Pro-RL", "54b10491b1811c76aa9681a9d0ff872396a4064c"),
+    ("XiaomiMiMo/MiMo-V2.6-Flash-RL", "3b38d063180c3e4aed9691fdc735f3d10b266ee4"),
+]
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("model_id,revision", _MIMO_CHECKPOINTS)
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "ref", "unconstrained"])
+def test_mimo_official_tokenizer_masks(model_id, revision, reasoning, policy, schema_kind):
+    """Replay actual template completions, including tokens crossing XML boundaries."""
+    tokenizer = load_tokenizer(model_id, revision=revision)
+    info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=152576)
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert info.stop_token_ids == [151645]
+    assert len(tokenizer) == 151675
+    for text, token_id in [
+        ("<tool_call>", 151657),
+        ("</tool_call>", 151658),
+        ("<think>", 151667),
+        ("</think>", 151668),
+    ]:
+        assert tokenizer.encode(text, add_special_tokens=False) == [token_id]
+
+    arguments = {
+        "query": '\n北京 &amp; "quoted"\n',
+        "limit": 2,
+        "data": {"items": [True, None, "é"]},
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "limit": {"type": "integer", "minimum": 1},
+            "data": {
+                "type": "object",
+                "properties": {"items": {"type": "array"}},
+                "required": ["items"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["query", "limit", "data"],
+        "additionalProperties": False,
+    }
+    if schema_kind == "union":
+        schema["properties"]["limit"] = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+        arguments["limit"] = None
+    elif schema_kind == "ref":
+        schema["$defs"] = {"Limit": schema["properties"]["limit"]}
+        schema["properties"]["limit"] = {"$ref": "#/$defs/Limit"}
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "parameters": schema,
+                "strict": schema_kind != "unconstrained",
+            },
+        }
+        for name in ("search", "other")
+    ]
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    tag = get_model_structural_tag("mimo", tools=tools, reasoning=reasoning, tool_choice=choice)
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_structural_tag(tag))
+    message = {
+        "role": "assistant",
+        "content": "",
+        "reasoning_content": "Plan." if reasoning else "",
+        "tool_calls": [
+            {"type": "function", "function": {"name": name, "arguments": arguments}}
+            for name in (["search"] if policy == "forced" else ["search", "other"])
+        ],
+    }
+    kwargs = {"tools": tools, "tokenize": False, "enable_thinking": reasoning}
+    prompt = tokenizer.apply_chat_template([USER_MSG], add_generation_prompt=True, **kwargs)
+    full = tokenizer.apply_chat_template([USER_MSG, message], **kwargs)
+    assert prompt.endswith("assistant\n" if reasoning else "assistant\n<think></think>")
+    assert full.startswith(prompt)
+    output = full[len(prompt) :]
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    for index, token_id in enumerate(token_ids):
+        matcher.fill_next_token_bitmask(bitmask)
+        if policy != "auto" and (index == 0 or token_ids[index - 1] != 151658):
+            assert not (int(bitmask[0, 151645 // 32]) >> (151645 % 32)) & 1
+        assert (int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1, (index, token_id)
+        assert matcher.accept_token(token_id), (index, token_id)
+    assert matcher.is_terminated()
 
 
 if __name__ == "__main__":

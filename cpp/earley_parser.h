@@ -329,6 +329,10 @@ class EarleyParser {
   /*! \brief In this round of advancing, check if the stop token can be accepted. */
   bool tmp_accept_stop_token_ = false;
 
+  /*! \brief Whether a lookahead reached an ExcludeToken element, which its byte scan cannot take:
+   * the lookahead check then leaves the token to the parent instead of rejecting it. */
+  bool lookahead_reached_exclude_token_ = false;
+
   /*! \brief store when accepting i characters, if the stop token can be accepted. */
   std::vector<bool> is_completed_;
 
@@ -365,6 +369,7 @@ class EarleyParser {
     kFsmStateNonTerminal = 1 << 2,
     kFsmStateEnd = 1 << 3,
     kFsmStateHasEdges = 1 << 4,
+    kFsmStateHasExcludeToken = 1 << 5,
   };
 
   /*! \brief Lazily-computed FSM state properties, indexed by rule id and state id. */
@@ -640,6 +645,15 @@ class EarleyParser {
    * \return True if any state advanced, false otherwise.
    */
   bool AdvanceAtomicToken(int32_t token_id, bool debug_print = false, int32_t token_char_count = 0);
+
+  /*!
+   * \brief Find the latest of the last num_rows rows (row i holds the states after the first i
+   * bytes of the current token) with a kExcludeToken edge accepting token_id, or with any
+   * kExcludeToken edge if token_id is -1: a token-level free-text region reached inside a token
+   * takes the whole token from there.
+   * \return That i, or 0 if there is none.
+   */
+  int32_t FindMidTokenExcludeEdgeRow(int32_t num_rows, int32_t token_id);
 
   /*!
    * \brief Enqueue the state into the queue.

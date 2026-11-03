@@ -81,6 +81,8 @@ struct NamedGrammar;
  * rule2 ::= character_class_star_grammar_expr(id_of_a_character_class_grammar_expr)
  */
 class Grammar {
+  static const std::vector<NamedGrammar>& EmptyNamedGrammars();
+
  public:
   /*!
    * \brief Get the EBNF string of the grammar.
@@ -104,9 +106,10 @@ class Grammar {
    * \param indent The number of spaces for indentation. If set to std::nullopt, the output will be
    * in one line. Default: 2.
    * \param separators Two separators used in the schema: comma and colon. Examples: {",", ":"},
-   * {", ", ": "}. If std::nullopt, the default separators will be used: {",", ": "} when the
-   * indent is not nullopt, and {", ", ": "} otherwise. This follows the convention in python
-   * json.dumps(). Default: std::nullopt.
+   * {", ", ": "}. If std::nullopt, the default separators will be used: {",", ":"} when
+   * any_whitespace is true, {",", ": "} when the indent is not nullopt, and {", ", ": "}
+   * otherwise. With indent, values with an unconstrained schema (e.g. {}) still stay on one line
+   * with {", ", ": "}. This follows the convention in python json.dumps(). Default: std::nullopt.
    * \param strict_mode Whether to use strict mode. In strict mode, the generated grammar will not
    * allow properties and items that is not specified in the schema. This is equivalent to
    * setting unevaluatedProperties and unevaluatedItems to false.
@@ -142,7 +145,7 @@ class Grammar {
   static Grammar FromLark(
       const std::string& lark_string,
       const std::optional<TokenizerInfo>& tokenizer_info = std::nullopt,
-      const std::vector<NamedGrammar>& named_grammars = {}
+      const std::vector<NamedGrammar>& named_grammars = EmptyNamedGrammars()
   );
 
   /*!
@@ -215,6 +218,11 @@ struct NamedGrammar {
   /*! \brief An existing grammar or a Lark source with its own `start` rule. */
   std::variant<Grammar, std::string> grammar;
 };
+
+inline const std::vector<NamedGrammar>& Grammar::EmptyNamedGrammars() {
+  static const std::vector<NamedGrammar> empty;
+  return empty;
+}
 
 }  // namespace xgrammar
 

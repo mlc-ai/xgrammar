@@ -610,12 +610,15 @@ inline std::string value::to_str() const {
     case number_type: {
       char buf[256];
       double tmp;
-      SNPRINTF(
-          buf,
-          sizeof(buf),
-          fabs(u_.number_) < (1ULL << 53) && modf(u_.number_, &tmp) == 0 ? "%.f" : "%.17g",
-          u_.number_
-      );
+      if (fabs(u_.number_) < (1ULL << 53) && modf(u_.number_, &tmp) == 0) {
+        SNPRINTF(buf, sizeof(buf), "%.f", u_.number_);
+      } else {
+        // Print the fewest digits that parse back to the same double.
+        for (int precision = 15; precision <= 17; ++precision) {
+          SNPRINTF(buf, sizeof(buf), "%.*g", precision, u_.number_);
+          if (strtod(buf, NULL) == u_.number_) break;
+        }
+      }
 #if PICOJSON_USE_LOCALE
       char* decimal_point = localeconv()->decimal_point;
       if (strcmp(decimal_point, ".") != 0) {

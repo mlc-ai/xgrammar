@@ -7,6 +7,7 @@
 #ifndef XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 #define XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_
 
+#include <algorithm>
 #include <map>
 #include <optional>
 #include <string>
@@ -17,6 +18,63 @@
 #include "json_schema_converter.h"
 
 namespace xgrammar {
+
+namespace converter_ext {
+
+// Wrapper strings for XML parameter tags.
+struct XMLWrapper {
+  std::string key_wrapper_prefix;
+  std::string key_wrapper_suffix;
+  std::string value_wrapper_prefix;
+  std::string parameter_suffix;
+};
+
+}  // namespace converter_ext
+
+/*!
+ * \brief Converter for MiniMax M3's recursive namespace-prefixed XML format.
+ *
+ * This initial implementation supports schemas whose object property names are
+ * known when the grammar is built. Schemas requiring runtime element names are
+ * rejected explicitly.
+ */
+class MiniMaxM3XMLToolCallingConverter : public JSONSchemaConverter {
+ public:
+  MiniMaxM3XMLToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false
+  );
+
+ protected:
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateArray(const ArraySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateObject(
+      const ObjectSpec& spec, const std::string& rule_name, bool dummy_need_braces = false
+  ) override;
+  int32_t GenerateAny(const AnySpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  int32_t FormatProperty(
+      const std::string& key,
+      int32_t value_rule_id,
+      const std::string& rule_name,
+      int64_t idx,
+      const SchemaSpecPtr& schema
+  ) override;
+  std::string NextSeparator(bool is_end = false) override;
+  void AddBasicRules() override;
+
+ private:
+  int32_t FormatElement(const std::string& name, int32_t value_rule_id);
+  int32_t GenerateLiteral(const picojson::value& value);
+  void ValidateObject(const ObjectSpec& spec) const;
+  static void ValidateElementName(const std::string& name);
+};
 
 /*!
  * \brief Converter for XML Tool Calling format (e.g., Qwen style).
@@ -34,7 +92,8 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
       std::optional<int> max_whitespace_cnt,
       RefResolver ref_resolver = nullptr,
       JSONFormat json_format = JSONFormat::kQwenXML,
-      bool any_order = false
+      bool any_order = false,
+      std::vector<std::string> excludes = {}
   );
 
   /*! \brief Convert SchemaSpec to grammar with XML format for root object. Note that this function
@@ -81,15 +140,10 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
+  std::string RefCacheKey(const std::string& uri) const override;
 
  protected:
-  // Wrapper strings for XML parameter tags (key prefix/suffix, value prefix, closing suffix)
-  struct XMLWrapper {
-    std::string key_wrapper_prefix;
-    std::string key_wrapper_suffix;
-    std::string value_wrapper_prefix;
-    std::string parameter_suffix;
-  };
+  using XMLWrapper = converter_ext::XMLWrapper;
 
   static const std::unordered_map<JSONFormat, XMLWrapper> kKeyWrapperMap;
   static const std::string kXMLString;
@@ -101,17 +155,13 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::string EscapeAttrValue(const std::string& value) const;
 
   /*!
-   * \brief Return the Kimi-K3 `type` attribute a value of \p spec is rendered with, or
-   * std::nullopt if the schema does not pin down a single type (\p spec may be nullptr, which
-   * is how free-form keys end up unconstrained).
+   * \brief Return a single rendered JSON type when it can be determined without resolving
+   * references or combinators, or std::nullopt otherwise (\p spec may be nullptr).
    *
-   * The Kimi-K3 tool-call parser reads the attribute as a decoding switch: type="string"
-   * keeps the value as raw text, anything else JSON-decodes it. So the attribute must agree
-   * with the value grammar, otherwise the decoded argument changes type (e.g. a string
-   * property tagged type="number" with body 123 decodes to the integer 123). Mirrors the
-   * model's renderer (_xtml_type), which maps both ints and floats to "number".
+   * Shared by Kimi-K3 type attributes and DeepSeek string attributes. Both integer and
+   * number schemas render as "number"; string values are rendered as raw text.
    */
-  static std::optional<std::string> KimiK3TypeAttr(const SchemaSpecPtr& spec);
+  static std::optional<std::string> GetRenderedJSONType(const SchemaSpecPtr& spec);
 
   /*!
    * \brief Build the expression between the property key and its value.
@@ -121,7 +171,23 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    */
   int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
 
+  /*!
+   * \brief Build a DeepSeek XML parameter's string attribute, value and closing tag.
+   * string="true" wraps raw strings, string="false" wraps JSON values. Unions and mixed enums
+   * produce one alternative per option; GetRenderedJSONType supplies the type classification.
+   * A negative value_rule_id defers value-rule creation until a typed leaf is reached.
+   */
+  int32_t FormatDeepSeekParamSuffix(
+      const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name_hint = ""
+  );
+
+  // Parameter suffix rules are independent of the key, so references can be shared across
+  // named and dynamic parameters. Allocate them before resolving refs to handle cycles.
+  std::unordered_map<std::string, int32_t> deepseek_param_ref_rules_;
+
   JSONFormat json_format_;
+  // Root parameter lists, raw parameter values, and nested JSON have distinct grammars.
+  int EncodingContext() const { return std::min(nested_object_level_, 2); }
   // Track if we're at the root object level
   int nested_object_level_ = 0;
   const XMLWrapper xml_wrapper_;
@@ -176,26 +242,42 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   ) override;
   std::string NextSeparator(bool is_end = false) override;
 
+  void AddBasicRules() override;
   void AddCache(const std::string& key, int32_t rule_id) override;
   std::optional<int32_t> GetCache(const std::string& key) const override;
+  std::string RefCacheKey(const std::string& uri) const override;
 
  private:
-  struct XMLIdentifierTrieNode {
+  struct CohereKeyTrieNode {
     bool is_terminal = false;
-    std::map<char, XMLIdentifierTrieNode> children;
+    std::map<int32_t, CohereKeyTrieNode> children;
   };
 
+  static const std::string kCohereKey;
+  static const std::string kCohereAnyScalar;
+  static const std::string kCohereAnyList;
+
+  /*! \brief `<cofl:value` plus the optional ` name="..."` attribute of one parameter. */
+  int32_t CohereParamPrefix(
+      const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
+  );
+  /*!
+   * \brief The type attribute, value and closing tag of one parameter, correlated with
+   * \p schema. The suffix does not depend on the parameter name, so `$ref` schemas get one
+   * memoized rule per URI that is registered before the reference is resolved; recursive
+   * references (directly, or through nested dict/list items) then point back at that rule.
+   */
+  int32_t FormatCohereParamSuffix(const SchemaSpecPtr& schema, int32_t value_rule_id);
+  int32_t FormatCohereSuffixWithType(int32_t type_expression, int32_t value_rule_id);
+  int32_t FormatAnyCohereSuffix();
   int32_t FormatCohereParam(
       const std::optional<std::string>& name,
       const std::optional<int32_t>& key_pattern_expr,
       const SchemaSpecPtr& schema,
       int32_t value_rule_id
   );
-  int32_t FormatSingleCohereParam(
-      const std::optional<std::string>& name,
-      const std::optional<int32_t>& key_pattern_expr,
-      const SchemaSpecPtr& schema,
-      int32_t value_rule_id
+  int32_t FormatAnyCohereParam(
+      const std::optional<std::string>& name, const std::optional<int32_t>& key_pattern_expr
   );
   int32_t FormatCohereValue(int32_t value_rule_id);
   int32_t GetCohereTypePattern(const SchemaSpecPtr& schema);
@@ -205,16 +287,101 @@ class CohereXMLToolCallingConverter : public XMLToolCallingConverter {
   );
   std::optional<std::vector<SchemaSpecPtr>> GetCohereCompositeOptions(const SchemaSpecPtr& schema
   ) const;
-  int32_t BuildXMLIdentifierExcludingBody(
-      const XMLIdentifierTrieNode& node, const std::string& rule_name, int depth
-  );
+  int32_t BuildCohereKeyExcludingBody(const CohereKeyTrieNode& node, int depth);
+  bool AtCohereRoot() const;
   bool InCohereValueContext() const;
 
   std::vector<const ObjectSpec*> object_stack_;
   std::vector<SchemaSpecPtr> additional_property_stack_;
+  // Parameter suffix rules keyed by `$ref` URI; see FormatCohereParamSuffix.
+  std::unordered_map<std::string, int32_t> cohere_param_ref_rules_;
   int cohere_array_level_ = 0;
 };
 
+/*!
+ * \brief Converter for the Gemma tool-calling argument format.
+ *
+ * Every nesting level uses Gemma's spelling instead of JSON:
+ * - Object keys are unquoted: {key:value,key2:value2}
+ * - Strings are delimited by the <|"|> token instead of double quotes and have no escape
+ *   sequences: <|"|>any text<|"|>
+ * - Numbers, booleans, null, arrays and objects otherwise follow JSON syntax.
+ */
+class GemmaToolCallingConverter : public JSONSchemaConverter {
+ public:
+  GemmaToolCallingConverter(
+      std::optional<int> indent,
+      std::optional<std::pair<std::string, std::string>> separators,
+      bool any_whitespace,
+      std::optional<int> max_whitespace_cnt,
+      RefResolver ref_resolver = nullptr,
+      bool any_order = false,
+      std::vector<std::string> excludes = {}
+  );
+
+  // The Gemma string delimiter that replaces the JSON double quote.
+  static const std::string kGemmaStringDelim;
+
+ protected:
+  int32_t GenerateString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
+
+  int32_t FormatPropertyKey(const std::string& key, const SchemaSpecPtr& schema) override;
+  std::string GetKeyPattern() const override;
+  int32_t GetKeyPatternExcluding(
+      const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
+  ) override;
+  int32_t CreatePatternKeyRule(const std::string& pattern, const std::string& rule_name_hint)
+      override;
+  int32_t CreatePropertyNamesKeyRule(
+      const SchemaSpecPtr& property_names, const std::string& rule_name_hint
+  ) override;
+
+  void AddBasicRules() override;
+
+ private:
+  // Rule matching any text that does not contain the string delimiter.
+  static const std::string kGemmaStringContent;
+  // Rule matching an unquoted property key.
+  static const std::string kGemmaVariableName;
+
+  /*! \brief Wrap a string body expression in the delimiters. */
+  int32_t GemmaString(int32_t body);
+  /*! \brief A regex string body that cannot contain the delimiter, when the FSM engine allows. */
+  int32_t GemmaRegexBody(const std::string& regex, const std::string& rule_name);
+  /*! \brief A choice of the bare keys spelled by the JSON string literals, or Unsatisfiable. */
+  int32_t GemmaKeyLiterals(const std::vector<std::string>& json_values);
+  /*! \brief Whether no raw string or key inside the value contains an exclusion. */
+  bool IsAllowedGemmaValue(const picojson::value& value) const;
+  /*! \brief Serialize a JSON value into Gemma's argument spelling. */
+  static std::string SerializeGemma(const picojson::value& value);
+  /*! \brief The Gemma spelling of a JSON literal as a byte string, or Unsatisfiable. */
+  int32_t GemmaLiteral(const std::string& json_value);
+
+  // Whether the caller supplied JSONSchemaFormat.excludes beyond the delimiter.
+  bool has_user_excludes_;
+};
+
+namespace converter_ext {
+
+XMLWrapper GetQwenXMLWrapper();
+XMLWrapper GetMiniMaxXMLWrapper();
+XMLWrapper GetDeepSeekXMLWrapper();
+XMLWrapper GetDeepSeekV41XMLWrapper();
+XMLWrapper GetGLMXMLWrapper();
+XMLWrapper GetCohereXMLWrapper();
+XMLWrapper GetKimiK3XMLWrapper();
+
+struct XMLKeySuffix {
+  const char* prefix;
+  std::vector<const char*> values;
+  const char* suffix;
+};
+
+const XMLKeySuffix& GetKimiK3XMLKeySuffix();
+
+}  // namespace converter_ext
 }  // namespace xgrammar
 
 #endif  // XGRAMMAR_JSON_SCHEMA_CONVERTER_EXT_H_

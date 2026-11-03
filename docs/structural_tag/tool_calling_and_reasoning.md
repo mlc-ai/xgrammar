@@ -13,7 +13,7 @@ The `tool_choice` parameter controls how tool calls and text are mixed:
 - **Forced** (named choice): exactly one specified tool must be called.
 - **None** (`"none"`): tool calls are disabled; only text and reasoning are allowed.
 
-The `reasoning` parameter controls whether the model-specific reasoning section is enabled.
+The `reasoning` parameter controls the model-specific reasoning section.
 
 ## Basic API: `get_model_structural_tag`
 
@@ -23,13 +23,14 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"glm_4_7"`, `"deepseek_v4"`, `"cohere"`, `"exaone"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`, `"deepseek_v4_1"`, `"mimo"`, `"cohere"`, `"exaone"`, `"gemma_4"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
     {"type": "function", "function": {"name": "...", "parameters": {...}}}
     ```
     The `"parameters"` field accepts a JSON Schema dict, `True` (any JSON), or can be omitted (unconstrained). When `"strict"` is `False`, the parameters constraint is skipped.
+    MiniMax M3 currently requires fixed property names and rejects unconstrained parameters and schemas with runtime-named properties.
   - **Builtin tools** use a compact shape with XGrammar-specific fields:
     ```json
     {"type": "web_search_preview", "name": "browser.search", "parameters": {...}}
@@ -47,11 +48,13 @@ Use it when you need to constrain the model to output in a fixed pattern such as
   - `{"type": "function", "function": {"name": ...}}`: forces one function tool.
   - `{"type": <builtin_type>}`: forces one builtin tool (matched by `type`).
   - `{"type": "allowed_tools", "allowed_tools": {"mode": ..., "tools": [...]}}`: limits available tools before applying its `mode`. The `tools` list may contain both function refs and builtin refs (matched by `type`).
-- **reasoning** (`bool`, optional): Whether to enable reasoning mode (`<think>`/`</think>` tags or model-specific equivalents). Default `True`.
+- **reasoning** (`"enabled" | "disabled" | "auto" | bool`, optional): Controls the model-specific reasoning section. The string modes are recommended. The boolean aliases `True` and `False` are deprecated but remain supported as `"enabled"` and `"disabled"`, respectively. For models with a leading reasoning block, `"auto"` means that the prompt does not prefill its opener, and the model may emit one complete block or answer/call a tool directly. Default `"enabled"` in `get_model_structural_tag`; the model-specific `get_minimax_m3_structural_tag` defaults to `"auto"`. For MiniMax M3, these modes must be paired with the chat template's `enabled`, `disabled`, and `adaptive` thinking modes; adaptive output may start with `</mm:think>` when skipping reasoning. Boolean aliases are supported only by `get_model_structural_tag`; model-specific builders take the three explicit string modes.
 - **any_order** (`bool`, optional): When `True`, applies `any_order=True` to every `JSONSchemaFormat` in the generated structural tag, so each tool's arguments may be emitted in any property order (see [`JSONSchemaFormat`](structural_tag) for the exact semantics). Default `False`, which keeps the declared property order with full validation.
+- **parallel_tool_calls** (`bool`, optional): Whether the model may emit more than one tool call in a single response, following the OpenAI Chat Completions parameter of the same name. Default `True`, which keeps the multi-call grammar. When `False`, the structural tag allows at most one tool call: exactly zero or one under `tool_choice="auto"`, exactly one under `"required"` or a forced tool. Free text is still allowed before the call, but generation must end once the call is closed, since a second call is no longer reachable.
+- **token_markers** (`bool`, optional): Match control markers (`<tool_call>`, `</think>`, ...) as their dedicated tokens instead of as strings; see [Token-level markers](#token-level-markers). Supported for `glm_4_7`, `qwen_3`, `qwen_3_5` and `qwen_3_coder`. Default `False`.
 - **max_whitespace_cnt** (`Optional[int]`, optional): Caps the number of consecutive whitespace characters. Setting it (e.g. `2`) bounds runs of whitespace, which avoids the unbounded-whitespace outputs some models emit in bad cases that would otherwise blow up grammar compilation/matching.
 
-Passing an unsupported `model` or an invalid `tool_choice` will raise `ValueError`.
+Passing an unsupported `model`, invalid `tool_choice`, or invalid `reasoning` mode will raise `ValueError`.
 
 ### Returns
 
@@ -119,14 +122,22 @@ grammar = Grammar.from_structural_tag(structural_tag)
 
 ### Reasoning mode
 
-For formats that support reasoning (like Qwen3, DeepSeek-R1, Kimi-K2), pass `reasoning` to enable/disable:
+For formats that support reasoning (like Qwen3, DeepSeek-R1, Kimi-K2), use the recommended string modes:
 
 ```python
-structural_tag = get_model_structural_tag("qwen_3", tools=tools, reasoning=True)
+structural_tag = get_model_structural_tag("qwen_3", tools=tools, reasoning="enabled")
 grammar = Grammar.from_structural_tag(structural_tag)
 ```
 
-If `reasoning` is not passed, reasoning mode is enabled by default.
+If `reasoning` is omitted, reasoning is enabled by default. Adaptive reasoning must be requested explicitly:
+
+```python
+structural_tag = get_model_structural_tag(
+    "qwen_3", tools=tools, reasoning="auto"
+)
+```
+
+The model-specific `get_minimax_m3_structural_tag` builder is the exception: its direct-call default is `reasoning="auto"`.
 
 ### Tool choice
 
@@ -183,6 +194,33 @@ structural_tag = get_model_structural_tag(
 
 Defaults to `True`. No effect for models without special tokens (e.g. `harmony`).
 
+### Parallel tool calls
+
+By default the grammar accepts as many tool calls as the model wants to emit. Pass
+`parallel_tool_calls=False` to cap the response at a single call:
+
+```python
+structural_tag = get_model_structural_tag(
+    "qwen_3",
+    tools=tools,
+    parallel_tool_calls=False,
+)
+```
+
+With `tool_choice="auto"` the model may still answer with plain text instead, so the response holds
+exactly zero or one call; with `"required"` or a forced tool it holds exactly one. A forced tool
+choice already resolves to a single call, so the flag does not change it.
+
+### Token-level markers
+
+By default control markers such as `<tool_call>` are strings, so the grammar also accepts them
+spelled from ordinary sub-tokens (`<`, `tool_call`, `>`), which a parser that recognises markers by
+token ID cannot parse. `token_markers=True` requires the dedicated tokens instead; the tokenizer
+must define each marker as a single token, and the tag must be compiled with a tokenizer-configured
+`GrammarCompiler`, not `Grammar.from_structural_tag`. Markers in token-triggered free text are then
+also only excluded as tokens, so use it only with such parsers. Markers inside schema-driven content
+(e.g. GLM's `<arg_key>`) stay strings.
+
 ---
 
 ## Supported models
@@ -202,10 +240,14 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"harmony"` | gpt-oss |
 | `"deepseek_v3_2"` | DeepSeek-V3.2 |
 | `"minimax"` | MiniMax-M2.5 |
+| `"minimax_m3"` | MiniMax-M3 |
 | `"glm_4_7"` | GLM-5, GLM-4.7 |
 | `"deepseek_v4"` | DeepSeek-V4 |
+| `"deepseek_v4_1"` | DeepSeek-V4.1-Flash |
+| `"mimo"` | MiMo-V2.6-Pro-RL, MiMo-V2.6-Flash-RL |
 | `"cohere"` | Cohere Command models using XML tool calls |
 | `"exaone"` | EXAONE-4.0-32B, EXAONE-4.0-1.2B |
+| `"gemma_4"` | Gemma 4 (gemma-4-E2B-it, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it); arguments use the `"gemma"` JSON-schema style |
 
 ## Extending with custom models
 

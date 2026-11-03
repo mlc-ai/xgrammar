@@ -136,7 +136,7 @@ static void AddSameLengthCharacterRange(FSM& fsm, int from, int to, uint32_t min
     if ((max & 0x00FFFF) != 0xBFBF) {
       int tmp_state_max = fsm.AddState();
       fsm.AddEdge(from, tmp_state_max, byte_max[2], byte_max[2]);
-      AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x0080, (max & 0x00FFFF));
+      AddSameLengthCharacterRange(fsm, tmp_state_max, to, 0x008080, (max & 0x00FFFF));
     } else {
       byte_max[2]++;
     }
@@ -381,6 +381,22 @@ void AddCodepointRangesToFSM(
   }
 }
 
+/*! \brief The code points matched by \s. The regex dialect is ECMAScript, where \s is WhiteSpace
+ * (TAB, VT, FF, ZWNBSP and every Space_Separator code point) plus LineTerminator (LF, CR, LS, PS).
+ * Unlike \d and \w, it is not ASCII-only. */
+const std::vector<CodepointRange> kWhitespaceClassRanges = {
+    {0x09, 0x0D},
+    {0x20, 0x20},
+    {0xA0, 0xA0},
+    {0x1680, 0x1680},
+    {0x2000, 0x200A},
+    {0x2028, 0x2029},
+    {0x202F, 0x202F},
+    {0x205F, 0x205F},
+    {0x3000, 0x3000},
+    {0xFEFF, 0xFEFF},
+};
+
 /*! \brief One parsed regex escape (or literal): either a single codepoint, or a (possibly
  * negated) set of codepoint ranges for class escapes like \d, \D, \w, \W, \s, \S. */
 struct RegexEscapeItem {
@@ -463,10 +479,10 @@ Result<RegexEscapeItem> ParseRegexEscape(const std::string& regex, size_t* pos, 
       item.negated = true;
       return ResultOk(std::move(item));
     case 's':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = kWhitespaceClassRanges;
       return ResultOk(std::move(item));
     case 'S':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = kWhitespaceClassRanges;
       item.negated = true;
       return ResultOk(std::move(item));
     case 'x': {
@@ -1595,6 +1611,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
       }
     }
   }
+  new_fsm.SetEdgeAuxData(std::vector<int32_t>(fsm.GetEdgeAuxData()));
   return ResultOk(FSMWithStartEnd(new_fsm, fsm_wse.GetStart(), fsm_wse.GetEnds()));
 }
 
@@ -1608,7 +1625,12 @@ class TrieFSMBuilderImpl {
       bool allow_overlap,
       bool add_back_edges
   );
-  void AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends);
+  void AddBackEdges(
+      FSM* fsm,
+      int start,
+      const std::unordered_set<int>& ends,
+      std::unordered_set<int32_t>* dead_states
+  );
 };
 
 std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
@@ -1685,7 +1707,7 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
     }
 
     // Add back edges.
-    AddBackEdges(&fsm, start, ends);
+    AddBackEdges(&fsm, start, ends, &dead_state_set);
 
     // Remove the edges to excluded end states.
     if (dead_state_set.size() != 0) {
@@ -1707,7 +1729,12 @@ std::optional<FSMWithStartEnd> TrieFSMBuilderImpl::Build(
   return FSMWithStartEnd(fsm, start, std::vector<int32_t>(ends.begin(), ends.end()));
 }
 
-void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_set<int>& ends) {
+void TrieFSMBuilderImpl::AddBackEdges(
+    FSM* fsm,
+    int start,
+    const std::unordered_set<int>& ends,
+    std::unordered_set<int32_t>* dead_states
+) {
   // Build an Aho-Corasick automaton by adding back edges.
   // When matching on the trie fails at state u on byte b, the matcher must resume from
   // the longest proper suffix of u's prefix that is still a path in the trie (the
@@ -1747,6 +1774,13 @@ void TrieFSMBuilderImpl::AddBackEdges(FSM* fsm, int start, const std::unordered_
     }
   }
   for (int u : bfs_order) {
+    // An explicit trie child can complete an excluded suffix without entering its
+    // terminal state: with excludes {"abc", "xabcq"}, the state for "xabc" has
+    // failure state "abc". It must be dead too, even if more trie edges remain.
+    // BFS ensures the failure state's excluded status has already been propagated.
+    if (dead_states->count(fail[u]) > 0) {
+      dead_states->insert(u);
+    }
     for (int byte = 0; byte < 256; byte++) {
       // Entries of deeper states are untouched so far, so a non-empty entry here is
       // exactly a trie child of u.

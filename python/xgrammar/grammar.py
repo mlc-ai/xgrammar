@@ -13,6 +13,29 @@ if TYPE_CHECKING:
     from .tokenizer_info import TokenizerInfo
 
 
+def _convert_named_grammars_to_lists(
+    named_grammars: Optional[Dict[str, Union["Grammar", str]]]
+) -> Tuple[List[str], List[Any]]:
+    if named_grammars is None:
+        named_grammars = {}
+    if not isinstance(named_grammars, dict):
+        raise TypeError("named_grammars must be a dictionary")
+    names: List[str] = []
+    values: List[Any] = []
+    for name, grammar_or_source in named_grammars.items():
+        if not isinstance(name, str):
+            raise TypeError("named grammar names must be strings")
+        if isinstance(grammar_or_source, Grammar):
+            value = grammar_or_source._handle
+        elif isinstance(grammar_or_source, str):
+            value = grammar_or_source
+        else:
+            raise TypeError("named grammar values must be Grammar instances or Lark strings")
+        names.append(name)
+        values.append(value)
+    return names, values
+
+
 def _convert_instance_to_str(instance: Union[str, Dict[str, Any], StructuralTag]) -> str:
     """Convert a instance to a string representation. It returns the schema in string format because
     it's faster to send to C++.
@@ -202,7 +225,13 @@ class Grammar(XGRObject):
 
         any_whitespace : bool, default: True
             Whether to use any whitespace. If True, the generated grammar will ignore the
-            indent and separators parameters, and allow any whitespace.
+            indent parameter, and allow any whitespace.
+
+            Setting this to False can degrade generation quality with schemas that allow additional
+            properties, possibly because restricting whitespace steers prose into unconstrained keys.
+            The output can still satisfy the schema. If extra keys are not needed, set
+            additionalProperties to false. See
+            <https://github.com/mlc-ai/xgrammar/issues/851> for more details.
 
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
@@ -216,8 +245,9 @@ class Grammar(XGRObject):
 
         separators : Optional[Tuple[str, str]], default: None
             Two separators used in the schema: comma and colon. Examples: (",", ":"), (", ", ": ").
-            If None, the default separators will be used: (",", ": ") when the indent is not None,
-            and (", ", ": ") otherwise.
+            If None, the default separators will be used: (",", ":") when any_whitespace is True,
+            (",", ": ") when the indent is not None, and (", ", ": ") otherwise. With indent, values
+            with an unconstrained schema (e.g. {}) still stay on one line with (", ", ": ").
 
         strict_mode : bool, default: True
             Whether to use strict mode. In strict mode, the generated grammar will not allow
@@ -328,23 +358,7 @@ class Grammar(XGRObject):
             keys are passed without the leading ``@``.
         """
         tokenizer_handle = None if tokenizer_info is None else tokenizer_info._handle
-        if named_grammars is None:
-            named_grammars = {}
-        if not isinstance(named_grammars, dict):
-            raise TypeError("named_grammars must be a dictionary")
-        names: List[str] = []
-        values: List[Any] = []
-        for name, grammar_or_source in named_grammars.items():
-            if not isinstance(name, str):
-                raise TypeError("named grammar names must be strings")
-            if isinstance(grammar_or_source, Grammar):
-                value = grammar_or_source._handle
-            elif isinstance(grammar_or_source, str):
-                value = grammar_or_source
-            else:
-                raise TypeError("named grammar values must be Grammar instances or Lark strings")
-            names.append(name)
-            values.append(value)
+        names, values = _convert_named_grammars_to_lists(named_grammars)
         return Grammar._create_from_handle(
             _core.Grammar.from_lark(lark_string, tokenizer_handle, names, values)
         )

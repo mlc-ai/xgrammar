@@ -14,6 +14,7 @@
 #include <memory>
 
 #include "../../cpp/json_schema_converter.h"
+#include "../../cpp/support/encoding.h"
 #include "../../cpp/support/utils.h"
 #include "../../cpp/testing.h"
 
@@ -114,6 +115,19 @@ std::vector<int32_t> GrammarMatcher_GetNextTokenBitmask(GrammarMatcher& matcher,
 }
 
 /*!
+ * \brief Wrapper for GrammarMatcher::FindJumpForwardString that keeps only whole UTF-8 characters.
+ * \note The forced bytes can stop inside a multi-byte character (e.g. "é" | "è" share only their
+ * first byte) or start inside one (after a token that split a character). embind decodes
+ * std::string as UTF-8 and would turn such a partial character into U+FFFD, so return the longest
+ * prefix of whole characters; any prefix of the jump-forward string is itself a valid jump-forward.
+ */
+std::string GrammarMatcher_FindJumpForwardString(GrammarMatcher& matcher) {
+  std::string jump_forward = matcher.FindJumpForwardString();
+  jump_forward.resize(ValidUTF8PrefixLength(jump_forward));
+  return jump_forward;
+}
+
+/*!
  * \brief Return the list of rejected token IDs based on the bit mask.
  * \note This method is mainly used in testing, so performance is not as important.
  */
@@ -157,6 +171,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .value("kQwenXML", xgrammar::JSONFormat::kQwenXML)
       .value("kMiniMaxXML", xgrammar::JSONFormat::kMiniMaxXML)
       .value("kDeepSeekXML", xgrammar::JSONFormat::kDeepSeekXML)
+      .value("kDeepSeekV41XML", xgrammar::JSONFormat::kDeepSeekV41XML)
       .value("kCohereXML", xgrammar::JSONFormat::kCohereXML);
 
   // Register std::optional used in Grammar::FromJSONSchema
@@ -237,7 +252,7 @@ EMSCRIPTEN_BINDINGS(xgrammar) {
       .function("IsTerminated", &GrammarMatcher::IsTerminated)
       .function("IsCompleted", &GrammarMatcher::IsCompleted)
       .function("Reset", &GrammarMatcher::Reset)
-      .function("FindJumpForwardString", &GrammarMatcher::FindJumpForwardString)
+      .function("FindJumpForwardString", &GrammarMatcher_FindJumpForwardString)
       .function("Rollback", &GrammarMatcher::Rollback)
       .function("AcceptString", &GrammarMatcher::AcceptString);
 }

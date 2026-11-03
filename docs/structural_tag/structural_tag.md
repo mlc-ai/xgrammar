@@ -152,8 +152,9 @@ Matches content that conforms to a JSON Schema.
 | Field | Type | Default |
 | --- | --- | --- |
 | `json_schema` | `object` | (required) |
-| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"deepseek_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` | `"json"` |
+| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` \| `"gemma"` | `"json"` |
 | `any_order` | `bool` | `false` |
+| `excludes` | `string[]` | `[]` |
 
 - **Use it when**: the structured part is naturally expressed as schema-constrained data
 
@@ -162,13 +163,32 @@ Matches content that conforms to a JSON Schema.
 - `"json"`: standard JSON
 - `"qwen_xml"`: Qwen-style XML parameters, such as `<parameter=name>value</parameter>`
 - `"minimax_xml"`: MiniMax-style XML parameters, such as `<parameter name="name">value</parameter>`
-- `"deepseek_xml"`: DeepSeek-v3.2 XML parameter format
+- `"minimax_m3_xml"`: MiniMax M3 namespace-prefixed XML. Fixed-name objects and arrays are encoded recursively, for example `]<]minimax[>[<city>Paris]<]minimax[>[</city>`. Schemas requiring runtime property names—for example schemas that permit `additionalProperties` or use `patternProperties` / `propertyNames`—and unconstrained schemas are rejected. String pattern, recognized format, and length constraints are also unsupported because string bodies must exclude the namespace marker.
+- `"deepseek_xml"`: DeepSeek-V3.2 / V4 XML parameter format
+- `"deepseek_v4_1_xml"`: DeepSeek-V4.1 XML parameters, using `<｜DSML｜ parameter name="key" string="true|false">value</｜DSML｜ parameter>` (the space after `｜DSML｜` is significant). The `string` attribute follows the value type: raw strings use `true`, and JSON nonstrings use `false`, including for unions, references, mixed enums, and unconstrained parameters.
 - `"glm_xml"`: GLM-style XML parameter format, such as `<arg_key>name</arg_key><arg_value>value</arg_value>`
 - `"cohere_xml"`: Cohere-style XML values, such as `<cofl:value name="name" type="raw">value</cofl:value>`
 - `"kimi_k3_xml"`: Kimi-K3 argument format, such as `<|open|>argument key="name" type="string"<|sep|>value<|close|>argument<|sep|>`. The `type` attribute is fixed to the type each declared property is rendered with (`integer` and `number` schemas both render as `number`); keys with no declared schema accept any type name.
+- `"gemma"`: Gemma 4 tool-call arguments, such as `{location:<|"|>Paris<|"|>,days:3}`. Object keys are unquoted and strings are delimited by the `<|"|>` token with no escape sequences, at every nesting level. String `pattern` and `format` constraints and `patternProperties` / `propertyNames` key patterns are intersected with "does not contain `<|"|>`" where the regex engine supports the pattern; length constraints are dropped as under `excludes` below. A `patternProperties` key pattern whose language contains `:` cannot round-trip because keys are unquoted.
 
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.
+
+`excludes` forbids non-empty substrings in the string values that have no `pattern` or `format`,
+and in property names, nested JSON strings included. Matching uses the emitted text, so excluding
+`ab` still allows `"\u0061b"`, and stops at the string: quotes, punctuation and XML parameter
+wrappers are never part of a match, so for Kimi-K3 `excludes=["<|open|>", "<|close|>", "<|sep|>"]`
+still allows the `<|close|>argument<|sep|>` terminator. The list combines with the string keywords
+as follows:
+
+- `pattern` or `format`: the string is matched by that constraint alone; the exclusions do not
+  apply to it. Keys constrained by `patternProperties` or `propertyNames` are treated the same.
+  (`"gemma"` intersects the exclusions into these constraints instead, see above.)
+- `minLength` / `maxLength`: the bounds are dropped with a warning; the exclusions apply.
+- `const` / `enum`: alternatives containing an excluded substring are removed.
+
+XML styles reject exclusions that start or end with whitespace, and `cohere_xml`/`minimax_m3_xml`
+reject non-empty lists.
 
 ```json
 {
@@ -222,11 +242,12 @@ The same flag is the `any_order` argument of
 
 #### `grammar`
 
-Matches text with an EBNF grammar.
+Matches text with an EBNF or Lark grammar.
 
 | Field | Type | Default |
 | --- | --- | --- |
 | `grammar` | `string` | (required) |
+| `syntax` | `"ebnf"` \| `"lark"` | `"ebnf"` |
 
 - **Use it when**: JSON Schema is too restrictive or the structure is better described directly as a grammar
 
@@ -234,6 +255,19 @@ Matches text with an EBNF grammar.
 {
     "type": "grammar",
     "grammar": "root ::= (\"yes\" | \"no\")"
+}
+```
+
+With `"syntax": "lark"`, the grammar is written in the [Lark dialect](../defining_structures/lark_grammar)
+of [`Grammar.from_lark`](xgrammar.Grammar.from_lark) and must define a `start` rule. Named special
+tokens are resolved with the tokenizer info the structural tag is compiled with; `@name` references
+to named grammars are not available.
+
+```json
+{
+    "type": "grammar",
+    "grammar": "start: \"yes\" | \"no\"",
+    "syntax": "lark"
 }
 ```
 

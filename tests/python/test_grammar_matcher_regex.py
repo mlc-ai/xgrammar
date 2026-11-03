@@ -3,7 +3,7 @@ import time
 
 import pytest
 import torch
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _get_masked_tokens_from_bitmask, _is_grammar_accept_string
@@ -131,7 +131,7 @@ regex_input_str_test_fill_next_token_bitmask = [
 @pytest.mark.parametrize("regex, input_str", regex_input_str_test_fill_next_token_bitmask)
 def test_fill_next_token_bitmask(regex: str, input_str: str):
     tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -164,7 +164,7 @@ def test_fill_next_token_bitmask(regex: str, input_str: str):
 def test_regex_with_large_range_compilation():
     regex_with_large_range = r"[a-z]{100,20000}"
     tokenizer_path = "meta-llama/Meta-Llama-3-8B-Instruct"
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=True, trust_remote_code=True)
+    tokenizer = load_tokenizer(tokenizer_path, use_fast=True, trust_remote_code=True)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     compiler = xgr.GrammarCompiler(tokenizer_info)
 
@@ -176,7 +176,7 @@ def test_regex_with_large_range_compilation():
 
 @pytest.mark.hf_token_required
 def test_regression_lookahead_already_completed():
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-0.5B")
+    tokenizer = load_tokenizer("Qwen/Qwen2.5-0.5B")
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     xgr_compiler = xgr.GrammarCompiler(tokenizer_info, max_threads=1)
     compiled_grammar = xgr_compiler.compile_regex(r"\/\*(\*+[^*\/]|[^*])*\*+\/")

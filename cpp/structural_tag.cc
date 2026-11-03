@@ -20,6 +20,7 @@
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "json_schema_converter.h"
+#include "support/json_parse.h"
 #include "support/logging.h"
 #include "support/recursion_guard.h"
 #include "support/utils.h"
@@ -94,13 +95,16 @@ picojson::value JSONSchemaFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
   picojson::value schema_val;
-  if (picojson::parse(schema_val, json_schema).empty()) {
+  if (ParseJSON(schema_val, json_schema).empty()) {
     obj["json_schema"] = schema_val;
   } else {
     obj["json_schema"] = picojson::value(json_schema);
   }
   obj["style"] = picojson::value(style);
   obj["any_order"] = picojson::value(any_order);
+  if (!excludes.empty()) {
+    obj["excludes"] = StringVectorToJSONArray(excludes);
+  }
   if (max_whitespace_cnt.has_value()) {
     obj["max_whitespace_cnt"] = picojson::value(static_cast<int64_t>(*max_whitespace_cnt));
   } else {
@@ -113,6 +117,7 @@ picojson::value GrammarFormat::ToJSON() const {
   picojson::object obj;
   obj["type"] = picojson::value(type);
   obj["grammar"] = picojson::value(grammar);
+  obj["syntax"] = picojson::value(syntax);
   return picojson::value(std::move(obj));
 }
 
@@ -371,7 +376,7 @@ class StructuralTagParser {
 
 Result<StructuralTag, StructuralTagError> StructuralTagParser::FromJSON(const std::string& json) {
   picojson::value value;
-  std::string err = picojson::parse(value, json);
+  std::string err = ParseJSON(value, json);
   if (!err.empty()) {
     return ResultErr<InvalidJSONError>("Failed to parse JSON: " + err);
   }
@@ -405,6 +410,15 @@ Result<StructuralTag, ISTError> StructuralTagParser::ParseStructuralTag(const pi
 
 Result<Format, ISTError> StructuralTagParser::ParseFormat(const picojson::value& value) {
   RecursionGuard guard(&parse_format_recursion_depth_);
+  // The global recursion limit is far deeper than the native stack allows for the recursive passes
+  // over the format tree (a few KB per level, and Windows has a 1 MB main-thread stack), so cap
+  // the nesting of formats explicitly.
+  static constexpr int kMaxFormatDepth = 100;
+  if (parse_format_recursion_depth_ > kMaxFormatDepth) {
+    return ResultErr<ISTError>(
+        "Formats are nested deeper than " + std::to_string(kMaxFormatDepth) + " levels"
+    );
+  }
   if (!value.is<picojson::object>()) {
     return ResultErr<ISTError>("Format must be an object");
   }
@@ -552,11 +566,13 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     if (it != obj.end() && it->second.is<std::string>()) {
       style = it->second.get<std::string>();
       if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
-          style != "deepseek_xml" && style != "glm_xml" && style != "cohere_xml" &&
-          style != "kimi_k3_xml") {
+          style != "minimax_m3_xml" && style != "deepseek_xml" && style != "glm_xml" &&
+          style != "cohere_xml" && style != "kimi_k3_xml" && style != "deepseek_v4_1_xml" &&
+          style != "gemma") {
         return ResultErr<ISTError>(
-            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"deepseek_xml\", "
-            "\"glm_xml\", \"cohere_xml\", or \"kimi_k3_xml\""
+            "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"minimax_m3_xml\", "
+            "\"deepseek_xml\", \"glm_xml\", \"cohere_xml\", \"kimi_k3_xml\", "
+            "\"deepseek_v4_1_xml\", or \"gemma\""
         );
       }
     }
@@ -577,9 +593,31 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
     }
     max_whitespace_cnt = static_cast<int>(max_whitespace_cnt_it->second.get<int64_t>());
   }
+  std::vector<std::string> excludes;
+  if (auto it = obj.find("excludes"); it != obj.end()) {
+    if (!it->second.is<picojson::array>()) {
+      return ResultErr<ISTError>(
+          "JSONSchema format's excludes must be an array of non-empty strings"
+      );
+    }
+    for (const auto& value : it->second.get<picojson::array>()) {
+      if (!value.is<std::string>() || value.get<std::string>().empty()) {
+        return ResultErr<ISTError>(
+            "JSONSchema format's excludes must be an array of non-empty strings"
+        );
+      }
+      excludes.push_back(value.get<std::string>());
+    }
+    std::sort(excludes.begin(), excludes.end());
+    excludes.erase(std::unique(excludes.begin(), excludes.end()), excludes.end());
+  }
   // here introduces a serialization/deserialization overhead; try to avoid it in the future.
   return ResultOk<JSONSchemaFormat>(
-      json_schema_it->second.serialize(false), style, any_order, max_whitespace_cnt
+      json_schema_it->second.serialize(false),
+      style,
+      any_order,
+      max_whitespace_cnt,
+      std::move(excludes)
   );
 }
 
@@ -647,7 +685,15 @@ Result<GrammarFormat, ISTError> StructuralTagParser::ParseGrammarFormat(const pi
       grammar_it->second.get<std::string>().empty()) {
     return ResultErr<ISTError>("Grammar format must have a grammar field with a non-empty string");
   }
-  return ResultOk<GrammarFormat>(grammar_it->second.get<std::string>());
+  std::string syntax = "ebnf";
+  if (auto it = obj.find("syntax"); it != obj.end()) {
+    if (!it->second.is<std::string>() ||
+        (it->second.get<std::string>() != "ebnf" && it->second.get<std::string>() != "lark")) {
+      return ResultErr<ISTError>("Grammar format's syntax must be \"ebnf\" or \"lark\"");
+    }
+    syntax = it->second.get<std::string>();
+  }
+  return ResultOk<GrammarFormat>(grammar_it->second.get<std::string>(), syntax);
 }
 
 Result<RegexFormat, ISTError> StructuralTagParser::ParseRegexFormat(const picojson::object& obj) {
@@ -1795,10 +1841,18 @@ std::optional<ISTError> StructuralTagAnalyzer::VisitSub(RepeatFormat* format) {
 
 class StructuralTagGrammarConverter {
  public:
-  static Result<Grammar, ISTError> Convert(const StructuralTag& structural_tag);
+  /*!
+   * \brief Convert a structural tag to a grammar.
+   * \param tokenizer_info Tokenizer metadata used to resolve named special tokens in Lark
+   * grammar formats.
+   */
+  static Result<Grammar, ISTError> Convert(
+      const StructuralTag& structural_tag, const std::optional<TokenizerInfo>& tokenizer_info
+  );
 
  private:
-  StructuralTagGrammarConverter() = default;
+  explicit StructuralTagGrammarConverter(const std::optional<TokenizerInfo>& tokenizer_info)
+      : tokenizer_info_(tokenizer_info) {}
 
   /*!
    * \brief Visit a Format and return the rule id of the added rule.
@@ -1836,6 +1890,8 @@ class StructuralTagGrammarConverter {
   int BuildBeginExpr(const TagFormat& tag);
   int BuildEndExpr(const TagFormat& tag);
 
+  const std::optional<TokenizerInfo>& tokenizer_info_;
+
   GrammarBuilder grammar_builder_;
 
   /*!
@@ -1852,9 +1908,10 @@ bool StructuralTagGrammarConverter::IsPrefix(
          std::string_view(full_str).substr(0, prefix.size()) == prefix;
 }
 
-Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(const StructuralTag& structural_tag
+Result<Grammar, ISTError> StructuralTagGrammarConverter::Convert(
+    const StructuralTag& structural_tag, const std::optional<TokenizerInfo>& tokenizer_info
 ) {
-  StructuralTagGrammarConverter converter;
+  StructuralTagGrammarConverter converter(tokenizer_info);
   auto result = converter.Visit(structural_tag.format);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
@@ -1931,14 +1988,16 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*strict_mode=*/true,
       /*max_whitespace_cnt=*/format.max_whitespace_cnt,
       /*any_order=*/format.any_order,
-      /*json_format=*/*json_format
+      /*json_format=*/*json_format,
+      /*excludes=*/format.excludes
   ));
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
 
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const GrammarFormat& format) {
-  auto sub_grammar = Grammar::FromEBNF(format.grammar);
+  auto sub_grammar = format.syntax == "lark" ? Grammar::FromLark(format.grammar, tokenizer_info_)
+                                             : Grammar::FromEBNF(format.grammar);
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }
@@ -2499,7 +2558,7 @@ Result<Grammar, StructuralTagError> StructuralTagToGrammar(
     return ResultErr(std::move(err).value());
   }
 
-  auto result = StructuralTagGrammarConverter::Convert(structural_tag);
+  auto result = StructuralTagGrammarConverter::Convert(structural_tag, tokenizer_info);
   if (result.IsErr()) {
     return ResultErr(std::move(result).UnwrapErr());
   }

@@ -1,0 +1,324 @@
+{
+  "models": [
+    {
+      "repo_id": "CohereForAI/aya-23-8B",
+      "revision": "89da1a0ed02d6130f93ae0ffdbedb63b760c0471",
+      "requires_token": true
+    },
+    {
+      "repo_id": "LGAI-EXAONE/EXAONE-4.0-1.2B",
+      "revision": "3abf2810673c7c0778df64a73c2d52eab32d91c4",
+      "requires_token": true
+    },
+    {
+      "repo_id": "MiniMaxAI/MiniMax-M2.5",
+      "revision": "f710177d938eff80b684d42c5aa84b382612f21f",
+      "requires_token": true
+    },
+    {
+      "repo_id": "MiniMaxAI/MiniMax-M3",
+      "revision": "f0e1c1e04d40177e4673a22097036854f536e9c0",
+      "requires_token": true
+    },
+    {
+      "repo_id": "NousResearch/Hermes-2-Theta-Llama-3-70B",
+      "revision": "8948247fa83f3f970ad24b3394d5656507642922",
+      "requires_token": true
+    },
+    {
+      "repo_id": "NousResearch/Hermes-3-Llama-3.1-8B",
+      "revision": "896ea440e5a9e6070e3d8a2774daf2b481ab425b",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen-7B-Chat",
+      "revision": "93a65d34827a3cc269b727e67004743b723e2f83",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen1.5-4B-Chat",
+      "revision": "a7a4d4945d28bac955554c9abd2f74a71ebbf22f",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen2-7B-Instruct",
+      "revision": "f2826a00ceef68f0f2b946d945ecc0477ce4450c",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen2.5-0.5B",
+      "revision": "060db6499f32faf8b98477b0a26969ef7d8b9987",
+      "requires_token": false
+    },
+    {
+      "repo_id": "Qwen/Qwen2.5-1.5B",
+      "revision": "8faed761d45a263340a0528343f099c05c9a4323",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-0.6B",
+      "revision": "c1899de289a04d12100db370d81485cdf75e47ca",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-235B-A22B-Instruct-2507-FP8",
+      "revision": "e156cb4efae43fbee1a1ab073f946a1377e6b969",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-4B-Instruct-2507",
+      "revision": "cdbee75f17c01a7cc42f958dc650907174af0554",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-4B-Thinking-2507",
+      "revision": "768f209d9ea81521153ed38c47d515654e938aea",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-Coder-30B-A3B-Instruct",
+      "revision": "b2cff646eb4bb1d68355c01b18ae02e7cf42d120",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-Coder-Next",
+      "revision": "a7fbcb5c0e12d62a448eaa0e260346bf5dcc0feb",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-Next-80B-A3B-Instruct",
+      "revision": "9c7f2fbe84465e40164a94cc16cd30b6999b0cc7",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3-Next-80B-A3B-Thinking",
+      "revision": "e502dd4100cc68c0de57643fd4317ec93a128670",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3.5-35B-A3B",
+      "revision": "59d61f3ce65a6d9863b86d2e96597125219dc754",
+      "requires_token": true
+    },
+    {
+      "repo_id": "Qwen/Qwen3.6-35B-A3B",
+      "revision": "995ad96eacd98c81ed38be0c5b274b04031597b0",
+      "requires_token": true
+    },
+    {
+      "repo_id": "THUDM/chatglm3-6b",
+      "revision": "e9e0406d062cdb887444fe5bd546833920abd4ac",
+      "requires_token": true
+    },
+    {
+      "repo_id": "THUDM/glm-4-9b-chat",
+      "revision": "bd8234fe5e0c09c48637a92abb0c797cb5fa0e73",
+      "requires_token": true
+    },
+    {
+      "repo_id": "XiaomiMiMo/MiMo-V2.6-Flash-RL",
+      "revision": "3b38d063180c3e4aed9691fdc735f3d10b266ee4",
+      "requires_token": true
+    },
+    {
+      "repo_id": "XiaomiMiMo/MiMo-V2.6-Pro-RL",
+      "revision": "54b10491b1811c76aa9681a9d0ff872396a4064c",
+      "requires_token": true
+    },
+    {
+      "repo_id": "allenai/Molmo-72B-0924",
+      "revision": "ab586dd9640de059566975b8e5bcd0c6fdc73956",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-Coder-V2-Instruct",
+      "revision": "2453c79a2a0947968a054947b53daa598cb3be52",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+      "revision": "e434a23f91ba5b4923cf6c9d9a238eb4a08e3a11",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-R1",
+      "revision": "56d4cbbb4d29f4355bab4b9a39ccb717a14ad5ad",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-R1-Distill-Llama-8B",
+      "revision": "6a6f4aa4197940add57724a7707d069478df56b1",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
+      "revision": "916b56a44061fd5cd7d6a8fb632557ed4f724f60",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-V2-Chat-0628",
+      "revision": "5d09e272c2b223830f4e84359cd9dd047a5d7c78",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-V2.5",
+      "revision": "c85b5ede86f2a598af339624cac5723861e557ed",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-V3-0324",
+      "revision": "e9b33add76883f293d6bf61f6bd89b497e80e335",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-V3.1",
+      "revision": "c0781d039fb7a1ba2abc4add0bdc293e92d2b8db",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/DeepSeek-V4.1-Flash",
+      "revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+      "requires_token": true
+    },
+    {
+      "repo_id": "deepseek-ai/deepseek-coder-7b-instruct-v1.5",
+      "revision": "2a050a4c59d687a85324d32e147517992117ed30",
+      "requires_token": true
+    },
+    {
+      "repo_id": "google/gemma-2-2b-it",
+      "revision": "299a8560bedf22ed1c72a8a11e7dce4a7f9f51f8",
+      "requires_token": true
+    },
+    {
+      "repo_id": "google/gemma-2b-it",
+      "revision": "96988410cbdaeb8d5093d1ebdc5a8fb563e02bad",
+      "requires_token": true
+    },
+    {
+      "repo_id": "google/gemma-4-31B-it",
+      "revision": "842da3794eaa0b77d5f08bae87a17459d91ff475",
+      "requires_token": true
+    },
+    {
+      "repo_id": "google/gemma-4-E2B-it",
+      "revision": "3e22461f65e89153144f8adb70e3b8c2cc9845a7",
+      "requires_token": true
+    },
+    {
+      "repo_id": "internlm/internlm2_5-7b-chat",
+      "revision": "eb72b541689b0432dade0435feb339b89fdd39ff",
+      "requires_token": true
+    },
+    {
+      "repo_id": "lmsys/vicuna-7b-v1.5",
+      "revision": "3321f76e3f527bd14065daf69dad9344000a201d",
+      "requires_token": true
+    },
+    {
+      "repo_id": "luodian/llama-7b-hf",
+      "revision": "27f2d847cf30ab1cdbd4a2ad82fc38309cd57257",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Llama-2-7b-chat-hf",
+      "revision": "f5db02db724555f92da89c216ac04704f23d4590",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Llama-3.1-8B-Instruct",
+      "revision": "0e9e39f249a16976918f6564b8830bc894c89659",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Llama-3.2-11B-Vision-Instruct",
+      "revision": "9eb2daaa8597bf192a8b0e73f848f3a102794df5",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Llama-3.2-1B",
+      "revision": "4e20de362430cd3b72f300e6b0f18e50e7166e08",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Llama-3.2-1B-Instruct",
+      "revision": "9213176726f574b556790deb65791e0c5aa438b6",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Llama-Guard-3-11B-Vision",
+      "revision": "62d4275543ec7503de66c486de1c0c2103e365ac",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Meta-Llama-3-8B-Instruct",
+      "revision": "8afb486c1db24fe5011ec46dfbe5b5dccdb575c2",
+      "requires_token": true
+    },
+    {
+      "repo_id": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+      "revision": "0e9e39f249a16976918f6564b8830bc894c89659",
+      "requires_token": true
+    },
+    {
+      "repo_id": "microsoft/Phi-3-mini-4k-instruct",
+      "revision": "f39ac1d28e925b323eae81227eaba4464caced4e",
+      "requires_token": true
+    },
+    {
+      "repo_id": "microsoft/Phi-3-small-8k-instruct",
+      "revision": "188b876e997ee4055df01afe46274c14c400fe40",
+      "requires_token": true
+    },
+    {
+      "repo_id": "microsoft/Phi-3.5-mini-instruct",
+      "revision": "2fe192450127e6a83f7441aef6e3ca586c338b77",
+      "requires_token": true
+    },
+    {
+      "repo_id": "microsoft/phi-2",
+      "revision": "810d367871c1d460086d9f82db8696f2e0a0fcd0",
+      "requires_token": true
+    },
+    {
+      "repo_id": "mistralai/Mixtral-8x22B-Instruct-v0.1",
+      "revision": "cc88a6cc19fbd17d9f1c0ee0b0d70a748dce698d",
+      "requires_token": true
+    },
+    {
+      "repo_id": "moonshotai/Kimi-K2-Instruct",
+      "revision": "fd1984e2b7a3350dbf7305fe73a4ede25c14de50",
+      "requires_token": true
+    },
+    {
+      "repo_id": "moonshotai/Kimi-K2-Thinking",
+      "revision": "a51ccc050d73dab088bf7b0e2dd9b30ae85a4e55",
+      "requires_token": true
+    },
+    {
+      "repo_id": "moonshotai/Kimi-K3",
+      "revision": "f831ab66814297da540d832a5235f8e904f29d06",
+      "requires_token": true
+    },
+    {
+      "repo_id": "openGPT-X/Teuken-7B-instruct-v0.6",
+      "revision": "eb3cb8fdd396037c7029ee3b2087f54c415086ac",
+      "requires_token": true
+    },
+    {
+      "repo_id": "openai/gpt-oss-20b",
+      "revision": "6cee5e81ee83917806bbde320786a8fb61efebee",
+      "requires_token": true
+    },
+    {
+      "repo_id": "zai-org/GLM-4.7-Flash",
+      "revision": "7dd20894a642a0aa287e9827cb1a1f7f91386b67",
+      "requires_token": true
+    },
+    {
+      "repo_id": "zai-org/GLM-5.2",
+      "revision": "cf457fa734ab149ffef225f80893eb38c6ff5cdc",
+      "requires_token": true
+    }
+  ]
+}

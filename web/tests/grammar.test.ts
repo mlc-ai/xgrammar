@@ -253,6 +253,53 @@ d_1 ::= ("" | ("d"))
     compiledGrammar2.dispose();
     compiler.dispose();
   });
+
+  test("Test MiniMax M3 fixed-name structural tag", async () => {
+    const ns = "]<]minimax[>[";
+    const structuralTag = {
+      type: "structural_tag" as const,
+      format: {
+        type: "json_schema" as const,
+        json_schema: {
+          type: "object",
+          properties: {
+            city: { type: "string" },
+            days: { type: "array", items: { type: "integer" } },
+          },
+          required: ["city", "days"],
+          additionalProperties: false,
+        },
+        style: "minimax_m3_xml" as const,
+      },
+    };
+    const element = (name: string, value: string) =>
+      `${ns}<${name}>${value}${ns}</${name}>`;
+    const valid = element("city", "Paris") + element(
+      "days",
+      element("item", "1") + element("item", "2"),
+    );
+
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(["x"], "byte_level", false);
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+    const compiledGrammar = await compiler.compileStructuralTag(structuralTag);
+
+    const matching = await GrammarMatcher.createGrammarMatcher(compiledGrammar, undefined, true);
+    expect(matching._acceptString(valid)).toEqual(true);
+    expect(matching.isCompleted()).toEqual(true);
+
+    const mismatching = await GrammarMatcher.createGrammarMatcher(
+      compiledGrammar,
+      undefined,
+      true,
+    );
+    expect(mismatching._acceptString(valid.replace("</days>", "</wrong>"))).toEqual(false);
+
+    matching.dispose();
+    mismatching.dispose();
+    compiledGrammar.dispose();
+    compiler.dispose();
+    tokenizerInfo.dispose();
+  });
 });
 
 // Identical to tests in `test_grammar_matcher.py`
@@ -566,6 +613,49 @@ sub_rule ::= "b"
     tokenizerInfo.dispose();
     expect(matcher.acceptToken(0)).toEqual(true);
     expect(matcher.findJumpForwardString()).toEqual("bb");
+  });
+
+  test("test_get_jump_forward_string_partial_utf8", async () => {
+    const vocab = ["é", "è", "a", "</s>"];
+    const cases: [string, string][] = [
+      // Both alternatives start with the byte 0xC3, so only that byte is forced.
+      [String.raw`root ::= "é" | "è"`, ""],
+      [String.raw`root ::= "aé" | "aè"`, "a"],
+      [String.raw`root ::= [é-ê]`, ""],
+      [String.raw`root ::= "aé"`, "aé"],
+    ];
+    for (const [grammar_ebnf, expected] of cases) {
+      const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+        vocab, "raw", false, undefined, [3]
+      );
+      const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+      const grammar = await compiler.compileGrammar(grammar_ebnf);
+      const matcher = await GrammarMatcher.createGrammarMatcher(grammar);
+      tokenizerInfo.dispose();
+      expect(matcher.findJumpForwardString()).toEqual(expected);
+      matcher.dispose();
+    }
+  });
+
+  test("test_get_jump_forward_string_after_split_character", async () => {
+    // A byte-level vocabulary in which "é" (C3 A9) is split across two tokens; in the byte-level
+    // encoding the bytes 0xC3 and 0xA9 are spelled "Ã" and "©". The literal ends in "z" rather
+    // than "a" because the compiler re-parses the printed grammar, where "\xe9a" is read as a
+    // single escape.
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      ["Ã", "©", "z", "</s>"], "byte_level", false, undefined, [3]
+    );
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+    const grammar = await compiler.compileGrammar(String.raw`root ::= "éz"`);
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar);
+    tokenizerInfo.dispose();
+    expect(matcher.findJumpForwardString()).toEqual("éz");
+    expect(matcher.acceptToken(0)).toEqual(true);
+    // The forced bytes now start inside "é".
+    expect(matcher.findJumpForwardString()).toEqual("");
+    expect(matcher.acceptToken(1)).toEqual(true);
+    expect(matcher.findJumpForwardString()).toEqual("z");
+    matcher.dispose();
   });
 });
 

@@ -11,7 +11,7 @@ from mlx_lm.utils import load as mlx_load
 from transformers import AutoTokenizer
 
 import xgrammar
-from xgrammar.kernels import apply_token_bitmask_inplace_kernels
+from xgrammar.kernels.apply_token_bitmask_mlx import apply_token_bitmask_mlx
 
 
 class XGrammarLogitsProcessor:
@@ -29,9 +29,7 @@ class XGrammarLogitsProcessor:
             self.matcher.accept_token(last_token)
         if not self.matcher.is_terminated():
             self.matcher.fill_next_token_bitmask(self.bitmask)
-            return apply_token_bitmask_inplace_kernels["metal"](
-                mx.array(self.bitmask.numpy()), logits, self.vocab_size
-            )
+            return apply_token_bitmask_mlx(mx.array(self.bitmask.numpy()), logits, self.vocab_size)
         return logits
 
 

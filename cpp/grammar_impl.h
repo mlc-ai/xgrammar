@@ -154,6 +154,13 @@ class Grammar::Impl {
     return rules_[root_rule_id_];
   }
 
+  /*!
+   * \brief Check that every id and offset stored in the grammar is in range. Used after
+   * deserialization, where the fields are restored verbatim and none of the builder checks run.
+   * \return An error message if the grammar is malformed.
+   */
+  std::optional<std::string> Validate() const;
+
   /*! \brief The type of the grammar expr. */
   enum class GrammarExprType : int32_t {
     // data format: [byte0, byte1, ...]
@@ -407,10 +414,19 @@ class Grammar::Impl {
    */
   std::vector<std::optional<CompactFSMWithStartEndWithSize>> per_rule_fsms;
 
+  /*! \brief Whether complete_fsm has any kToken or kExcludeToken edge. */
+  bool has_token_edges = false;
+
   /*!
    * \brief The hash value for each rule's FSM.
    */
   std::vector<std::optional<uint64_t>> per_rule_fsm_hashes;
+
+  /*!
+   * \brief Whether each rule's FSM hash is partial: it hashes a rule referenced at the start state
+   * as unknown, so it does not identify the language of the rule.
+   */
+  std::vector<bool> per_rule_fsm_hash_is_partial;
 
   /*!
    * \brief The new state ids of each FSM's states.
@@ -469,6 +485,8 @@ XGRAMMAR_MEMBER_TABLE(
     &Grammar::Impl::complete_fsm,
     "per_rule_fsms",
     &Grammar::Impl::per_rule_fsms,
+    "has_token_edges",
+    &Grammar::Impl::has_token_edges,
     "allow_empty_rule_ids",
     &Grammar::Impl::allow_empty_rule_ids,
     "optimized",

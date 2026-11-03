@@ -282,6 +282,63 @@ TEST(XGrammarFSMTest, FunctionTest) {
   std::cout << "--------- Function Test Passed! -----------" << std::endl;
 }
 
+TEST(XGrammarFSMTest, IntersectionUsesConfiguredStateLimit) {
+  auto bounded = RegexFSMBuilder::Build("a{1001}").Unwrap();
+  auto repeated = RegexFSMBuilder::Build("a*").Unwrap();
+  auto result = FSMWithStartEnd::Intersect(bounded, repeated, 4096);
+  ASSERT_TRUE(result.IsOk());
+  auto intersection = std::move(result).Unwrap();
+  EXPECT_TRUE(intersection.AcceptString(std::string(1001, 'a')));
+  EXPECT_FALSE(intersection.AcceptString(std::string(1000, 'a')));
+  EXPECT_TRUE(FSMWithStartEnd::Intersect(bounded, repeated, 1000).IsErr());
+}
+
+TEST(XGrammarFSMTest, DeterminizationBoundsSubsetStates) {
+  FSM fsm(7);
+  fsm.AddEdge(0, 0, 'a', 'b');
+  fsm.AddEdge(0, 1, 'a', 'a');
+  for (int i = 1; i < 6; ++i) fsm.AddEdge(i, i + 1, 'a', 'b');
+  FSMWithStartEnd nfa(fsm, 0, {6});
+  EXPECT_TRUE(nfa.ToDFA(16).IsErr());
+  auto result = nfa.ToDFA(64);
+  ASSERT_TRUE(result.IsOk());
+  auto dfa = std::move(result).Unwrap();
+  EXPECT_EQ(dfa.NumStates(), 64);
+  EXPECT_TRUE(dfa.AcceptString("abbbbb"));
+  EXPECT_FALSE(dfa.AcceptString("bbbbbb"));
+  EXPECT_FALSE(dfa.AcceptString("abbbb"));
+}
+
+TEST(XGrammarFSMTest, IntersectionBoundsProductStates) {
+  FSM pairs(2), triples(3);
+  for (int i = 0; i < 2; ++i) pairs.AddEdge(i, (i + 1) % 2, 'a', 'a');
+  for (int i = 0; i < 3; ++i) triples.AddEdge(i, (i + 1) % 3, 'a', 'a');
+  FSMWithStartEnd lhs(pairs, 0, {0}), rhs(triples, 0, {0});
+  EXPECT_TRUE(FSMWithStartEnd::Intersect(lhs, rhs, 4).IsErr());
+  auto result = FSMWithStartEnd::Intersect(lhs, rhs, 6);
+  ASSERT_TRUE(result.IsOk());
+  auto intersection = std::move(result).Unwrap();
+  EXPECT_TRUE(intersection.AcceptString("aaaaaa"));
+  EXPECT_FALSE(intersection.AcceptString("aaaaa"));
+}
+
+TEST(XGrammarFSMTest, MergeEquivalentStatesKeepsStartStateSeparate) {
+  // [a-z]* [a-z] "c" "d": the start state loops on [a-z] and also leads to state 1 on [a-z].
+  // State 1 is only reached from the start state, but the start state is also entered without
+  // any edge, so the two must not be merged; otherwise "cd" would be accepted.
+  FSM fsm(4);
+  fsm.AddEdge(0, 0, 'a', 'z');
+  fsm.AddEdge(0, 1, 'a', 'z');
+  fsm.AddEdge(1, 2, 'c', 'c');
+  fsm.AddEdge(2, 3, 'd', 'd');
+  FSMWithStartEnd nfa(fsm, 0, {3});
+  auto merged = nfa.MergeEquivalentStates();
+  EXPECT_FALSE(merged.AcceptString("cd"));
+  EXPECT_TRUE(merged.AcceptString("acd"));
+  EXPECT_TRUE(merged.AcceptString("xyzcd"));
+  EXPECT_FALSE(merged.AcceptString("d"));
+}
+
 TEST(XGrammarFSMTest, EfficiencyTest) {
   std::cout << "--------- Efficiency Test Starts! -----------" << std::endl;
   // i.e ([a-z]0123456789){10}. Use this way to test the performance.

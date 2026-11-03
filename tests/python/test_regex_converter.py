@@ -2,7 +2,7 @@ import sys
 import time
 
 import pytest
-from transformers import AutoTokenizer
+from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
 from xgrammar.testing import _is_grammar_accept_string, _regex_to_ebnf
@@ -68,10 +68,49 @@ def test_escaped_char_class():
     regex = r"\w\w\W\d\D\s\S"
     instance = "A_ 1b 0"
     grammar_str = _regex_to_ebnf(regex)
-    expected_grammar = r"""root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [\f\n\r\t\v\u0020\u00a0] [^\f\n\r\t\v\u0020\u00a0]
-"""
+    whitespace = r"\f\n\r\t\v\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+    expected_grammar = f"root ::= [a-zA-Z0-9_] [a-zA-Z0-9_] [^a-zA-Z0-9_] [0-9] [^0-9] [{whitespace}] [^{whitespace}]\n"
     assert grammar_str == expected_grammar
     assert _is_grammar_accept_string(grammar_str, instance)
+
+
+# \s follows the ECMAScript dialect: WhiteSpace (TAB, VT, FF, ZWNBSP and every Space_Separator)
+# plus LineTerminator (LF, CR, LS, PS). It is not ASCII-only, unlike \d and \w.
+ecmascript_whitespace = [
+    "\t",
+    "\n",
+    "\v",
+    "\f",
+    "\r",
+    " ",
+    "\u00a0",
+    "\u1680",
+    "\u2000",
+    "\u200a",
+    "\u2028",
+    "\u2029",
+    "\u202f",
+    "\u205f",
+    "\u3000",
+    "\ufeff",
+]
+not_ecmascript_whitespace = ["\x00", "\x01", "\x85", "\u200b", "\u2060", "a", "好"]
+
+
+@pytest.mark.parametrize("char", ecmascript_whitespace)
+def test_whitespace_class_accepts_ecmascript_whitespace(char: str):
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a\sb"), f"a{char}b")
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a[\s]b"), f"a{char}b")
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a\Sb"), f"a{char}b")
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a[\S]b"), f"a{char}b")
+
+
+@pytest.mark.parametrize("char", not_ecmascript_whitespace)
+def test_whitespace_class_rejects_other_characters(char: str):
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a\sb"), f"a{char}b")
+    assert not _is_grammar_accept_string(_regex_to_ebnf(r"a[\s]b"), f"a{char}b")
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a\Sb"), f"a{char}b")
+    assert _is_grammar_accept_string(_regex_to_ebnf(r"a[\S]b"), f"a{char}b")
 
 
 def test_non_whitespace_accepts_bracket():
@@ -468,7 +507,7 @@ tokenizer_path_regex_instance = [(t, *ri) for t in tokenizer_paths for ri in reg
 def test_mask_generation(tokenizer_path: str, regex: str, instance: str):
     print(f"Tokenizer: {tokenizer_path}, regex: {regex}, instance: {instance}")
 
-    tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = load_tokenizer(tokenizer_path)
     tokenizer_info = xgr.TokenizerInfo.from_huggingface(tokenizer)
     grammar_compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
 
@@ -509,5 +548,41 @@ def test_empty(regex: str):
     assert not _is_grammar_accept_string(grammar, "a")
 
 
+# A NUL makes the std::string non-empty while its c_str() is empty (leading NUL)
+# or truncated (later NUL). ParseUTF8 consumes the C string, so a leading NUL
+# used to yield an empty codepoint vector and an out-of-bounds read, and a later
+# one silently compiled just the prefix.
+null_regex = ["\0", "\0abc", "a\0b", "[0-9]+\0"]
+
+
+@pytest.mark.parametrize("regex", null_regex)
+def test_null_character(regex: str):
+    with pytest.raises(RuntimeError, match="The regex must not contain null characters."):
+        xgr.Grammar.from_regex(regex)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+@pytest.mark.parametrize(
+    "regex, accepted, rejected",
+    [
+        ("(a{2,}){1,2}", ["aa", "aaa", "aaaa", "aaaaaa"], ["", "a"]),
+        ("(a{2,}){2}", ["aaaa", "aaaaa"], ["", "a", "aa", "aaa"]),
+        ("(a{1,}){1,2}", ["a", "aa", "aaa"], [""]),
+        ("(a{2,}){1,2}b", ["aab", "aaab"], ["b", "ab"]),
+    ],
+)
+def test_bounded_repetition_of_unbounded_repetition(regex: str, accepted, rejected):
+    # The repetition expander inlines single-element rules into the outer repetition. The
+    # inlined a{2,} used to be copied verbatim, so an unbounded kRepeat reached the parser,
+    # which then never entered it and rejected every input.
+    grammar = xgr.Grammar.from_regex(regex)
+    for s in accepted:
+        assert _is_grammar_accept_string(grammar, s), (regex, s)
+    for s in rejected:
+        assert not _is_grammar_accept_string(grammar, s), (regex, s)
+    ebnf_grammar = xgr.Grammar.from_ebnf('root ::= b{1,2}\nb ::= a{2,}\na ::= "a"')
+    assert _is_grammar_accept_string(ebnf_grammar, "aa")
+    assert not _is_grammar_accept_string(ebnf_grammar, "a")

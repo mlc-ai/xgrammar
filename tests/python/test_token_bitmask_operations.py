@@ -366,6 +366,16 @@ def test_apply_token_bitmask_inplace_indices(
         torch.testing.assert_close(logits, logits_expected)
 
 
+@pytest.mark.parametrize("bad_index", [5, -1])
+def test_apply_token_bitmask_inplace_indices_out_of_bounds(bad_index: int):
+    # An index that is out of range for the logits/bitmask batch would cause an out-of-bounds
+    # write; it must be rejected instead of crashing.
+    logits = torch.ones(2, 128, dtype=torch.float32)
+    bitmask = torch.zeros(2, 4, dtype=torch.int32)
+    with pytest.raises(Exception):
+        xgr.apply_token_bitmask_inplace(logits, bitmask, indices=[bad_index])
+
+
 def test_bitmask_to_boolmask():
     # 0xFFFF0000, 0x0000FFFF
     bitmask = torch.tensor([[-65536, 65535]], dtype=torch.int32)

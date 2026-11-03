@@ -2,6 +2,10 @@
 
 We welcome contributions of all kinds, including new features, bug fixes, documentation improvements, and more. To ensure a smooth process, here is a general guide to contributing.
 
+All participants are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md), which also explains how to report concerns privately.
+
+Our [governance document](GOVERNANCE.md) lists the current maintainers and explains technical decisions, maintainer responsibilities, and role changes.
+
 For significant changes, such as adding a major new feature or refactoring core code, it's often a good idea to open a GitHub issue first to discuss your proposal. This step is optional, but can be very helpful as it allows the maintainers and the community to provide feedback and helps ensure your work aligns with the project's goals.
 
 The general workflow for submitting a change is:
@@ -70,3 +74,5 @@ Maintaining high performance and stability are key goals for XGrammar. If a perf
 ## **Community Committer Role**
 
 XGrammar is maintained by a group of **Community Committers**. These are core contributors who have earned the role by providing frequent and valuable contributions to the project. They are responsible for reviewing and merging pull requests, maintaining the project's standards, and guiding new contributors.
+
+See [GOVERNANCE.md](GOVERNANCE.md) for the current core maintainer roster and the process for becoming a maintainer or stepping down.
