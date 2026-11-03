@@ -1177,13 +1177,21 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
   // equivalent to prefixItems (with additionalItems governing the elements
   // beyond that list). Parse that positional form into prefix_items so the
   // rest of this function treats it uniformly with prefixItems.
+  bool positional_items_closed = false;
   if (schema.count("items") && schema.at("items").is<picojson::array>()) {
     for (const auto& item : schema.at("items").get<picojson::array>()) {
-      if (item.is<bool>() && !item.get<bool>()) {
-        return ResultErr<SchemaError>(
-            SchemaErrorType::kUnsatisfiableSchema, "items contains false"
-        );
-      } else if (!item.is<picojson::object>()) {
+      if (item.is<bool>()) {
+        if (!item.get<bool>()) {
+          // A false positional schema forbids this position and every later
+          // one, so the positional list ends here (the draft-07 equivalent of
+          // an empty array after this point).
+          positional_items_closed = true;
+          break;
+        }
+        spec.prefix_items.push_back(SchemaSpec::Make(AnySpec{}, "", "any"));
+        continue;
+      }
+      if (!item.is<picojson::object>()) {
         return ResultErr<SchemaError>(
             SchemaErrorType::kInvalidSchema, "items array must only contain objects or booleans"
         );
@@ -1205,8 +1213,11 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     if (items_value.is<picojson::array>()) {
       // The positional items were parsed into prefix_items above. Without an
       // explicit additionalItems we follow the strict-mode default, matching
-      // prefixItems behaviour.
-      if (schema.count("additionalItems")) {
+      // prefixItems behaviour. A false positional entry already closes the
+      // array, so later positions and additionalItems are unreachable.
+      if (positional_items_closed) {
+        spec.allow_additional_items = false;
+      } else if (schema.count("additionalItems")) {
         auto additional_items_value = schema.at("additionalItems");
         if (!additional_items_value.is<bool>() && !additional_items_value.is<picojson::object>()) {
           return ResultErr<SchemaError>(
@@ -1267,7 +1278,7 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
   // list (prefixItems or a positional "items" array) is present; it constrains
   // the elements beyond that list. Without a positional list the draft says it
   // is ignored, so apply it only in that case.
-  if (schema.count("additionalItems") && !spec.prefix_items.empty()) {
+  if (schema.count("additionalItems") && !spec.prefix_items.empty() && !positional_items_closed) {
     auto additional_items_value = schema.at("additionalItems");
     if (!additional_items_value.is<bool>() && !additional_items_value.is<picojson::object>()) {
       return ResultErr<SchemaError>(
@@ -2503,31 +2514,60 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
     return spec.min_items == 0 ? Choice({nonempty, empty_array}) : nonempty;
   }
 
+  // Per Draft 2020-12, prefixItems entries are positional: the instance may
+  // end after any prefix position (subject to minItems), and additional items
+  // are only allowed after the full prefix (issue #824).
+  size_t mandatory_count = static_cast<size_t>(std::min<int64_t>(
+      std::max<int64_t>(0, spec.min_items), static_cast<int64_t>(item_rule_ids.size())
+  ));
+
+  // Mandatory head: the first min(minItems, n) items, separated.
   std::vector<int32_t> prefix_elements;
-  for (size_t index = 0; index < item_rule_ids.size(); ++index) {
+  for (size_t index = 0; index < mandatory_count; ++index) {
     if (index != 0) {
       prefix_elements.push_back(middle_separator);
     }
     prefix_elements.push_back(RuleRef(item_rule_ids[index]));
   }
-  int32_t prefix = Sequence(prefix_elements);
-  if (!spec.allow_additional_items) {
-    return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
+
+  // Suffix after the mandatory head, flattened into a right-recursive chain
+  // of rules   suffix_k ::= "" | sep item_k suffix_{k+1}   so each position
+  // is encoded once instead of once per truncation length. The chain ends
+  // with the additional-items tail. Positions from index 1 on are separated
+  // by middle_separator; position 0, when it is not part of the mandatory
+  // head, gets its own rule without the separator.
+  int32_t suffix = Empty();
+  if (spec.allow_additional_items && spec.additional_items) {
+    int64_t minimum_additional =
+        std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rule_ids.size()));
+    suffix = Repeat(
+        rule_name + "_additional_items",
+        Sequence({middle_separator, RuleRef(additional_rule_id)}),
+        static_cast<int32_t>(minimum_additional),
+        spec.max_items == -1
+            ? -1
+            : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rule_ids.size()))
+    );
+  }
+  size_t chain_start = std::max<size_t>(mandatory_count, 1);
+  for (size_t k = item_rule_ids.size(); k-- > chain_start;) {
+    int32_t with_item = Sequence({middle_separator, RuleRef(item_rule_ids[k]), suffix});
+    int32_t suffix_rule_id = builder_.AddRuleWithHint(
+        rule_name + "_suffix_" + std::to_string(k), Choice({Empty(), with_item})
+    );
+    suffix = RuleRef(suffix_rule_id);
+  }
+  if (mandatory_count == 0) {
+    int32_t with_first = Sequence({RuleRef(item_rule_ids[0]), suffix});
+    int32_t suffix_rule_id =
+        builder_.AddRuleWithHint(rule_name + "_suffix_0", Choice({Empty(), with_first}));
+    suffix = RuleRef(suffix_rule_id);
   }
 
-  int64_t minimum_additional =
-      std::max(int64_t{0}, spec.min_items - static_cast<int64_t>(item_rule_ids.size()));
-  int32_t additional_tail = Repeat(
-      rule_name + "_additional_items",
-      Sequence({middle_separator, RuleRef(additional_rule_id)}),
-      static_cast<int32_t>(minimum_additional),
-      spec.max_items == -1
-          ? -1
-          : static_cast<int32_t>(spec.max_items - static_cast<int64_t>(item_rule_ids.size()))
-  );
-  return Sequence(
-      {left_bracket, start_separator, prefix, additional_tail, end_separator, right_bracket}
-  );
+  std::vector<int32_t> content_elements = prefix_elements;
+  content_elements.push_back(suffix);
+  int32_t prefix = Sequence(content_elements);
+  return Sequence({left_bracket, start_separator, prefix, end_separator, right_bracket});
 }
 
 int32_t JSONSchemaConverter::FormatPropertyKey(

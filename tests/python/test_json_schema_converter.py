@@ -178,8 +178,8 @@ schema__grammar__accepted_instances__rejected_instances__test_non_strict = [
         + r"""root_additional ::= basic_number | basic_string | basic_boolean | basic_null | basic_array | basic_object
 root ::= ("[" [ \n\t]* (basic_integer [ \n\t]* "," [ \n\t]* basic_integer) ([ \n\t]* "," [ \n\t]* root_additional)* [ \n\t]* "]")
 """,
-        [[1, 2], [1, 2, 3], [1, 2, 3, "123"]],
-        [[1]],
+        [[1, 2], [1, 2, 3], [1, 2, 3, "123"], [1], []],
+        [["foo"]],
     ),
     (
         {
@@ -1149,7 +1149,10 @@ root ::= ("[" [ \n\t]* (root_item_0 [ \n\t]* "," [ \n\t]* basic_integer [ \n\t]*
         ),
         [
             ([{"name": "John", "age": 30}, 42, "test"], True),
-            ([{"name": "John", "age": 30}, 42], False),
+            # positional prefixItems are optional: a shorter instance is valid
+            ([{"name": "John", "age": 30}, 42], True),
+            ([{"name": "John", "age": 30}], True),
+            ([], True),
             ([{"name": "John", "age": 30}, "test", 42], False),
             ([{"name": "John"}, 42, "test"], False),
         ],
@@ -1250,7 +1253,13 @@ schema__expected_grammar__instances__test_array_schema_min_max = [
             + r"""root ::= ("[" [ \n\t]* (basic_string [ \n\t]* "," [ \n\t]* basic_integer) [ \n\t]* "]")
 """
         ),
-        [(["foo", 42], True), (["foo", 42, "bar"], False), (["foo"], False), ([42, "foo"], False)],
+        [
+            (["foo", 42], True),
+            (["foo", 42, "bar"], False),
+            (["foo"], True),
+            ([], True),
+            ([42, "foo"], False),
+        ],
     ),
     # prefix non-empty, additional items allowed
     (
@@ -1369,7 +1378,10 @@ def test_draft07_positional_items_and_additional_items():
     check_schema_with_instance(
         schema_positional, [1, "x", 2], is_accepted=False, any_whitespace=False
     )
-    check_schema_with_instance(schema_positional, [1], is_accepted=False, any_whitespace=False)
+    # Draft-07 positional items are optional: an instance may end after any
+    # position, and the schemas at later positions are simply not applied.
+    check_schema_with_instance(schema_positional, [1], any_whitespace=False)
+    check_schema_with_instance(schema_positional, [], any_whitespace=False)
 
     # additionalItems: true (or absent) allows extra elements of any type.
     schema_positional_loose = {
@@ -1378,6 +1390,8 @@ def test_draft07_positional_items_and_additional_items():
         "additionalItems": True,
     }
     check_schema_with_instance(schema_positional_loose, [1, "x", 2], any_whitespace=False)
+    check_schema_with_instance(schema_positional_loose, [1], any_whitespace=False)
+    check_schema_with_instance(schema_positional_loose, [], any_whitespace=False)
     check_schema_with_instance(
         schema_positional_loose, ["x"], is_accepted=False, any_whitespace=False
     )
@@ -1404,6 +1418,8 @@ def test_draft07_positional_items_and_additional_items():
         "additionalItems": {"type": "string"},
     }
     check_schema_with_instance(schema_positional_schema, [1, "a", "b"], any_whitespace=False)
+    check_schema_with_instance(schema_positional_schema, [1], any_whitespace=False)
+    check_schema_with_instance(schema_positional_schema, [], any_whitespace=False)
     check_schema_with_instance(
         schema_positional_schema, [1, 2], is_accepted=False, any_whitespace=False
     )
@@ -1437,6 +1453,27 @@ def test_draft07_positional_items_and_additional_items():
     check_schema_with_instance(
         {"type": "array", "items": False, "additionalItems": False}, [], any_whitespace=False
     )
+
+
+def test_draft07_boolean_positional_items():
+    # Boolean schemas are legal positional entries in draft-07. true admits any
+    # value at that position; false forbids that position and every later one,
+    # so the item list ends there regardless of additionalItems.
+    schema_false = {"type": "array", "items": [False], "additionalItems": True}
+    check_schema_with_instance(schema_false, [], any_whitespace=False)
+    check_schema_with_instance(schema_false, [1], is_accepted=False, any_whitespace=False)
+
+    schema_true_then_false = {"type": "array", "items": [True, False]}
+    check_schema_with_instance(schema_true_then_false, [], any_whitespace=False)
+    check_schema_with_instance(schema_true_then_false, [1], any_whitespace=False)
+    check_schema_with_instance(
+        schema_true_then_false, [1, 2], is_accepted=False, any_whitespace=False
+    )
+
+    schema_true_closed = {"type": "array", "items": [True], "additionalItems": False}
+    check_schema_with_instance(schema_true_closed, [], any_whitespace=False)
+    check_schema_with_instance(schema_true_closed, [1], any_whitespace=False)
+    check_schema_with_instance(schema_true_closed, [1, 2], is_accepted=False, any_whitespace=False)
 
 
 def test_object_with_only_properties_keyword():
