@@ -118,12 +118,14 @@
     {
       "repo_id": "XiaomiMiMo/MiMo-V2.6-Flash-RL",
       "revision": "3b38d063180c3e4aed9691fdc735f3d10b266ee4",
-      "requires_token": true
+      "requires_token": true,
+      "update_ref": null
     },
     {
       "repo_id": "XiaomiMiMo/MiMo-V2.6-Pro-RL",
       "revision": "54b10491b1811c76aa9681a9d0ff872396a4064c",
-      "requires_token": true
+      "requires_token": true,
+      "update_ref": null
     },
     {
       "repo_id": "allenai/Molmo-72B-0924",
@@ -178,7 +180,8 @@
     {
       "repo_id": "deepseek-ai/DeepSeek-V4.1-Flash",
       "revision": "dba1be0a40aa45a94ad051997016db3960a90277",
-      "requires_token": true
+      "requires_token": true,
+      "update_ref": null
     },
     {
       "repo_id": "deepseek-ai/deepseek-coder-7b-instruct-v1.5",

@@ -42,3 +42,30 @@ XGRAMMAR_TOKENIZER_ASSETS="$PWD/.ci/extracted" TIKTOKEN_CACHE_DIR="$PWD/.ci/extr
 Without a token, preparation includes only the public smoke-test assets. With an
 authorized `HF_TOKEN`, it also includes assets for the marked tests. Normal developer
 test runs without `XGRAMMAR_TOKENIZER_ASSETS` retain the standard Hub loading behavior.
+
+## Automatic tokenizer revision updates
+
+`update_tokenizer_assets.yaml` checks tracked Hub refs weekly (Monday at 06:23 UTC),
+or on manual dispatch. It queries commit SHAs sequentially without downloading files,
+reuses the bounded 429 retry handling, and creates or updates a regular PR on
+`ci/update-tokenizer-assets` when revisions change. Ordinary PR tests remain offline.
+HF commits that change only weights may also cause revision updates.
+
+Entries track `main` by default. Set `update_ref` to another branch/tag to track it,
+or to `null` to preserve a release intentionally pinned by a test. The DeepSeek V4.1
+and MiMo release tests keep their explicit pins. Without `HF_TOKEN`, the updater
+checks only entries with `requires_token: false`.
+
+Enable **Allow GitHub Actions to create and approve pull requests** in the repository's
+Actions settings. The workflow uses `GITHUB_TOKEN` with contents, pull-request and
+Actions write permissions. Because this token does not trigger normal PR workflows,
+the updater explicitly dispatches unit tests, wheel builds, web builds and documentation
+builds on the update branch. Documentation uses `build_only: true`; the branch build
+does not publish to PyPI. The updater waits up to three hours for all four workflows
+to succeed before requesting squash auto-merge, guarded by the tested head SHA.
+Failed or cancelled checks leave the PR unmerged. Auto-merge must be enabled in
+repository settings, and any required reviews or other branch rules still apply.
+An existing update PR is revalidated on manual reruns even if its pins did not change.
+
+The scheduled workflow runs only after it is merged into the default branch. Forks
+can test it with manual dispatch; automatic scheduled runs are limited to upstream.

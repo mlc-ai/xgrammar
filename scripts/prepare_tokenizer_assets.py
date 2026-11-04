@@ -43,14 +43,12 @@ def rate_limit_wait(error):
     return max([0, *delays]) + 1 if delays else 301
 
 
-def download_snapshot(model_id, revision, max_attempts=10, retry_budget=1200):
-    """Retry API-tree 429s too; the SDK's file-download retries do not cover them."""
+def retry_hub_request(request, description, max_attempts=10, retry_budget=1200):
+    """Retry API 429s too; the SDK's file-download retries do not cover them."""
     deadline = time.monotonic() + retry_budget
     for attempt in range(1, max_attempts + 1):
         try:
-            return snapshot_download(
-                model_id, revision=revision, allow_patterns=ASSET_PATTERNS, max_workers=1
-            )
+            return request()
         except HfHubHTTPError as error:
             if error.response is None or error.response.status_code != 429:
                 raise
@@ -58,12 +56,23 @@ def download_snapshot(model_id, revision, max_attempts=10, retry_budget=1200):
             if attempt == max_attempts or time.monotonic() + delay > deadline:
                 raise
             print(
-                f"Hub rate limit for {model_id}; retrying in {delay:g}s "
+                f"Hub rate limit for {description}; retrying in {delay:g}s "
                 f"(attempt {attempt}/{max_attempts})",
                 flush=True,
             )
             time.sleep(delay)
-    raise RuntimeError("No snapshot download attempts configured")
+    raise RuntimeError("No Hub request attempts configured")
+
+
+def download_snapshot(model_id, revision, max_attempts=10, retry_budget=1200):
+    return retry_hub_request(
+        lambda: snapshot_download(
+            model_id, revision=revision, allow_patterns=ASSET_PATTERNS, max_workers=1
+        ),
+        model_id,
+        max_attempts=max_attempts,
+        retry_budget=retry_budget,
+    )
 
 
 def prepare_tiktoken_cache(output):
