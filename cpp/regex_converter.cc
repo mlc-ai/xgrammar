@@ -228,6 +228,8 @@ std::string RegexConverter::HandleEscapeInCharClass() {
   } else if (current_[1] == 'S') {
     current_ += 2;
     return kNonWhitespaceClassBody;
+  } else if (current_[1] == 'p' || current_[1] == 'P') {
+    RaiseError("Unicode character class escape sequence is not supported yet.");
   } else {
     auto res = HandleCharEscape();
     if (res == "]" || res == "-") {

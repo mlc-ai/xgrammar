@@ -336,6 +336,18 @@ def test_empty_character_class():
         _regex_to_ebnf(regex)
 
 
+@pytest.mark.parametrize(
+    "regex", [r"[\p{L}]", r"[a\p{M}]", r"[\P{L}]", r"^[\p{L}\p{M}]+$", r"[^\p{Thai}]"]
+)
+def test_unicode_property_escape_in_char_class(regex: str):
+    # \p{...} and \P{...} raise outside a character class. Inside one they used to fall back to
+    # the literal characters, so [\p{L}] matched only 'p', '{', 'L' and '}'.
+    with pytest.raises(
+        RuntimeError, match="Unicode character class escape sequence is not supported yet."
+    ):
+        _regex_to_ebnf(regex)
+
+
 def test_group_modifiers():
     # Test non-capturing group
     regex = "(?:abc)"
