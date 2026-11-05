@@ -1488,9 +1488,22 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
   return ResultOk(std::move(spec));
 }
 
+// picojson serializes a whole double such as 3.0 as "3", dropping the fraction the schema wrote.
+// Integers written without a fraction parse as int64 and stay exact.
+bool IsWholeFloatLiteral(const picojson::value& value, const std::string& serialized) {
+  if (!value.is<double>() || value.is<int64_t>() || serialized.empty()) return false;
+  auto digits_begin = serialized.begin() + (serialized[0] == '-' ? 1 : 0);
+  return digits_begin != serialized.end() &&
+         std::all_of(digits_begin, serialized.end(), [](char c) {
+           return std::isdigit(static_cast<unsigned char>(c));
+         });
+}
+
 Result<ConstSpec, SchemaError> SchemaParser::ParseConst(const picojson::object& schema) {
   ConstSpec spec;
-  spec.json_value = schema.at("const").serialize();
+  const auto& value = schema.at("const");
+  spec.json_value = value.serialize();
+  spec.is_whole_float = IsWholeFloatLiteral(value, spec.json_value);
   return ResultOk(std::move(spec));
 }
 
@@ -1505,6 +1518,7 @@ Result<EnumSpec, SchemaError> SchemaParser::ParseEnum(const picojson::object& sc
   }
   for (const auto& value : enum_array) {
     spec.json_values.push_back(value.serialize());
+    spec.is_whole_float.push_back(IsWholeFloatLiteral(value, spec.json_values.back()));
   }
   return ResultOk(std::move(spec));
 }
@@ -2430,6 +2444,15 @@ bool JSONSchemaConverter::IsAllowedJSONLiteral(const std::string& json_value, bo
   picojson::value value;
   XGRAMMAR_CHECK(picojson::parse(value, json_value).empty());
   return IsAllowedLiteral(value, raw_string);
+}
+
+int32_t JSONSchemaConverter::JSONLiteral(const std::string& json_value, bool is_whole_float) {
+  if (!is_whole_float) {
+    return ByteString(json_value);
+  }
+  // 3.0 and 3 are the same JSON number. Accepting only "3" would also let "3." continue into a
+  // different listed value such as 3.5.
+  return Sequence({ByteString(json_value), Choice({Empty(), ByteString(".0")})});
 }
 
 int32_t JSONSchemaConverter::ExcludingString(
@@ -3514,7 +3537,7 @@ int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::str
   if (!IsAllowedJSONLiteral(spec.json_value)) {
     return Unsatisfiable();
   }
-  return ByteString(spec.json_value);
+  return JSONLiteral(spec.json_value, spec.is_whole_float);
 }
 
 int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::string& rule_name) {
@@ -3522,9 +3545,11 @@ int32_t JSONSchemaConverter::GenerateEnum(const EnumSpec& spec, const std::strin
       << "GenerateEnum called with empty enum spec for rule: " << rule_name;
   std::vector<int32_t> values;
   values.reserve(spec.json_values.size());
-  for (const auto& value : spec.json_values) {
+  for (size_t i = 0; i < spec.json_values.size(); ++i) {
+    const auto& value = spec.json_values[i];
     if (IsAllowedJSONLiteral(value)) {
-      values.push_back(ByteString(value));
+      bool is_whole_float = i < spec.is_whole_float.size() && spec.is_whole_float[i];
+      values.push_back(JSONLiteral(value, is_whole_float));
     }
   }
   if (values.empty()) {
@@ -4073,7 +4098,7 @@ int32_t XMLToolCallingConverter::GenerateConst(
     if (!IsAllowedJSONLiteral(spec.json_value, /*raw_string=*/true)) {
       return Unsatisfiable();
     }
-    return ByteString(XMLValue(spec.json_value));
+    return JSONLiteral(XMLValue(spec.json_value), spec.is_whole_float);
   }
   return JSONSchemaConverter::GenerateConst(spec, rule_name);
 }
@@ -4084,8 +4109,9 @@ int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::s
   if (nested_object_level_ <= 1) {
     std::vector<int32_t> values;
     values.reserve(spec.json_values.size());
-    for (const auto& value : spec.json_values) {
-      values.push_back(GenerateConst(ConstSpec{value}, rule_name));
+    for (size_t i = 0; i < spec.json_values.size(); ++i) {
+      bool is_whole_float = i < spec.is_whole_float.size() && spec.is_whole_float[i];
+      values.push_back(GenerateConst(ConstSpec{spec.json_values[i], is_whole_float}, rule_name));
     }
     return Choice(values);
   }

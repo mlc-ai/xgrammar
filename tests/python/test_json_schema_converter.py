@@ -580,6 +580,31 @@ def test_numeric_const_enum_literals(schema: Dict[str, Any], accepted: str, reje
     check_schema_with_instance(schema, rejected, is_accepted=False, any_whitespace=False)
 
 
+@pytest.mark.parametrize(
+    "schema, accepted, rejected",
+    [
+        (
+            {"enum": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]},
+            ["3", "3.0", "3.5", "0.0", "5.0"],
+            ["3.00", "3.", "3.1"],
+        ),
+        ({"const": 100000.0}, ["100000", "100000.0"], ["1e+05", "100000.00"]),
+        ({"const": -2.0}, ["-2", "-2.0"], ["2.0"]),
+        # Integers written without a fraction stay exact.
+        ({"enum": [1, 2]}, ["1", "2"], ["1.0", "2.0"]),
+        ({"const": 1e20}, ["1e+20"], ["1e+20.0"]),
+    ],
+)
+def test_whole_float_const_enum_accepts_fraction_spelling(
+    schema: Dict[str, Any], accepted: List[str], rejected: List[str]
+):
+    # 3.0 is serialized as "3", but the schema's "3.0" spelling is the same JSON number.
+    for instance in accepted:
+        check_schema_with_instance(schema, instance, any_whitespace=False)
+    for instance in rejected:
+        check_schema_with_instance(schema, instance, is_accepted=False, any_whitespace=False)
+
+
 @pytest.mark.parametrize("style", ["qwen_xml", "minimax_m3_xml"])
 def test_numeric_const_literals_in_xml_styles(style: str):
     schema = {"type": "object", "const": {"price": 19.99}}
