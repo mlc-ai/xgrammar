@@ -107,12 +107,46 @@ std::string RegexConverter::HandleCharacterClass() {
   if (*current_ == ']') {
     RaiseError("Empty character class is not allowed in regex.");
   }
+  auto is_class_escape_at = [this](const TCodepoint* pos) {
+    if (end_ - pos < 2 || pos[0] != '\\') {
+      return false;
+    }
+    TCodepoint next = pos[1];
+    return next == 'd' || next == 'D' || next == 'w' || next == 'W' || next == 's' || next == 'S';
+  };
+  if (*current_ == '^') {
+    char_class += '^';
+    ++current_;
+  }
+  // A class escape like \w cannot be a range endpoint, so a '-' right before or after one is
+  // literal. It is escaped because the class escape is expanded to text here, and the '-' would
+  // otherwise form a range with a character of that text.
+  bool last_was_single = false;
+  bool last_was_class_escape = false;
   while (*current_ != ']' && current_ != end_) {
-    if (*current_ == '\\') {
+    if (*current_ == '-' && last_was_single && end_ - current_ >= 2 && current_[1] != ']' &&
+        !is_class_escape_at(current_ + 1)) {
+      ++current_;
+      char_class += '-';
+      if (*current_ == '\\') {
+        char_class += HandleEscapeInCharClass();
+      } else {
+        char_class += CharToUTF8(*current_);
+        ++current_;
+      }
+      last_was_single = false;
+      last_was_class_escape = false;
+    } else if (*current_ == '\\') {
+      last_was_class_escape = is_class_escape_at(current_);
+      last_was_single = !last_was_class_escape;
       char_class += HandleEscapeInCharClass();
     } else {
-      char_class += CharToUTF8(*current_);
+      bool escape_dash =
+          *current_ == '-' && (last_was_class_escape || is_class_escape_at(current_ + 1));
+      char_class += escape_dash ? "\\-" : CharToUTF8(*current_);
       ++current_;
+      last_was_single = true;
+      last_was_class_escape = false;
     }
   }
   if (current_ == end_) {
