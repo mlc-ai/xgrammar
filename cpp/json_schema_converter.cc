@@ -3670,12 +3670,18 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
         ")";
     m["email"] = "^(" + dot_string + "|" + quoted_string + ")@" + domain + "$";
 
-    m["date"] = "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))$";
+    // The number of days depends on the month, and February 29 needs a leap year: a year divisible
+    // by 4 that does not end in 00, or a year divisible by 400.
+    std::string date =
+        "(\\d{4}-((0[13578]|1[02])-(0[1-9]|[12]\\d|3[01])|(0[469]|11)-(0[1-9]|[12]\\d|30)|"
+        "02-(0[1-9]|1\\d|2[0-8]))|"
+        "(\\d\\d(0[48]|[2468][048]|[13579][26])|([02468][048]|[13579][26])00)-02-29)";
+    m["date"] = "^" + date + "$";
     m["time"] =
         "^([01]\\d|2[0-3]):[0-5]\\d:([0-5]\\d|60)(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
     m["date-time"] =
-        "^(\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2]\\d|3[01]))T([01]\\d|2[0-3]):[0-5]\\d:([0-5]\\d|60)("
-        "\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
+        "^" + date +
+        "T([01]\\d|2[0-3]):[0-5]\\d:([0-5]\\d|60)(\\.\\d+)?(Z|[+-]([01]\\d|2[0-3]):[0-5]\\d)$";
     m["duration"] =
         "^P((\\d+D|\\d+M(\\d+D)?|\\d+Y(\\d+M(\\d+D)?)?)(T(\\d+S|\\d+M(\\d+S)?|\\d+H(\\d+M(\\d+"
         "S)?"
