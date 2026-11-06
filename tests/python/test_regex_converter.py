@@ -367,6 +367,14 @@ def test_group_modifiers():
             _regex_to_ebnf(regex)
 
 
+@pytest.mark.parametrize("name", ["first_name", "group1", "_"])
+def test_group_name_with_digit_or_underscore(name: str):
+    grammar_str = _regex_to_ebnf(f"(?<{name}>abc)d")
+    assert _is_grammar_accept_string(grammar_str, "abcd")
+    assert not _is_grammar_accept_string(grammar_str, "abc")
+    assert not _is_grammar_accept_string(grammar_str, name + "d")
+
+
 def test_unmatched_parentheses():
     # Test unmatched closing parenthesis
     regex = "abc)"
