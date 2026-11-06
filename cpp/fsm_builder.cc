@@ -310,6 +310,10 @@ constexpr int kLargeRepeatThreshold = 128;
  * because no GrammarBuilder is available. */
 constexpr int64_t kMaxUnrolledRepeatStates = 100000;
 
+/*! \brief Upper bound of a repetition merged from adjacent repetitions of the same element. The
+ * merged repetition is unrolled, and unrolling time grows quadratically with the bound. */
+constexpr int kMaxMergedRepeatUpperBound = 2 * kLargeRepeatThreshold;
+
 using CodepointRange = std::pair<uint32_t, uint32_t>;
 
 /*! \brief Sort the ranges and merge overlapping or adjacent ones. */
@@ -1194,6 +1198,8 @@ struct RegexStackEntry {
   std::variant<RegexIR::State, char> item;
   int span_begin = 0;
   int span_end = 0;
+  // For a bounded repetition, the end of the repeated atom, which starts at span_begin.
+  int repeat_atom_end = -1;
 };
 
 /*! \brief Skip a character class starting at regex[pos] == '['. Returns the position right after
@@ -1223,9 +1229,14 @@ size_t SkipCharacterClass(const std::string& regex, size_t pos) {
  * \param builder If not null, large bounded repetitions are compiled into subrules added through
  * this builder; see RegexFSMBuilder::Build.
  * \param rule_hint Name hint for the created subrules.
+ * \param merge_repeats Whether to merge adjacent repetitions of the same element. It builds the
+ * element's FSM, so callers that only parse the regex disable it.
  */
 Result<RegexIR> ParseRegexToIR(
-    const std::string& regex_with_flags, GrammarBuilder* builder, const std::string& rule_hint
+    const std::string& regex_with_flags,
+    GrammarBuilder* builder,
+    const std::string& rule_hint,
+    bool merge_repeats
 ) {
   RegexIR ir;
   std::string regex = regex_with_flags;
@@ -1450,9 +1461,51 @@ Result<RegexIR> ParseRegexToIR(
       if (i + 1 < size && regex[i + 1] == '?') {
         i++;
       }
-      bool is_large_repeat = upper_bound == RegexIR::kRepeatNoUpperBound
-                                 ? lower_bound > kLargeRepeatThreshold
-                                 : upper_bound > kLargeRepeatThreshold;
+      // X{a,b}X{c,d} == X{a+c,b+d}. Merge them so the unrolled FSM has no ambiguous boundary
+      // between the two repeats; the merged repeat stays unrolled. A following quantifier
+      // applies to X{c,d} alone, so don't merge then.
+      bool merged = false;
+      bool followed_by_quantifier = i + 1 < size && std::strchr("*+?{", regex[i + 1]) != nullptr;
+      if (merge_repeats && upper_bound != RegexIR::kRepeatNoUpperBound &&
+          upper_bound <= kLargeRepeatThreshold && !followed_by_quantifier && !stack.empty() &&
+          stack.back().repeat_atom_end != -1) {
+        const auto& prev_entry = stack.back();
+        const auto& prev = std::get<RegexIR::Repeat>(std::get<RegexIR::State>(prev_entry.item));
+        bool same_atom = regex.compare(
+                             prev_entry.span_begin,
+                             prev_entry.repeat_atom_end - prev_entry.span_begin,
+                             regex,
+                             atom.span_begin,
+                             atom.span_end - atom.span_begin
+                         ) == 0;
+        bool within_limit = false;
+        int64_t merged_upper_bound = static_cast<int64_t>(prev.upper_bound) + upper_bound;
+        if (same_atom && prev.upper_bound != RegexIR::kRepeatNoUpperBound &&
+            merged_upper_bound <= kMaxMergedRepeatUpperBound) {
+          if (upper_bound == 0) {
+            // Adds no copies: the merged repetition has the previous one's bounds.
+            within_limit = true;
+          } else {
+            auto child = std::visit(
+                [&](auto&& arg) { return ir.visit(arg); }, std::get<RegexIR::State>(atom.item)
+            );
+            within_limit =
+                child.IsOk() && std::move(child).Unwrap().NumStates() * merged_upper_bound <=
+                                    kMaxUnrolledRepeatStates;
+          }
+        }
+        if (within_limit) {
+          lower_bound += prev.lower_bound;
+          upper_bound += prev.upper_bound;
+          atom.span_begin = prev_entry.span_begin;
+          atom.span_end = prev_entry.repeat_atom_end;
+          stack.pop_back();
+          merged = true;
+        }
+      }
+      bool is_large_repeat = !merged && (upper_bound == RegexIR::kRepeatNoUpperBound
+                                             ? lower_bound > kLargeRepeatThreshold
+                                             : upper_bound > kLargeRepeatThreshold);
       if (is_large_repeat && builder != nullptr) {
         // Compile the repeated sub-pattern into a new rule (with a kRegex body), and represent
         // the repetition as a kRepeatRef FSM edge. The Earley parser executes it with a counter
@@ -1497,7 +1550,7 @@ Result<RegexIR> ParseRegexToIR(
         repeat.lower_bound = lower_bound;
         repeat.upper_bound = upper_bound;
         repeat.states.push_back(std::move(std::get<RegexIR::State>(atom.item)));
-        stack.push_back({std::move(repeat), atom.span_begin, i + 1});
+        stack.push_back({std::move(repeat), atom.span_begin, i + 1, atom.span_end});
       }
       continue;
     }
@@ -1562,7 +1615,7 @@ Result<RegexIR> ParseRegexToIR(
 Result<FSMWithStartEnd> RegexFSMBuilder::Build(
     const std::string& regex, GrammarBuilder* builder, const std::string& rule_hint
 ) {
-  auto ir_result = ParseRegexToIR(regex, builder, rule_hint);
+  auto ir_result = ParseRegexToIR(regex, builder, rule_hint, /*merge_repeats=*/true);
   if (ir_result.IsErr()) {
     return ResultErr(std::move(ir_result).UnwrapErr());
   }
@@ -1570,7 +1623,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::Build(
 }
 
 Result<bool> RegexFSMBuilder::MatchesEmpty(const std::string& regex) {
-  auto ir_result = ParseRegexToIR(regex, nullptr, "");
+  auto ir_result = ParseRegexToIR(regex, nullptr, "", /*merge_repeats=*/false);
   if (ir_result.IsErr()) {
     return ResultErr(std::move(ir_result).UnwrapErr());
   }

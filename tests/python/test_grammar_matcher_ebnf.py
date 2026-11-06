@@ -846,6 +846,34 @@ def test_repeat_ref_boundary():
     assert not _is_grammar_accept_string(g129, "a" * 130)
 
 
+def test_regex_adjacent_repeats_merged():
+    """Test that adjacent repeats of the same element merge into one unrolled repeat. Issue #972."""
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
+
+    def fsms(regex):
+        return _print_grammar_fsms(compiler.compile_grammar(f'root ::= Regex("{regex}")').grammar)
+
+    assert fsms("x[a-z]{1,3}[a-z]{0,2}[a-z]{2}y") == fsms("x[a-z]{3,7}y")
+    assert fsms("x(a?){2}(a?){2}y") == fsms("x(a?){4}y")
+    assert fsms("xa{1}?a{2}?y") == fsms("xa{3}y")
+    # Not merged: an unbounded first repeat, or a quantifier on the second one.
+    for regex, accepted, rejected in [
+        ("a{2,}a{3}", ["a" * 5, "a" * 9], ["a" * 4]),
+        ("a{2}a{3}*", ["aa", "a" * 8], ["", "a" * 4]),
+        ("a{2}a{3}{2}", ["a" * 8], ["a" * 10]),
+    ]:
+        grammar = xgr.Grammar.from_ebnf(f'root ::= Regex("{regex}")')
+        assert all(_is_grammar_accept_string(grammar, s) for s in accepted)
+        assert not any(_is_grammar_accept_string(grammar, s) for s in rejected)
+
+    grammar = xgr.Grammar.from_ebnf('root ::= Regex("x[a-z]{1,60}[a-z]{0,60}[a-z]{0,60}y")')
+    assert "Repeat(" not in fsms("x[a-z]{1,60}[a-z]{0,60}[a-z]{0,60}y")
+    assert _is_grammar_accept_string(grammar, "x" + "a" * 1 + "y")
+    assert _is_grammar_accept_string(grammar, "x" + "a" * 180 + "y")
+    assert not _is_grammar_accept_string(grammar, "xy")
+    assert not _is_grammar_accept_string(grammar, "x" + "a" * 181 + "y")
+
+
 def test_repeat_ref_multichar_rule():
     """Test RepeatRef with a multi-character rule body."""
     grammar_str = """
