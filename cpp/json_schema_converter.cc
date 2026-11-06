@@ -4001,7 +4001,7 @@ int32_t XMLToolCallingConverter::GenerateString(
       }
     }
     if (spec.pattern.has_value()) {
-      return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
+      return XMLPatternString(*spec.pattern, rule_name);
     }
     const bool bounded = spec.min_length != 0 || spec.max_length != -1;
     // Without exclusions, a length bound or an unrecognized format keeps the plain repetition.
@@ -4021,6 +4021,122 @@ int32_t XMLToolCallingConverter::GenerateString(
     return RuleRef(kXMLString);
   }
   return JSONSchemaConverter::GenerateString(spec, rule_name);
+}
+
+bool XMLToolCallingConverter::RegexCanMatchStringContaining(
+    const std::string& regex, const std::string& needle
+) {
+  if (needle.empty()) {
+    return true;
+  }
+  auto parsed = GrammarFSMBuilder::Regex(regex, false);
+  if (parsed.IsErr()) {
+    // The pattern is emitted through RegexExpression, which reports its own parse error.
+    return false;
+  }
+  auto parsed_dfa_result = std::move(parsed).Unwrap().ToDFA();
+  if (parsed_dfa_result.IsErr()) {
+    return false;
+  }
+  const FSMWithStartEnd parsed_dfa = std::move(parsed_dfa_result).Unwrap();
+  auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, {needle}});
+  if (!exclusion.has_value()) {
+    return true;
+  }
+
+  // Restrict the regex DFA to productive states: only those can appear on an accepted string.
+  const auto& dfa = parsed_dfa.GetFsm();
+  const int num_states = dfa.NumStates();
+  std::vector<std::vector<int>> predecessors(num_states);
+  for (int state = 0; state < num_states; ++state) {
+    for (const auto& edge : dfa.GetEdges(state)) {
+      if (edge.IsCharRange()) {
+        predecessors[edge.target].push_back(state);
+      }
+    }
+  }
+  std::vector<bool> productive(num_states, false);
+  std::vector<int> productive_states(parsed_dfa.GetEnds().begin(), parsed_dfa.GetEnds().end());
+  for (int state : productive_states) {
+    productive[state] = true;
+  }
+  for (size_t index = 0; index < productive_states.size(); ++index) {
+    for (int state : predecessors[productive_states[index]]) {
+      if (!productive[state]) {
+        productive[state] = true;
+        productive_states.push_back(state);
+      }
+    }
+  }
+  if (!productive[parsed_dfa.GetStart()]) {
+    return false;
+  }
+
+  // The exclusion automaton accepts every string that avoids `needle`; the transitions it is
+  // missing are exactly those that complete `needle`. Walk the product with the regex DFA. A
+  // productive regex transition on a byte the exclusion state cannot take means some accepted
+  // regex string contains `needle`.
+  const auto& exclusion_fsm = exclusion->GetFsm();
+  std::unordered_set<uint64_t> visited;
+  std::vector<std::pair<int, int>> pending;
+  auto push_state = [&](int dfa_state, int exclusion_state) {
+    uint64_t key =
+        (static_cast<uint64_t>(dfa_state) << 32) | static_cast<uint32_t>(exclusion_state);
+    if (visited.insert(key).second) {
+      pending.emplace_back(dfa_state, exclusion_state);
+    }
+  };
+  push_state(parsed_dfa.GetStart(), exclusion->GetStart());
+  for (size_t index = 0; index < pending.size(); ++index) {
+    auto [dfa_state, exclusion_state] = pending[index];
+    const auto& exclusion_edges = exclusion_fsm.GetEdges(exclusion_state);
+    for (const auto& dfa_edge : dfa.GetEdges(dfa_state)) {
+      if (!dfa_edge.IsCharRange()) {
+        // The regex FSM builder emits leaf character ranges; treat anything else conservatively.
+        return true;
+      }
+      if (!productive[dfa_edge.target]) {
+        continue;
+      }
+      bool fully_covered = true;
+      for (int byte = dfa_edge.min; byte <= dfa_edge.max && fully_covered; ++byte) {
+        fully_covered = std::any_of(
+            exclusion_edges.begin(),
+            exclusion_edges.end(),
+            [byte](const FSMEdge& edge) {
+              return edge.IsCharRange() && edge.min <= byte && byte <= edge.max;
+            }
+        );
+      }
+      if (!fully_covered) {
+        return true;
+      }
+      for (const auto& exclusion_edge : exclusion_edges) {
+        if (!exclusion_edge.IsCharRange() || dfa_edge.min > exclusion_edge.max ||
+            exclusion_edge.min > dfa_edge.max) {
+          continue;
+        }
+        push_state(dfa_edge.target, exclusion_edge.target);
+      }
+    }
+  }
+  return false;
+}
+
+int32_t XMLToolCallingConverter::XMLPatternString(
+    const std::string& pattern, const std::string& rule_name
+) {
+  const std::string& suffix = xml_wrapper_.parameter_suffix;
+  if (suffix.empty() || !RegexCanMatchStringContaining(pattern, suffix)) {
+    return RegexExpression(pattern, false, /*force_cfg_expansion=*/true);
+  }
+  // Exclude only the XML framing delimiter. Caller-supplied excludes_ deliberately do not apply
+  // to a pattern: the pattern is the schema's own contract for the string's content.
+  std::vector<std::string> saved_excludes = std::move(excludes_);
+  excludes_ = {suffix};
+  int32_t rule_id = ExcludingString(pattern, rule_name, /*close_json_string=*/false);
+  excludes_ = std::move(saved_excludes);
+  return rule_id;
 }
 
 int32_t XMLToolCallingConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
