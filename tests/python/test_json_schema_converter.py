@@ -3705,6 +3705,51 @@ def test_any_order_acceptance(instance: str, expect: bool):
     _accept_any_order(schema, instance, expect)
 
 
+@pytest.mark.parametrize("strict_mode", [True, False])
+@pytest.mark.parametrize(
+    "schema, instance, accepted",
+    [
+        ({"type": "object", "unevaluatedProperties": False}, {}, True),
+        ({"type": "object", "unevaluatedProperties": False}, {"a": 1}, False),
+        ({"type": "object", "unevaluatedProperties": True}, {"a": 1}, True),
+        ({"type": "object", "unevaluatedProperties": {"type": "integer"}}, {"a": 1}, True),
+        ({"type": "object", "unevaluatedProperties": {"type": "integer"}}, {"a": "x"}, False),
+        (
+            {
+                "type": "object",
+                "properties": {"a": {"type": "string"}},
+                "unevaluatedProperties": False,
+            },
+            {"a": "x"},
+            True,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"a": {"type": "string"}},
+                "unevaluatedProperties": False,
+            },
+            {"a": "x", "b": 1},
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"a": {"type": "string"}},
+                "unevaluatedProperties": False,
+                "additionalProperties": True,
+            },
+            {"a": "x", "b": 1},
+            True,
+        ),
+    ],
+)
+def test_unevaluated_properties_does_not_depend_on_strict_mode(
+    strict_mode: bool, schema: Dict[str, Any], instance: Dict[str, Any], accepted: bool
+):
+    check_schema_with_instance(schema, instance, is_accepted=accepted, strict_mode=strict_mode)
+
+
 def test_any_order_additional_properties_unbounded():
     schema = {
         "type": "object",
