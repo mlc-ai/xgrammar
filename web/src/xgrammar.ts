@@ -34,6 +34,18 @@ async function asyncInitBinding() {
   }
 }
 
+export type PropertyOrder = "schema" | "unordered" | "unordered_relaxed";
+
+function toPropertyOrder(order?: PropertyOrder): any {
+  switch (order) {
+    case undefined: return undefined;
+    case "schema": return binding.PropertyOrder.kSchema;
+    case "unordered": return binding.PropertyOrder.kUnordered;
+    case "unordered_relaxed": return binding.PropertyOrder.kUnorderedRelaxed;
+    default: throw new Error(`Invalid property order: ${order}`);
+  }
+}
+
 type SeparatorPair = { first: string; second: string };
 
 function toSeparatorPair(separators?: [string, string]): SeparatorPair | undefined {
@@ -256,7 +268,8 @@ export class Grammar {
     separators?: [string, string],
     strictMode = true,
     maxWhitespaceCnt?: number,
-    anyOrder: boolean = false
+    anyOrder: boolean = false,
+    propertyOrder?: PropertyOrder
   ): Promise<Grammar> {
     const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
@@ -275,7 +288,8 @@ export class Grammar {
         strictMode,
         maxWhitespaceCnt,
         printConvertedEBNF,
-        anyOrder
+        anyOrder,
+        toPropertyOrder(propertyOrder)
       ));
   }
 
@@ -526,7 +540,8 @@ export class GrammarCompiler {
     separators?: [string, string],
     strictMode = true,
     maxWhitespaceCnt?: number,
-    anyOrder: boolean = false
+    anyOrder: boolean = false,
+    propertyOrder?: PropertyOrder
   ): Promise<CompiledGrammar> {
     const separatorsPair = toSeparatorPair(separators);
     await asyncInitBinding();
@@ -542,7 +557,8 @@ export class GrammarCompiler {
         separatorsPair,
         strictMode,
         maxWhitespaceCnt,
-        anyOrder));
+        anyOrder,
+        toPropertyOrder(propertyOrder)));
   }
 
   /**

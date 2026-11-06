@@ -108,6 +108,15 @@ std::string GrammarPrinter::PrintGrammarExpr(const GrammarExpr& grammar_expr) {
       return PrintTokenTagDispatch(grammar_expr);
     case GrammarExprType::kRegex:
       return PrintRegex(grammar_expr);
+    case GrammarExprType::kUnordered: {
+      std::string result = "Unordered(" + grammar_->GetRule(grammar_expr[0]).name + ", " +
+                           std::to_string(grammar_expr[1]) + ", " + std::to_string(grammar_expr[2]);
+      for (int i = 4; i < grammar_expr.size(); i += 2) {
+        result += ", (" + grammar_->GetRule(grammar_expr[i]).name + ", " +
+                  (grammar_expr[i + 1] ? "true" : "false") + ")";
+      }
+      return result + ")";
+    }
     case GrammarExprType::kSubstring:
       return PrintSubstring(grammar_expr);
     default:

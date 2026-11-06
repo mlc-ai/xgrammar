@@ -157,6 +157,8 @@ class GrammarFunctor {
         return VisitRegex(grammar_expr);
       case GrammarExprType::kSubstring:
         return VisitSubstring(grammar_expr);
+      case GrammarExprType::kUnordered:
+        return VisitUnordered(grammar_expr);
       default:
         XGRAMMAR_LOG(FATAL) << "Unexpected sequence type: " << static_cast<int>(grammar_expr.type);
         XGRAMMAR_UNREACHABLE();
@@ -204,6 +206,35 @@ class GrammarFunctor {
       Grammar::Impl::TagDispatch tag_dispatch = base_grammar_->GetTagDispatch(grammar_expr);
       return builder_->AddTagDispatch(tag_dispatch);
     } else {
+      return T();
+    }
+  }
+
+  virtual T VisitUnordered(const GrammarExpr& expr) {
+    auto visit_rule = [&](int index) -> int32_t {
+      GrammarExpr ref{GrammarExprType::kRuleRef, expr.data + index, 1};
+      if constexpr (std::is_same<T, void>::value) {
+        VisitRuleRef(ref);
+        return 0;
+      } else if constexpr (std::is_same<T, int32_t>::value) {
+        return builder_->GetGrammarExpr(VisitRuleRef(ref))[0];
+      } else {
+        return 0;
+      }
+    };
+    if constexpr (std::is_same<T, int32_t>::value) {
+      int32_t separator = visit_rule(0);
+      std::vector<std::pair<int32_t, bool>> entries;
+      entries.reserve((expr.size() - 4) / 2);
+      for (int i = 4; i < expr.size(); i += 2) {
+        entries.emplace_back(visit_rule(i), expr[i + 1]);
+      }
+      return builder_->AddUnordered(separator, expr[1], expr[2], std::move(entries));
+    } else {
+      visit_rule(0);
+      for (int i = 4; i < expr.size(); i += 2) {
+        visit_rule(i);
+      }
       return T();
     }
   }
