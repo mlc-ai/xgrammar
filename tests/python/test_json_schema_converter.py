@@ -2604,6 +2604,8 @@ instance__accepted__test_uri_format = [
     (r"aaa:?azAZ09-._~%Ff!$&'()*+,;=:@#azAZ09-._~%Aa!$&'()*+,;=:@", True),
     (r"z+.-:", True),
     (r"abc:", True),
+    (r"s3://bucket/key", True),
+    (r"a1+.-:", True),
     (r"abc:a", True),
     (r"abc:/", True),
     (r"abc:/a", True),
@@ -2619,6 +2621,8 @@ instance__accepted__test_uri_format = [
     (r"abc://@@", False),
     (r"abc://::", False),
     (r"abc:/[]", False),
+    (r"1a:b", False),
+    (r"a_b:c", False),
 ]
 
 
@@ -2645,11 +2649,18 @@ instance__accepted__test_uri_reference_format = [
     (r"//azAZ09-._~%Ff!$&'()*+,;=", True),
     (r"/a", True),
     (r"/azAZ09-._~%Ff!$&'()*+,;=:@", True),
+    (r"http://foo.bar/?baz=qux#quux", True),
+    (r"urn:isbn:0451450523", True),
+    (r"abc:", True),
+    (r"s3://bucket/key", True),
     (r"?[#]", False),
     (r"//@@", False),
     (r"//::", False),
     (r"/[]", False),
     (r":", False),
+    (r"abc://@@", False),
+    (r"1a:b", False),
+    (r"a_b:c", False),
 ]
 
 
