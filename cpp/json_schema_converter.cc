@@ -1213,7 +1213,12 @@ Result<NullSpec, SchemaError> SchemaParser::ParseNull(const picojson::object&) {
 }
 
 Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "minContains", "maxContains"});
+  WarnUnsupportedKeywords(schema, {"contains", "minContains", "maxContains"});
+  auto unique_items = schema.find("uniqueItems");
+  if (unique_items != schema.end() && unique_items->second.is<bool>() &&
+      unique_items->second.get<bool>()) {
+    XGRAMMAR_LOG(WARNING) << "uniqueItems is not supported; uniqueness will not be enforced";
+  }
   ArraySpec spec;
 
   if (schema.count("prefixItems")) {
