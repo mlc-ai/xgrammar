@@ -110,6 +110,8 @@ struct RepetitionFollowBytes {
   ByteSet under_all;
   ByteSet under_any;
   int32_t max_upper = 0;
+  /*! \brief Each repeat edge to the rule, as (parent rule id, source state of the edge). */
+  std::vector<std::pair<int32_t, int32_t>> references;
 };
 
 /*!
@@ -142,7 +144,7 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
 
   std::vector<bool> disqualified(num_rules, false);
   std::vector<bool> referenced(num_rules, false);
-  std::vector<RepetitionFollowBytes> follow_bytes(num_rules, {ByteSet().set(), ByteSet()});
+  std::vector<RepetitionFollowBytes> follow_bytes(num_rules, {ByteSet().set(), ByteSet(), 0, {}});
   for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
     if (const auto* suffix_stop_info = grammar->GetSuffixStopInfo(rule_id)) {
       for (int32_t ref : {suffix_stop_info->body_rule_id, suffix_stop_info->marker_rule_id}) {
@@ -195,6 +197,7 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
         XGRAMMAR_DCHECK(info.Upper() >= 0);
         follow_bytes[body_rule_id].max_upper =
             std::max(follow_bytes[body_rule_id].max_upper, info.Upper());
+        follow_bytes[body_rule_id].references.emplace_back(rule_id, state);
       }
     }
   }
@@ -218,11 +221,12 @@ struct RepetitionTokenClass {
     kExit,
     // Never legal from this state.
     kRejected,
-    // Depends on what follows the repetition: left to the matcher's replay.
+    // Leaves the repetition at byte `exit_position` and depends on what follows the repetition.
     kUndecided,
   };
   Kind kind;
   int32_t num_repetitions = 0;
+  int32_t exit_position = -1;
 };
 
 /*!
@@ -253,7 +257,7 @@ RepetitionTokenClass ClassifyRepetitionToken(
         // The parent consumes this last byte right after `num_repetitions` codepoints.
         return {RepetitionTokenClass::kExit, num_repetitions};
       }
-      return {RepetitionTokenClass::kUndecided};
+      return {RepetitionTokenClass::kUndecided, num_repetitions, static_cast<int32_t>(i)};
     }
     state = next_state;
     if (fsm.IsEndState(state)) {
@@ -274,6 +278,75 @@ RepetitionTokenClass ClassifyRepetitionToken(
   return {RepetitionTokenClass::kBudget, num_repetitions};
 }
 
+/*!
+ * \brief Decide, per repetition parent, the tokens that leave the repetition before their last
+ * byte (RepetitionTokenClass::kUndecided), and record them in `mask->repeat_parent_exit_tokens`.
+ *
+ * The bytes from the one that leaves the repetition on are classified from the target state of
+ * each parent's repeat edge, as that state's own mask would classify them. A token that some
+ * parent leaves uncertain stays uncertain in the mask and is replayed by the matcher; the others
+ * are added to `decided_indices`, and listed for the parents that accept them.
+ */
+void PopulateRepeatParentExitTokens(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    const std::vector<std::pair<int32_t, int32_t>>& references,
+    const std::vector<std::pair<int32_t, RepetitionTokenClass>>& undecided,
+    AdaptiveTokenMask* mask,
+    std::vector<int32_t>* decided_indices
+) {
+  // The matcher replays the tokens that a free-text region may take whole from the middle.
+  if (undecided.empty() || grammar->has_token_edges) {
+    return;
+  }
+  // The matcher finds a parent's tokens by the parent state, i.e. the edge's source. The byte that
+  // leaves the repetition must be scanned after it, from the edge's target: so the source may have
+  // no other edge that could scan it.
+  std::vector<int32_t> targets;
+  for (const auto& [rule_id, source] : references) {
+    const auto& edges = grammar->per_rule_fsms[rule_id]->GetFsm().GetFsm().GetEdges(source);
+    if (edges.size() != 1 ||
+        std::count(references.begin(), references.end(), std::make_pair(rule_id, source)) != 1) {
+      return;
+    }
+    targets.push_back(edges[0].target);
+  }
+  const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
+  std::vector<std::string> exit_bytes;
+  exit_bytes.reserve(undecided.size());
+  for (const auto& [index, token_class] : undecided) {
+    exit_bytes.push_back(sorted_vocab[index].second.substr(token_class.exit_position));
+  }
+  std::vector<std::vector<RepeatExitClass>> classes;
+  classes.reserve(references.size());
+  for (size_t r = 0; r < references.size(); ++r) {
+    classes.push_back(ClassifyBytesAfterRepetition(
+        grammar, tokenizer_info, references[r].first, targets[r], exit_bytes
+    ));
+  }
+  for (size_t i = 0; i < undecided.size(); ++i) {
+    const bool uncertain = std::any_of(classes.begin(), classes.end(), [&](const auto& c) {
+      return c[i] == RepeatExitClass::kUncertain;
+    });
+    if (uncertain) {
+      continue;
+    }
+    const auto& [index, token_class] = undecided[i];
+    decided_indices->push_back(index);
+    for (size_t r = 0; r < references.size(); ++r) {
+      if (classes[r][i] == RepeatExitClass::kAccepted) {
+        mask->repeat_parent_exit_tokens.emplace_back(
+            references[r].first,
+            references[r].second,
+            token_class.num_repetitions,
+            sorted_vocab[index].first
+        );
+      }
+    }
+  }
+  std::sort(mask->repeat_parent_exit_tokens.begin(), mask->repeat_parent_exit_tokens.end());
+}
+
 }  // namespace
 
 void PopulateRepeatInteriorBitsets(
@@ -288,6 +361,7 @@ void PopulateRepeatInteriorBitsets(
     mask.repeat_interior_char_counts.clear();
     mask.repeat_interior_bitsets.clear();
     mask.repeat_exit_tokens.clear();
+    mask.repeat_parent_exit_tokens.clear();
     if (state.rule_id < 0 || !counted_repetition_bodies[state.rule_id].has_value()) {
       continue;
     }
@@ -299,10 +373,14 @@ void PopulateRepeatInteriorBitsets(
     // sorted-vocabulary order.
     std::map<int32_t, std::vector<int32_t>> tokens_by_repetitions;
     std::vector<int32_t> decided_indices;
+    std::vector<std::pair<int32_t, RepetitionTokenClass>> undecided;
     for (int32_t index = 0; index < static_cast<int32_t>(sorted_vocab.size()); ++index) {
       const auto token_class = ClassifyRepetitionToken(
           fsm, *counted_repetition_bodies[state.rule_id], sorted_vocab[index].second
       );
+      if (token_class.kind == RepetitionTokenClass::kUndecided) {
+        undecided.emplace_back(index, token_class);
+      }
       if (token_class.kind == RepetitionTokenClass::kBudget) {
         tokens_by_repetitions[token_class.num_repetitions].push_back(index);
       } else if (token_class.kind == RepetitionTokenClass::kExit) {
@@ -314,7 +392,16 @@ void PopulateRepeatInteriorBitsets(
         decided_indices.push_back(index);
       }
     }
-    if (tokens_by_repetitions.empty() && mask.repeat_exit_tokens.empty()) {
+    PopulateRepeatParentExitTokens(
+        grammar,
+        tokenizer_info,
+        counted_repetition_bodies[state.rule_id]->references,
+        undecided,
+        &mask,
+        &decided_indices
+    );
+    if (tokens_by_repetitions.empty() && mask.repeat_exit_tokens.empty() &&
+        mask.repeat_parent_exit_tokens.empty()) {
       continue;
     }
 
