@@ -2,6 +2,11 @@ name: Build Web-XGrammar
 
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish @mlc-ai/web-xgrammar to npm after a successful build and test"
+        type: boolean
+        default: false
   pull_request:
   push:
     branches:
@@ -31,8 +36,38 @@ jobs:
           npm install
           npm run build
 
-    # TODO(Linzhang): Tests will fail currently. Need further maintenance.
-    # - name: Run tests
-    #   run: |
-    #     cd web
-    #     npm test
+      - name: Run tests
+        run: |
+          source ./emsdk/emsdk_env.sh
+          cd web
+          npm test
+
+  # Manual, opt-in: publish the web package to npm. Requires the NPM_TOKEN secret.
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build emsdk
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+
+      - name: Build and publish Web-XGrammar
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          source ./emsdk/emsdk_env.sh
+          echo "set(XGRAMMAR_BUILD_PYTHON_BINDINGS OFF)" >> cmake/config.cmake
+          cd web
+          npm install
+          npm run build
+          npm config set //registry.npmjs.org/:_authToken "$NODE_AUTH_TOKEN"
+          npm publish --access public
