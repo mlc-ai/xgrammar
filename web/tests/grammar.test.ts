@@ -614,6 +614,49 @@ sub_rule ::= "b"
     expect(matcher.acceptToken(0)).toEqual(true);
     expect(matcher.findJumpForwardString()).toEqual("bb");
   });
+
+  test("test_get_jump_forward_string_partial_utf8", async () => {
+    const vocab = ["é", "è", "a", "</s>"];
+    const cases: [string, string][] = [
+      // Both alternatives start with the byte 0xC3, so only that byte is forced.
+      [String.raw`root ::= "é" | "è"`, ""],
+      [String.raw`root ::= "aé" | "aè"`, "a"],
+      [String.raw`root ::= [é-ê]`, ""],
+      [String.raw`root ::= "aé"`, "aé"],
+    ];
+    for (const [grammar_ebnf, expected] of cases) {
+      const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+        vocab, "raw", false, undefined, [3]
+      );
+      const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+      const grammar = await compiler.compileGrammar(grammar_ebnf);
+      const matcher = await GrammarMatcher.createGrammarMatcher(grammar);
+      tokenizerInfo.dispose();
+      expect(matcher.findJumpForwardString()).toEqual(expected);
+      matcher.dispose();
+    }
+  });
+
+  test("test_get_jump_forward_string_after_split_character", async () => {
+    // A byte-level vocabulary in which "é" (C3 A9) is split across two tokens; in the byte-level
+    // encoding the bytes 0xC3 and 0xA9 are spelled "Ã" and "©". The literal ends in "z" rather
+    // than "a" because the compiler re-parses the printed grammar, where "\xe9a" is read as a
+    // single escape.
+    const tokenizerInfo = await TokenizerInfo.createTokenizerInfo(
+      ["Ã", "©", "z", "</s>"], "byte_level", false, undefined, [3]
+    );
+    const compiler = await GrammarCompiler.createGrammarCompiler(tokenizerInfo);
+    const grammar = await compiler.compileGrammar(String.raw`root ::= "éz"`);
+    const matcher = await GrammarMatcher.createGrammarMatcher(grammar);
+    tokenizerInfo.dispose();
+    expect(matcher.findJumpForwardString()).toEqual("éz");
+    expect(matcher.acceptToken(0)).toEqual(true);
+    // The forced bytes now start inside "é".
+    expect(matcher.findJumpForwardString()).toEqual("");
+    expect(matcher.acceptToken(1)).toEqual(true);
+    expect(matcher.findJumpForwardString()).toEqual("z");
+    matcher.dispose();
+  });
 });
 
 // Identical to `test_builtin_grammar_json_schema.py`
