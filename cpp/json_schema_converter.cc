@@ -137,6 +137,8 @@ std::string TypeArraySpec::ToString() const {
   return "TypeArraySpec{type_schemas.size()=" + std::to_string(type_schemas.size()) + "}";
 }
 
+std::string UnsatisfiableSpec::ToString() const { return "UnsatisfiableSpec{}"; }
+
 std::string SchemaSpec::ToString() const {
   std::string spec_str;
   std::visit([&spec_str](const auto& s) { spec_str = s.ToString(); }, spec);
@@ -174,6 +176,82 @@ bool HasMultipleInRange(int64_t start, int64_t end, int64_t multiple_of) {
 constexpr const char* kUnsupportedOneOfMessage =
     "oneOf with overlapping or non-provably-disjoint branches cannot be represented exactly; "
     "falling back to anyOf semantics";
+
+/*! \brief Whether no accepting state of the automaton is reachable from its start. */
+bool IsLanguageEmpty(const FSMWithStartEnd& fsm) {
+  std::unordered_set<int> reachable_states;
+  fsm.GetReachableStates(&reachable_states);
+  return std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
+    return fsm.IsEndState(state);
+  });
+}
+
+/*!
+ * \brief The conjunction of two value schemas, as far as it can be decided from the specs
+ * alone (no schema merging).
+ */
+enum class SchemaPairRelation {
+  /*! \brief Both constrain the same values: the conjunction is either of them. */
+  kEqual,
+  /*! \brief The left schema accepts everything: the conjunction is the right schema. */
+  kLeftIsAny,
+  /*! \brief The right schema accepts everything: the conjunction is the left schema. */
+  kRightIsAny,
+  /*! \brief They constrain disjoint JSON types: nothing satisfies both. */
+  kConflict,
+  /*! \brief Undecided; the conjunction would need a real schema merge. */
+  kUnknown,
+};
+
+/*! \brief The JSON type a schema pins its values to, or std::nullopt for combinators,
+ * literals and references. Integers and numbers share a bucket since every integer is a
+ * number. */
+std::optional<int> PinnedJSONType(const SchemaSpecPtr& spec) {
+  return std::visit(
+      [](const auto& s) -> std::optional<int> {
+        using T = std::decay_t<decltype(s)>;
+        if constexpr (std::is_same_v<T, IntegerSpec> || std::is_same_v<T, NumberSpec>) {
+          return 0;
+        } else if constexpr (std::is_same_v<T, StringSpec>) {
+          return 1;
+        } else if constexpr (std::is_same_v<T, BooleanSpec>) {
+          return 2;
+        } else if constexpr (std::is_same_v<T, NullSpec>) {
+          return 3;
+        } else if constexpr (std::is_same_v<T, ArraySpec>) {
+          return 4;
+        } else if constexpr (std::is_same_v<T, ObjectSpec>) {
+          return 5;
+        } else {
+          return std::nullopt;
+        }
+      },
+      spec->spec
+  );
+}
+
+SchemaPairRelation ClassifySchemaPair(const SchemaSpecPtr& lhs, const SchemaSpecPtr& rhs) {
+  const bool lhs_any = std::holds_alternative<AnySpec>(lhs->spec);
+  const bool rhs_any = std::holds_alternative<AnySpec>(rhs->spec);
+  // The parser deduplicates by cache key, so equal schemas usually share one pointer; the
+  // cache key covers the remaining cases (it ignores annotations such as title).
+  if (lhs == rhs || (lhs_any && rhs_any) ||
+      (!lhs->cache_key.empty() && lhs->cache_key == rhs->cache_key)) {
+    return SchemaPairRelation::kEqual;
+  }
+  if (lhs_any) {
+    return SchemaPairRelation::kLeftIsAny;
+  }
+  if (rhs_any) {
+    return SchemaPairRelation::kRightIsAny;
+  }
+  auto lhs_type = PinnedJSONType(lhs);
+  auto rhs_type = PinnedJSONType(rhs);
+  if (lhs_type.has_value() && rhs_type.has_value() && *lhs_type != *rhs_type) {
+    return SchemaPairRelation::kConflict;
+  }
+  return SchemaPairRelation::kUnknown;
+}
 
 bool IsSchemaAnnotationKey(const std::string& key) {
   static const std::unordered_set<std::string> kAnnotationKeys = {
@@ -2340,6 +2418,8 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
           return GenerateAllOf(s, rule_name_hint);
         } else if constexpr (std::is_same_v<T, TypeArraySpec>) {
           return GenerateTypeArray(s, rule_name_hint);
+        } else if constexpr (std::is_same_v<T, UnsatisfiableSpec>) {
+          return Unsatisfiable();
         } else {
           XGRAMMAR_LOG(FATAL) << "Unknown spec type";
         }
@@ -2369,17 +2449,8 @@ int32_t JSONSchemaConverter::RegexExpression(
   }
   if (can_use_fsm) {
     auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
-    if (fsm_result.IsOk()) {
-      auto fsm = std::move(fsm_result).Unwrap();
-      std::unordered_set<int> reachable_states;
-      fsm.GetReachableStates(&reachable_states);
-      bool language_is_empty =
-          std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
-            return fsm.IsEndState(state);
-          });
-      if (!language_is_empty) {
-        return builder_.AddRegex(regex, json_string);
-      }
+    if (fsm_result.IsOk() && !IsLanguageEmpty(std::move(fsm_result).Unwrap())) {
+      return builder_.AddRegex(regex, json_string);
     }
   }
 
@@ -2456,6 +2527,17 @@ int32_t JSONSchemaConverter::ExcludingString(
     XGRAMMAR_CHECK(filtered.IsOk());
     fsm = std::move(filtered).Unwrap();
   }
+  return EmitKeyRuleFromFSM(
+      fsm, rule_name, close_json_string, /*share_continuations=*/!excluded_keys.empty()
+  );
+}
+
+int32_t JSONSchemaConverter::EmitKeyRuleFromFSM(
+    const FSMWithStartEnd& fsm,
+    const std::string& rule_name,
+    bool close_json_string,
+    bool share_continuations
+) {
   // Do not emit paths that can never complete after exclusions. Otherwise a matcher
   // could accept a forbidden alternative's prefix and reach an all-rejected mask later.
   std::vector<std::vector<int>> predecessors(fsm.NumStates());
@@ -2594,7 +2676,7 @@ int32_t JSONSchemaConverter::ExcludingString(
       bool single_ascii = codepoints.size() == 1 && codepoints[0].lower == codepoints[0].upper &&
                           codepoints[0].upper <= 0x7f;
       // Keep self-loops local for the compiler's speculative string-mask fast path.
-      if (!excluded_keys.empty() && !single_ascii && target != state) {
+      if (share_continuations && !single_ascii && target != state) {
         std::vector<int32_t> key{target};
         key.reserve(1 + codepoints.size() * 2);
         for (const auto& range : codepoints) {
@@ -2928,6 +3010,269 @@ int32_t JSONSchemaConverter::CreatePatternKeyRule(
   return CreateRule(
       SchemaSpec::Make(std::move(key_spec), /*cache_key=*/"", rule_name_hint), rule_name_hint
   );
+}
+
+bool JSONSchemaConverter::PatternKeyIsJSONString() const { return GetKeyPattern() == kBasicString; }
+
+std::string JSONSchemaConverter::EncodePatternKey(const std::string& name) const {
+  if (!PatternKeyIsJSONString()) {
+    return name;
+  }
+  // The JSON key automaton matches the escaped body between the quotes.
+  auto encoded = picojson::value(name).serialize(false);
+  return encoded.substr(1, encoded.size() - 2);
+}
+
+std::optional<FSMWithStartEnd> JSONSchemaConverter::BuildPatternKeyFSM(const std::string& pattern) {
+  const bool json_string = PatternKeyIsJSONString();
+  // Mirror RegexExpression: the FSM engine only builds JSON-string automata for ASCII patterns.
+  if (json_string && !std::all_of(pattern.begin(), pattern.end(), [](unsigned char character) {
+        return character >= 0x20 && character <= 0x7e;
+      })) {
+    return std::nullopt;
+  }
+  auto fsm_result = GrammarFSMBuilder::Regex(pattern, json_string);
+  if (fsm_result.IsErr()) {
+    return std::nullopt;
+  }
+  auto fsm = std::move(fsm_result).Unwrap();
+  if (!fsm.IsLeaf()) {
+    return std::nullopt;
+  }
+  if (!json_string && !excludes_.empty()) {
+    // Raw keys are emitted verbatim, so they must not contain an exclusion (for Gemma, the
+    // string delimiter); JSON keys handle exclusions through their escaped spelling instead.
+    auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, excludes_});
+    if (!exclusion.has_value()) {
+      return std::nullopt;
+    }
+    auto intersected = FSMWithStartEnd::Intersect(fsm, *exclusion);
+    if (intersected.IsErr()) {
+      return std::nullopt;
+    }
+    fsm = std::move(intersected).Unwrap();
+  }
+  return fsm;
+}
+
+int32_t JSONSchemaConverter::CreateKeyRuleFromFSM(
+    const FSMWithStartEnd& fsm, const std::string& rule_name_hint
+) {
+  const bool json_string = PatternKeyIsJSONString();
+  // Reserve the rule first so the per-state rules are named after it, as CreateRule does.
+  int32_t rule_id = builder_.AddEmptyRuleWithHint(rule_name_hint);
+  std::string rule_name = builder_.GetRule(rule_id).name;
+  int32_t body =
+      EmitKeyRuleFromFSM(fsm, rule_name, /*close_json_string=*/json_string, /*share=*/false);
+  if (json_string) {
+    body = Sequence({ByteString("\""), body});
+  }
+  builder_.UpdateRuleBody(rule_id, body);
+  return rule_id;
+}
+
+JSONSchemaConverter::PatternPropertyAlternatives
+JSONSchemaConverter::BuildPatternPropertyAlternatives(
+    const ObjectSpec& spec, const std::string& rule_name, const std::string& suffix_prefix
+) {
+  const auto& patterns = spec.pattern_properties;
+  const auto& properties = spec.properties;
+  const int pattern_count = static_cast<int>(patterns.size());
+  const int property_count = static_cast<int>(properties.size());
+
+  PatternPropertyAlternatives result;
+  result.property_schemas.assign(property_count, nullptr);
+
+  // Key automata are built lazily: only entries that take part in a pair whose value schemas
+  // are not identical need one. Most schemas never reach this point.
+  std::vector<std::optional<FSMWithStartEnd>> key_fsms(pattern_count);
+  std::vector<bool> key_fsm_built(pattern_count, false);
+  auto key_fsm = [&](int index) -> const std::optional<FSMWithStartEnd>& {
+    if (!key_fsm_built[index]) {
+      key_fsm_built[index] = true;
+      key_fsms[index] = BuildPatternKeyFSM(patterns[index].pattern);
+    }
+    return key_fsms[index];
+  };
+  auto name_literal = [&](const std::string& name) {
+    auto literal = TrieFSMBuilder::Build({EncodePatternKey(name)}, {});
+    XGRAMMAR_CHECK(literal.has_value());
+    return std::move(*literal);
+  };
+
+  // Keys removed from every entry: those matching two schemas with disjoint types, which no
+  // value can satisfy. Keys removed from one entry only: those an unconstrained entry shares
+  // with a typed one, whose rule is the conjunction of both.
+  std::vector<FSMWithStartEnd> shared_exclusions;
+  std::vector<std::vector<FSMWithStartEnd>> own_exclusions(pattern_count);
+
+  for (int lhs = 0; lhs < pattern_count; ++lhs) {
+    for (int rhs = lhs + 1; rhs < pattern_count; ++rhs) {
+      auto relation = ClassifySchemaPair(patterns[lhs].schema, patterns[rhs].schema);
+      if (relation == SchemaPairRelation::kEqual) {
+        continue;
+      }
+      const auto& lhs_fsm = key_fsm(lhs);
+      const auto& rhs_fsm = key_fsm(rhs);
+      if (!lhs_fsm.has_value() || !rhs_fsm.has_value()) {
+        XGRAMMAR_LOG(WARNING) << "Cannot decide whether patternProperties \""
+                              << patterns[lhs].pattern << "\" and \"" << patterns[rhs].pattern
+                              << "\" of " << rule_name
+                              << " overlap; a key matching both only needs to satisfy one of "
+                                 "their value schemas";
+        continue;
+      }
+      if (relation == SchemaPairRelation::kLeftIsAny) {
+        own_exclusions[lhs].push_back(*rhs_fsm);
+        continue;
+      }
+      if (relation == SchemaPairRelation::kRightIsAny) {
+        own_exclusions[rhs].push_back(*lhs_fsm);
+        continue;
+      }
+      auto overlap = FSMWithStartEnd::Intersect(*lhs_fsm, *rhs_fsm);
+      if (overlap.IsErr()) {
+        XGRAMMAR_LOG(WARNING) << "Cannot decide whether patternProperties \""
+                              << patterns[lhs].pattern << "\" and \"" << patterns[rhs].pattern
+                              << "\" of " << rule_name
+                              << " overlap: " << std::move(overlap).UnwrapErr().what();
+        continue;
+      }
+      auto overlap_fsm = std::move(overlap).Unwrap();
+      if (IsLanguageEmpty(overlap_fsm)) {
+        continue;  // No key matches both entries.
+      }
+      if (relation == SchemaPairRelation::kConflict) {
+        shared_exclusions.push_back(std::move(overlap_fsm));
+      } else {
+        XGRAMMAR_LOG(WARNING) << "patternProperties \"" << patterns[lhs].pattern << "\" and \""
+                              << patterns[rhs].pattern << "\" of " << rule_name
+                              << " overlap but their value schemas cannot be combined; a key "
+                                 "matching both only needs to satisfy one of them";
+      }
+    }
+  }
+
+  for (int property = 0; property < property_count; ++property) {
+    const auto& name = properties[property].name;
+    // Fold the matching entries into the property's value schema.
+    SchemaSpecPtr schema = properties[property].schema;
+    for (int index = 0; index < pattern_count; ++index) {
+      auto relation = ClassifySchemaPair(schema, patterns[index].schema);
+      if (relation == SchemaPairRelation::kEqual) {
+        continue;
+      }
+      const auto& fsm = key_fsm(index);
+      if (!fsm.has_value()) {
+        XGRAMMAR_LOG(WARNING) << "Cannot decide whether property \"" << name
+                              << "\" matches patternProperties \"" << patterns[index].pattern
+                              << "\" of " << rule_name
+                              << "; its value only needs to satisfy one of the two schemas";
+        continue;
+      }
+      if (!fsm->AcceptString(EncodePatternKey(name))) {
+        continue;
+      }
+      if (relation == SchemaPairRelation::kLeftIsAny) {
+        schema = patterns[index].schema;
+      } else if (relation == SchemaPairRelation::kRightIsAny) {
+        // The named slot already has the conjunction; the entry must not accept the name.
+        own_exclusions[index].push_back(name_literal(name));
+      } else if (relation == SchemaPairRelation::kConflict) {
+        schema = SchemaSpec::Make(UnsatisfiableSpec{}, /*cache_key=*/"", "unsatisfiable");
+        shared_exclusions.push_back(name_literal(name));
+        break;  // Nothing can be the value of this name anymore.
+      } else {
+        XGRAMMAR_LOG(WARNING) << "Property \"" << name << "\" matches patternProperties \""
+                              << patterns[index].pattern << "\" of " << rule_name
+                              << " but their value schemas cannot be combined; its value only "
+                                 "needs to satisfy one of them";
+      }
+    }
+    if (schema != properties[property].schema) {
+      result.property_schemas[property] = schema;
+    }
+  }
+
+  // An exclusion set as one deterministic automaton and its complement. Intersect
+  // re-determinizes its inputs, so each set is determinized once here and reused by every
+  // entry that shares it rather than per entry.
+  struct ExclusionSet {
+    FSMWithStartEnd language;
+    FSMWithStartEnd complement;
+  };
+  auto exclusion_set = [&](const std::vector<FSMWithStartEnd>& parts
+                       ) -> std::optional<ExclusionSet> {
+    auto warn = [&](const std::runtime_error& error) {
+      XGRAMMAR_LOG(WARNING) << "Cannot separate the overlapping patternProperties of " << rule_name
+                            << ": " << error.what() << "; keeping the permissive grammar for them";
+    };
+    auto language = FSMWithStartEnd::Union(parts).ToDFA();
+    if (language.IsErr()) {
+      warn(std::move(language).UnwrapErr());
+      return std::nullopt;
+    }
+    auto language_dfa = std::move(language).Unwrap();
+    auto complement = language_dfa.Not();
+    if (complement.IsErr()) {
+      warn(std::move(complement).UnwrapErr());
+      return std::nullopt;
+    }
+    return ExclusionSet{std::move(language_dfa), std::move(complement).Unwrap()};
+  };
+  std::optional<ExclusionSet> shared;
+  if (!shared_exclusions.empty()) {
+    shared = exclusion_set(shared_exclusions);
+    if (!shared.has_value()) {
+      // All or nothing: a named slot made unsatisfiable while the entries still accept the
+      // name would reject valid instances without rejecting the invalid ones.
+      shared_exclusions.clear();
+      result.property_schemas.assign(property_count, nullptr);
+    }
+  }
+
+  for (int index = 0; index < pattern_count; ++index) {
+    const auto& pattern_property = patterns[index];
+    const std::string pattern_suffix = suffix_prefix + std::to_string(index);
+    const std::string key_rule_name = rule_name + "_" + pattern_suffix + "_key";
+
+    std::optional<int32_t> key_rule_id;
+    if ((shared.has_value() || !own_exclusions[index].empty()) && key_fsm(index).has_value()) {
+      const auto& fsm = *key_fsm(index);
+      std::optional<ExclusionSet> own;
+      if (!own_exclusions[index].empty()) {
+        auto parts = own_exclusions[index];
+        parts.insert(parts.end(), shared_exclusions.begin(), shared_exclusions.end());
+        own = exclusion_set(parts);
+      }
+      // Fall back to the shared set when the entry's own set is too large to determinize: a
+      // superset of the correct key language is still sound.
+      const std::optional<ExclusionSet>& exclusions = own.has_value() ? own : shared;
+      if (exclusions.has_value()) {
+        // Only rewrite the key rule when its language actually meets the exclusions, so
+        // entries away from every overlap keep their usual rule.
+        auto removed = FSMWithStartEnd::Intersect(fsm, exclusions->language);
+        if (removed.IsOk() && !IsLanguageEmpty(std::move(removed).Unwrap())) {
+          auto carved = FSMWithStartEnd::Intersect(fsm, exclusions->complement);
+          if (carved.IsOk()) {
+            key_rule_id = CreateKeyRuleFromFSM(std::move(carved).Unwrap(), key_rule_name);
+          } else {
+            XGRAMMAR_LOG(WARNING) << "Cannot restrict patternProperties \""
+                                  << pattern_property.pattern << "\" of " << rule_name << ": "
+                                  << std::move(carved).UnwrapErr().what();
+          }
+        }
+      }
+    }
+    if (!key_rule_id.has_value()) {
+      key_rule_id = CreatePatternKeyRule(pattern_property.pattern, key_rule_name);
+    }
+    int32_t value_rule_id = CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
+    result.alternatives.push_back(FormatOtherProperty(
+        RuleRef(*key_rule_id), value_rule_id, rule_name, pattern_suffix, pattern_property.schema
+    ));
+  }
+  return result;
 }
 
 int32_t JSONSchemaConverter::CreatePropertyNamesKeyRule(
@@ -3325,21 +3670,25 @@ int32_t JSONSchemaConverter::GenerateObject(
     SchemaSpecPtr effective_additional = additional_property;
     std::string effective_suffix = additional_suffix;
     std::optional<int32_t> additional_override;
+    // A named property whose name also matches a patternProperties entry must satisfy both
+    // value schemas; BuildPatternPropertyAlternatives supplies the conjunction when known.
+    const std::vector<ObjectSpec::Property>* effective_properties = &spec.properties;
+    std::vector<ObjectSpec::Property> narrowed_properties;
 
     if (!spec.pattern_properties.empty()) {
       // Build patternProperties as additional property alternatives
-      std::vector<int32_t> patterns;
-      for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
-        const auto& pattern_property = spec.pattern_properties[index];
-        std::string pattern_suffix = "pp_" + std::to_string(index);
-        int32_t key_rule_id = CreatePatternKeyRule(
-            pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
-        );
-        int32_t value_rule_id =
-            CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
-        patterns.push_back(FormatOtherProperty(
-            RuleRef(key_rule_id), value_rule_id, rule_name, pattern_suffix, pattern_property.schema
-        ));
+      auto pattern_alternatives = BuildPatternPropertyAlternatives(spec, rule_name, "pp_");
+      std::vector<int32_t> patterns = std::move(pattern_alternatives.alternatives);
+      for (size_t index = 0; index < spec.properties.size(); ++index) {
+        const auto& schema = pattern_alternatives.property_schemas[index];
+        if (schema == nullptr) {
+          continue;
+        }
+        if (narrowed_properties.empty()) {
+          narrowed_properties = spec.properties;
+          effective_properties = &narrowed_properties;
+        }
+        narrowed_properties[index].schema = schema;
       }
       // Merge with existing additionalProperties if present
       if (effective_additional) {
@@ -3371,7 +3720,7 @@ int32_t JSONSchemaConverter::GenerateObject(
     }
 
     content = GetPartialRuleForProperties(
-        spec.properties,
+        *effective_properties,
         spec.required,
         effective_additional,
         rule_name,
@@ -3388,24 +3737,9 @@ int32_t JSONSchemaConverter::GenerateObject(
       int32_t beginning_separator = NextSeparatorExpression();
       std::vector<int32_t> property_choices;
       if (!spec.pattern_properties.empty()) {
-        for (size_t index = 0; index < spec.pattern_properties.size(); ++index) {
-          const auto& pattern_property = spec.pattern_properties[index];
-          std::string pattern_suffix = "prop_" + std::to_string(index);
-          int32_t key_rule_id = CreatePatternKeyRule(
-              pattern_property.pattern, rule_name + "_" + pattern_suffix + "_key"
-          );
-          int32_t value_rule_id =
-              CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
-          property_choices.push_back(Sequence(
-              {beginning_separator,
-               FormatOtherProperty(
-                   RuleRef(key_rule_id),
-                   value_rule_id,
-                   rule_name,
-                   pattern_suffix,
-                   pattern_property.schema
-               )}
-          ));
+        auto pattern_alternatives = BuildPatternPropertyAlternatives(spec, rule_name, "prop_");
+        for (int32_t alternative : pattern_alternatives.alternatives) {
+          property_choices.push_back(Sequence({beginning_separator, alternative}));
         }
       } else {
         int32_t key_rule_id = CreatePropertyNamesKeyRule(spec.property_names, rule_name + "_name");

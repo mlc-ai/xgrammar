@@ -21,6 +21,7 @@
 #include <variant>
 #include <vector>
 
+#include "fsm.h"
 #include "grammar_builder.h"
 #include "support/utils.h"
 
@@ -155,6 +156,15 @@ struct TypeArraySpec {
   std::string ToString() const;
 };
 
+/*!
+ * \brief A schema that no value satisfies. The parser never produces it; the converter uses it
+ * for a property whose value would have to satisfy two schemas with disjoint types at once
+ * (a named property that also matches a patternProperties entry, see issue #964).
+ */
+struct UnsatisfiableSpec {
+  std::string ToString() const;
+};
+
 // Unified SchemaSpec
 using SchemaSpecVariant = std::variant<
     IntegerSpec,
@@ -171,7 +181,8 @@ using SchemaSpecVariant = std::variant<
     AnyOfSpec,
     OneOfSpec,
     AllOfSpec,
-    TypeArraySpec>;
+    TypeArraySpec,
+    UnsatisfiableSpec>;
 
 struct SchemaSpec {
   SchemaSpecVariant spec;
@@ -377,6 +388,68 @@ class JSONSchemaConverter {
   );
 
   /*!
+   * \brief Whether pattern keys are spelled as JSON strings in the current context. True for
+   * the JSON format; false for the raw keys of the XML tool-calling and Gemma formats. Derived
+   * from GetKeyPattern() so it follows the same context switches as the other key hooks.
+   */
+  bool PatternKeyIsJSONString() const;
+
+  /*! \brief The byte spelling of a property name as the pattern key automaton sees it. */
+  std::string EncodePatternKey(const std::string& name) const;
+
+  /*!
+   * \brief The automaton of a patternProperties key in the current key encoding, or
+   * std::nullopt when the FSM regex engine cannot build it (the key then keeps its regular
+   * CreatePatternKeyRule rule and takes no part in overlap analysis).
+   */
+  std::optional<FSMWithStartEnd> BuildPatternKeyFSM(const std::string& pattern);
+
+  /*!
+   * \brief Create a key rule from an automaton produced by BuildPatternKeyFSM (possibly
+   * intersected or complemented since) and return its rule id. The quotes of a JSON key are
+   * added here; the automaton covers the key body only.
+   */
+  int32_t CreateKeyRuleFromFSM(const FSMWithStartEnd& fsm, const std::string& rule_name_hint);
+
+  /*! \brief The patternProperties alternatives of one object, see
+   * BuildPatternPropertyAlternatives. */
+  struct PatternPropertyAlternatives {
+    /*! \brief One `key : value` expression per patternProperties entry, in schema order. */
+    std::vector<int32_t> alternatives;
+    /*! \brief For each named property, the value schema to use instead of its own, or nullptr
+     * to keep it. Set when the name also matches a patternProperties entry: the conjunction of
+     * both schemas when it is known, or UnsatisfiableSpec when their types are disjoint. */
+    std::vector<SchemaSpecPtr> property_schemas;
+  };
+
+  /*!
+   * \brief Build the patternProperties alternatives of an object.
+   *
+   * JSON Schema requires the value of a key to satisfy every patternProperties entry (and
+   * named property) the key matches. The alternatives are a Choice, so a key matching several
+   * entries would only need to satisfy one of them. This method narrows the key rules so that
+   * the Choice becomes correct wherever the conjunction of the value schemas is known:
+   * - Keys matching two entries whose value schemas have disjoint types (the "conflict zone")
+   *   are removed from every key rule: no value satisfies both, so they are rejected.
+   * - Keys matching an entry with an unconstrained schema and an entry with a typed one are
+   *   removed from the unconstrained entry's key rule: the typed entry's rule is the
+   *   conjunction.
+   * - A named property matching an entry takes the conjunction as its value schema (see
+   *   property_schemas), and a conflicting name joins the zone.
+   * Keys matching only entries with identical schemas need no change. Entries whose schemas
+   * can neither be shown to agree nor to conflict keep the Choice semantics with a warning.
+   *
+   * Entries whose key language is not narrowed keep the exact rule CreatePatternKeyRule
+   * produces, so schemas without such overlaps generate the same grammar as before.
+   *
+   * \param suffix_prefix Rule name suffix prefix per entry: "pp_" or "prop_" followed by the
+   * entry index, preserving the historical rule names of the two call sites.
+   */
+  PatternPropertyAlternatives BuildPatternPropertyAlternatives(
+      const ObjectSpec& spec, const std::string& rule_name, const std::string& suffix_prefix
+  );
+
+  /*!
    * \brief Create the key rule of a propertyNames constraint and return its rule id. Converts the
    * propertyNames schema like any value schema by default; formats whose keys are not JSON strings
    * override it to constrain the bare key.
@@ -453,6 +526,20 @@ class JSONSchemaConverter {
       const std::string& rule_name,
       bool close_json_string,
       const std::vector<std::string>& excluded_keys = {}
+  );
+  /*!
+   * \brief Spell a byte-level automaton as grammar rules (one per productive state) and return
+   * a reference to the start rule, or Unsatisfiable() when its language is empty. UTF-8 byte
+   * paths are collapsed into codepoint character classes. With close_json_string the closing
+   * quote is appended on the accepting states. share_continuations memoizes identical
+   * (transition, target) branches as shared rules, which lets the compiler reuse their token
+   * masks when many key prefixes fall back to the same continuation.
+   */
+  int32_t EmitKeyRuleFromFSM(
+      const FSMWithStartEnd& fsm,
+      const std::string& rule_name,
+      bool close_json_string,
+      bool share_continuations
   );
   bool IsAllowedString(const std::string& text) const;
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
