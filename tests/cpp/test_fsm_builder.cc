@@ -518,6 +518,28 @@ TEST(XGrammarFSMBuilderTest, TestGrammarFSMBuilderRegex) {
   EXPECT_TRUE(GrammarFSMBuilder::Regex("+a").IsErr());
 }
 
+TEST(XGrammarFSMBuilderTest, TestRegexUpperCaseUnicodeEscape) {
+  // \UXXXXXXXX names a codepoint with eight hexadecimal digits, as the EBNF regex converter
+  // reads it. Matched literally, [\U00010000-\U0010ffff] became the characters U, 0, 1, f and
+  // the range 0-U.
+  auto fsm_wse = RegexFSMBuilder::Build("[\\U00010000-\\U0010ffff]").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\xF0\x90\x80\x80"));  // U+10000
+  EXPECT_TRUE(fsm_wse.AcceptString("\xF0\x9F\x98\x80"));  // U+1F600
+  EXPECT_TRUE(fsm_wse.AcceptString("\xF4\x8F\xBF\xBF"));  // U+10FFFF
+  EXPECT_FALSE(fsm_wse.AcceptString("\xEF\xBF\xBF"));     // U+FFFF
+  EXPECT_FALSE(fsm_wse.AcceptString("U"));
+  EXPECT_FALSE(fsm_wse.AcceptString("0"));
+  EXPECT_FALSE(fsm_wse.AcceptString("<"));
+
+  fsm_wse = RegexFSMBuilder::Build("\\U0001F600").Unwrap();
+  EXPECT_TRUE(fsm_wse.AcceptString("\xF0\x9F\x98\x80"));
+  EXPECT_FALSE(fsm_wse.AcceptString("\xF0\x9F\x98\x81"));
+  EXPECT_FALSE(fsm_wse.AcceptString("U0001F600"));
+
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\U0001F60").IsErr());
+  EXPECT_TRUE(RegexFSMBuilder::Build("\\U00110000").IsErr());
+}
+
 TEST(XGrammarFSMBuilderTest, TestRegexRepeatZero) {
   // {0} / {0,0} matches exactly the empty string (ECMA-262 semantics, and consistent
   // with the EBNF parser and the CFG fallback path).
