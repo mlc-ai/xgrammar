@@ -747,3 +747,68 @@ TEST(XGrammarFSMBuilderTest, TestRegexLargeRepeatWithoutBuilder) {
   // Repetitions whose estimated state count is too large report an error instead of hanging.
   EXPECT_TRUE(RegexFSMBuilder::Build("(abcdefghij){1,100000}").IsErr());
 }
+
+TEST(XGrammarFSMBuilderTest, TestValidRegexWithRepeatRulesBuildsAfterRuleVectorGrowth) {
+  // Control: repetitions that need repeat rules also grow the rule vector, and the regex builds.
+  auto grammar = Grammar::FromEBNF("root ::= \"x\" other\nother ::= Regex(\"a{200}b{300}\")\n");
+  const int num_rules_before = grammar->NumRules();
+  EXPECT_NO_THROW(GrammarFSMBuilder::Apply(&grammar));
+  EXPECT_GT(grammar->NumRules(), num_rules_before);
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexErrorNamesRuleAfterRuleVectorGrowth) {
+  // `a{200}` makes the regex builder add a repeat rule, which grows the grammar's rule vector,
+  // and the repetition of the long group then exceeds the unrolling limit. The error is raised
+  // after the growth and must still name the rule that was being built. The first case needs no
+  // repeat rule, so it never grows the vector.
+  const std::string long_group = "(" + std::string(1000, 'b') + "){100}";
+  const std::string regex = "a{200}" + long_group;
+  const std::vector<std::pair<std::string, std::string>> cases = {
+      {"root ::= Regex(\"" + long_group + "\")\n", "root"},
+      {"root ::= other\nother ::= Regex(\"" + regex + "\")\n", "other"},
+      {"root ::= \"x\" other\nfiller ::= \"y\"\nother ::= Regex(\"" + regex + "\")\n", "other"},
+      {"root ::= Regex(\"" + regex + "\")\n", "root"},
+  };
+  for (const auto& [ebnf, rule_name] : cases) {
+    auto grammar = Grammar::FromEBNF(ebnf);
+    try {
+      GrammarFSMBuilder::Apply(&grammar);
+      FAIL() << "Expected the regex in rule " << rule_name << " to be rejected";
+    } catch (const std::runtime_error& e) {
+      const std::string expected =
+          "Failed to build the automaton for rule " + rule_name + " with regex ";
+      EXPECT_NE(std::string(e.what()).find(expected), std::string::npos) << e.what();
+    }
+  }
+}
+
+TEST(XGrammarFSMBuilderTest, TestValidRegexesSharingRuleBodyBuildAfterRuleVectorGrowth) {
+  // Control: two regexes inline in one rule body. The grammar is built directly, so normalization
+  // does not give each regex its own rule. The first needs repeat rules and grows the rule vector.
+  GrammarBuilder builder;
+  int32_t first = builder.AddRegex("a{200}b{300}");
+  int32_t second = builder.AddRegex("c{250}");
+  builder.AddRule("root", builder.AddChoices({builder.AddSequence({first, second})}));
+  Grammar grammar = builder.Get("root");
+  const int num_rules_before = grammar->NumRules();
+  EXPECT_NO_THROW(GrammarFSMBuilder::Apply(&grammar));
+  EXPECT_GT(grammar->NumRules(), num_rules_before);
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexErrorNamesRuleWhenRegexesShareRuleBody) {
+  // Same shape as the control, but the second regex cannot be built. The rule name is read when the
+  // second regex starts, after the first one has grown the rule vector, and must still be valid.
+  const std::string long_group = "(" + std::string(1000, 'b') + "){100}";
+  GrammarBuilder builder;
+  int32_t first = builder.AddRegex("a{200}b{300}");
+  int32_t second = builder.AddRegex(long_group);
+  builder.AddRule("root", builder.AddChoices({builder.AddSequence({first, second})}));
+  Grammar grammar = builder.Get("root");
+  try {
+    GrammarFSMBuilder::Apply(&grammar);
+    FAIL() << "Expected the second regex to be rejected";
+  } catch (const std::runtime_error& e) {
+    const std::string expected = "Failed to build the automaton for rule root with regex ";
+    EXPECT_NE(std::string(e.what()).find(expected), std::string::npos) << e.what();
+  }
+}

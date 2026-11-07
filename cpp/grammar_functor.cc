@@ -1401,6 +1401,9 @@ class GrammarFSMBuilderImpl {
   void BuildRegex(
       const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
   );
+  // Owned copy of *rule_name_, taken by the first BuildRegex call. rule_name_ points into the
+  // grammar's rule vector, which building a regex can reallocate, so it is not read after that.
+  std::optional<std::string> rule_name_copy_;
   void BuildSubstring(
       const std::vector<std::string>& chunks, int start_state, std::vector<int32_t>* end_states
   );
@@ -1843,7 +1846,12 @@ void GrammarFSMBuilderImpl::AppendFSM(
 void GrammarFSMBuilderImpl::BuildRegex(
     const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
 ) {
-  const std::string rule_hint = rule_name_ != nullptr ? *rule_name_ : "";
+  // The first call is the only one that may read rule_name_: nothing appends rules before it, and
+  // building a regex can reallocate the rule vector that rule_name_ points into.
+  if (!rule_name_copy_.has_value() && rule_name_ != nullptr) {
+    rule_name_copy_ = *rule_name_;
+  }
+  const std::string rule_hint = rule_name_copy_.value_or("");
   auto build_result =
       json_string
           ? RegexFSMBuilder::BuildWithForbiddenChars(
@@ -1852,8 +1860,8 @@ void GrammarFSMBuilderImpl::BuildRegex(
           : RegexFSMBuilder::Build(regex, grammar_builder_, rule_hint);
   if (build_result.IsErr()) {
     auto error = std::move(build_result).UnwrapErr();
-    if (rule_name_ != nullptr) {
-      XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for rule " << *rule_name_
+    if (rule_name_copy_.has_value()) {
+      XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for rule " << *rule_name_copy_
                           << " with regex " << regex << ": " << error.what();
     }
     XGRAMMAR_LOG(FATAL) << "Failed to build the automaton for regex " << regex << ": "

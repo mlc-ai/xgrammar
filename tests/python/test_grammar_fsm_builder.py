@@ -749,3 +749,34 @@ def test_compiled_ebnf_fsm_structure_stable(
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+_LONG_GROUP = "(" + "b" * 1000 + "){100}"
+_UNBUILDABLE_REGEX = "a{200}" + _LONG_GROUP
+
+
+def test_valid_regex_with_repeat_rules_builds_after_rule_vector_growth():
+    # Control: repetitions that need repeat rules also grow the rule vector, and the regex builds.
+    matcher = _make_string_matcher('root ::= "x" other\nother ::= Regex("a{200}b{300}")')
+    assert _matcher_accepts(matcher, "x" + "a" * 200 + "b" * 300)
+    assert not _matcher_accepts(matcher, "x" + "a" * 199 + "b" * 300)
+
+
+@pytest.mark.parametrize(
+    "grammar_str, rule_name",
+    [
+        # No repeat rule is needed here, so the rule vector never grows.
+        (f'root ::= Regex("{_LONG_GROUP}")', "root"),
+        (f'root ::= other\nother ::= Regex("{_UNBUILDABLE_REGEX}")', "other"),
+        (f'root ::= "x" other\nfiller ::= "y"\nother ::= Regex("{_UNBUILDABLE_REGEX}")', "other"),
+        (f'root ::= Regex("{_UNBUILDABLE_REGEX}")', "root"),
+    ],
+)
+def test_regex_error_names_rule_after_rule_vector_growth(grammar_str: str, rule_name: str):
+    # "a{200}" makes the regex builder add a repeat rule, which grows the grammar's rule vector,
+    # and the repetition of the long group then exceeds the unrolling limit. The error is raised
+    # after the growth and must still name the rule that was being built.
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
+    with pytest.raises(RuntimeError) as exc_info:
+        compiler.compile_grammar(grammar_str)
+    assert f"Failed to build the automaton for rule {rule_name} with regex " in str(exc_info.value)
