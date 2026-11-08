@@ -831,6 +831,12 @@ bool GrammarMatcher::Impl::CanAcceptStopTokenAsTerminal(int32_t token_id) {
   if (token_id >= static_cast<int32_t>(decoded_vocab.size())) {
     return false;
   }
+  if (has_char_budget_rules_) {
+    // Probe normal token acceptance on a copy so budget enforcement cannot alter live state.
+    Impl trial(*this);
+    trial.stop_token_ids_.clear();
+    return trial.AcceptToken(token_id) && trial.IsCompleted();
+  }
   const bool atomic_success = AdvanceAtomicToken(token_id);
   if (atomic_success) {
     bool accepted = is_completed_.back();
