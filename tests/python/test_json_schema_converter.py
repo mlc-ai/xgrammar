@@ -2875,32 +2875,88 @@ def test_string_pattern_with_length_still_ignores_the_bound(capfd):
     assert _is_grammar_accept_string(grammar, '"abcd"')
 
 
+# Presence, rather than the keyword's truthiness, controls unsupported-keyword warnings.
 @pytest.mark.parametrize("strict_mode", [True, False])
-def test_unique_items_warns_without_enforcing_uniqueness(capfd, strict_mode):
-    schema = {"type": "array", "items": {"type": "integer"}, "uniqueItems": True}
-    grammar = xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
+@pytest.mark.parametrize(
+    "keyword, value",
+    [
+        ("not", False),
+        ("if", False),
+        ("then", False),
+        ("else", False),
+        ("dependentRequired", {}),
+        ("dependentSchemas", {}),
+        ("uniqueItems", True),
+        ("uniqueItems", False),
+        ("uniqueItems", None),  # The helper diagnoses presence; it does not validate values.
+        ("contains", False),
+        ("contains", {}),
+        ("minContains", 0),
+        ("maxContains", 0),
+    ],
+)
+def test_unsupported_keyword_warns_when_present(capfd, strict_mode, keyword, value):
+    baseline = {"type": "array", "items": {"type": "integer"}}
+    grammar = xgr.Grammar.from_json_schema({**baseline, keyword: value}, strict_mode=strict_mode)
     captured = capfd.readouterr()
-    output = captured.err + captured.out
-    assert "uniqueItems" in output and "not supported" in output, output
-
-    # This diagnostic must not change the accepted language.
-    del schema["uniqueItems"]
-    assert str(grammar) == str(xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode))
-    assert _is_grammar_accept_string(grammar, "[1, 1]")
-    assert _is_grammar_accept_string(grammar, "[1, 2]")
-    assert _is_grammar_accept_string(grammar, "[]")
-    assert not _is_grammar_accept_string(grammar, '[1, "x"]')
+    warnings = re.findall(r"Keyword (\w+) is not supported", captured.err + captured.out)
+    assert warnings == [keyword]
+    assert str(grammar) == str(xgr.Grammar.from_json_schema(baseline, strict_mode=strict_mode))
 
 
 @pytest.mark.parametrize("strict_mode", [True, False])
-@pytest.mark.parametrize("unique_items", [False, None])
-def test_unique_items_false_or_omitted_does_not_warn(capfd, strict_mode, unique_items):
-    schema = {"type": "array", "items": {"type": "integer"}}
-    if unique_items is not None:
-        schema["uniqueItems"] = unique_items
+def test_supported_keywords_do_not_warn(capfd, strict_mode):
+    # Both the general and array-specific lists are visited with no unsupported keys present.
+    schema = {"type": "array", "items": {"type": "integer"}, "minItems": 0, "maxItems": 3}
     xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
     captured = capfd.readouterr()
-    assert "uniqueItems" not in captured.err + captured.out
+    assert captured.err + captured.out == ""
+
+
+@pytest.mark.parametrize("strict_mode", [True, False])
+def test_multiple_nested_unsupported_keywords_warn(capfd, strict_mode):
+    array = {
+        "type": "array",
+        "items": {"type": "integer"},
+        "uniqueItems": True,
+        "contains": {"const": 7},
+        "minContains": 2,
+        "maxContains": 3,
+    }
+    schema = {
+        "type": "object",
+        "properties": {"values": array},
+        "required": ["values"],
+        "not": {"type": "null"},
+        "if": {"type": "object"},
+        "then": {},
+        "else": {},
+        "dependentRequired": {"values": ["other"]},
+        "dependentSchemas": {"values": {"required": ["other"]}},
+    }
+    grammar = xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
+    captured = capfd.readouterr()
+    warnings = re.findall(r"Keyword (\w+) is not supported", captured.err + captured.out)
+    assert warnings == [
+        "not",
+        "if",
+        "then",
+        "else",
+        "dependentRequired",
+        "dependentSchemas",
+        "uniqueItems",
+        "contains",
+        "minContains",
+        "maxContains",
+    ]
+    # Preserve the existing minContains-to-minItems approximation and ignored constraints.
+    baseline = {
+        "type": "object",
+        "properties": {"values": {"type": "array", "items": {"type": "integer"}, "minItems": 2}},
+        "required": ["values"],
+    }
+    assert str(grammar) == str(xgr.Grammar.from_json_schema(baseline, strict_mode=strict_mode))
+    assert _is_grammar_accept_string(grammar, '{"values": [1, 1]}')
 
 
 def test_type_array():
