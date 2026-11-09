@@ -1530,7 +1530,10 @@ schema__err_message__test_array_schema_error_cases = [
         {"type": "array", "prefixItems": ["not an object"]},
         "prefixItems must be an array of objects or booleans",
     ),
-    ({"type": "array", "prefixItems": [False]}, "prefixItems contains false"),
+    (
+        {"type": "array", "prefixItems": [False], "minItems": 1},
+        "minItems is greater than maxItems: 1 > 0",
+    ),
     ({"type": "array", "items": "not an object"}, "items must be a boolean or an object"),
     (
         {"type": "array", "unevaluatedItems": "not an object"},
@@ -1539,10 +1542,6 @@ schema__err_message__test_array_schema_error_cases = [
     ({"type": "array", "minItems": "not an integer"}, "minItems must be an integer"),
     ({"type": "array", "maxItems": -1}, "maxItems must be a non-negative integer"),
     ({"type": "array", "minItems": 5, "maxItems": 3}, "minItems is greater than maxItems: 5 > 3"),
-    (
-        {"type": "array", "prefixItems": [{}, {}, {}], "maxItems": 2},
-        "maxItems is less than the number of prefixItems: 2 < 3",
-    ),
     (
         {"type": "array", "prefixItems": [{}, {}], "minItems": 3, "items": False},
         "minItems is greater than the number of prefixItems, but additional items are not "
@@ -3963,3 +3962,316 @@ def test_deeply_nested_json_rejected():
 
 if __name__ == "__main__":
     pytest.main(sys.argv)
+
+
+# Explicit accepted/rejected positional-prefix fixtures, also cross-checked with
+# Draft202012Validator outside this test suite (no new test dependency).
+@pytest.mark.parametrize(
+    "schema, accepted, rejected",
+    [
+        (
+            {"type": "array", "prefixItems": [True], "items": False},
+            ["[]", '["a"]', "[1]", "[true]", "[null]"],
+            [
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {"type": "array", "prefixItems": [True], "items": True},
+            [
+                "[]",
+                '["a"]',
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+            [],
+        ),
+        (
+            {"type": "array", "prefixItems": [True], "items": {"type": "boolean"}},
+            ["[]", '["a"]', "[1]", "[true]", "[null]", '["a", true]'],
+            ['["a", 1]', '["a", 1, true]', '["a", 1, "extra"]', '["a", 1, 2]', '["a", []]'],
+        ),
+        (
+            {"type": "array", "prefixItems": [False], "items": False},
+            ["[]"],
+            [
+                '["a"]',
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {"type": "array", "prefixItems": [False], "items": True},
+            ["[]"],
+            [
+                '["a"]',
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {"type": "array", "prefixItems": [False], "items": {"type": "boolean"}},
+            ["[]"],
+            [
+                '["a"]',
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {"type": "array", "prefixItems": [{"type": "string"}, False], "items": False},
+            ["[]", '["a"]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {"type": "array", "prefixItems": [{"type": "string"}, False], "items": True},
+            ["[]", '["a"]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {
+                "type": "array",
+                "prefixItems": [{"type": "string"}, False],
+                "items": {"type": "boolean"},
+            },
+            ["[]", '["a"]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {
+                "type": "array",
+                "prefixItems": [{"type": "string"}, {"type": "integer"}],
+                "items": False,
+            },
+            ["[]", '["a"]', '["a", 1]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {
+                "type": "array",
+                "prefixItems": [{"type": "string"}, {"type": "integer"}],
+                "items": True,
+            },
+            ["[]", '["a"]', '["a", 1]', '["a", 1, true]', '["a", 1, "extra"]', '["a", 1, 2]'],
+            ["[1]", "[true]", "[null]", '["a", true]', '["a", []]'],
+        ),
+        (
+            {
+                "type": "array",
+                "prefixItems": [{"type": "string"}, {"type": "integer"}],
+                "items": {"type": "boolean"},
+            },
+            ["[]", '["a"]', '["a", 1]', '["a", 1, true]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {
+                "type": "array",
+                "prefixItems": [
+                    {"type": "string"},
+                    {"type": "array", "minItems": 2, "maxItems": 1},
+                ],
+                "items": False,
+            },
+            ["[]", '["a"]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {
+                "type": "array",
+                "prefixItems": [
+                    {"type": "string"},
+                    {"type": "array", "minItems": 2, "maxItems": 1},
+                ],
+                "items": True,
+            },
+            ["[]", '["a"]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+        (
+            {
+                "type": "array",
+                "prefixItems": [
+                    {"type": "string"},
+                    {"type": "array", "minItems": 2, "maxItems": 1},
+                ],
+                "items": {"type": "boolean"},
+            },
+            ["[]", '["a"]'],
+            [
+                "[1]",
+                "[true]",
+                "[null]",
+                '["a", 1]',
+                '["a", true]',
+                '["a", 1, true]',
+                '["a", 1, "extra"]',
+                '["a", 1, 2]',
+                '["a", []]',
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize("strict_mode", [False, True])
+@pytest.mark.parametrize("minimum", [0, 1, 2])
+@pytest.mark.parametrize("maximum", [0, 1, 2, 3, None])
+def test_prefix_items_reachable_bounds(schema, accepted, rejected, strict_mode, minimum, maximum):
+    schema = dict(schema, minItems=minimum)
+    if maximum is not None:
+        schema["maxItems"] = maximum
+    valid = [
+        value
+        for value in accepted
+        if len(json.loads(value)) >= minimum
+        and (maximum is None or len(json.loads(value)) <= maximum)
+    ]
+    invalid = rejected + [value for value in accepted if value not in valid]
+    if not valid:
+        with pytest.raises(RuntimeError):
+            xgr.Grammar.from_json_schema(json.dumps(schema), strict_mode=strict_mode)
+        return
+    for value in valid:
+        check_schema_with_instance(schema, value, True, strict_mode=strict_mode)
+    for value in invalid:
+        check_schema_with_instance(schema, value, False, strict_mode=strict_mode)
+
+
+@pytest.mark.parametrize("strict_mode", [False, True])
+def test_prefix_items_reference_and_invalid_schema(strict_mode):
+    schema = {
+        "type": "array",
+        "$defs": {"value": {"type": "string"}},
+        "prefixItems": [{"$ref": "#/$defs/value"}, True],
+        "items": False,
+        "maxItems": 1,
+    }
+    for value, valid in [("[]", True), ('["a"]', True), ('["a", 1]', False), ("[1]", False)]:
+        check_schema_with_instance(schema, value, valid, strict_mode=strict_mode)
+    with pytest.raises(RuntimeError, match="prefixItems must be an array of objects or booleans"):
+        xgr.Grammar.from_json_schema({"type": "array", "prefixItems": [False, 123]})
+
+
+@pytest.mark.parametrize("minimum", [0, 1, 2])
+@pytest.mark.parametrize("definition", [False, {"type": "array", "minItems": 2, "maxItems": 1}])
+def test_prefix_items_impossible_reference(minimum, definition):
+    schema = {
+        "type": "array",
+        "$defs": {"impossible": definition},
+        "prefixItems": [{"type": "string"}, {"$ref": "#/$defs/impossible"}],
+        "items": True,
+        "minItems": minimum,
+    }
+    if minimum == 2:
+        with pytest.raises(RuntimeError):
+            xgr.Grammar.from_json_schema(schema)
+    else:
+        check_schema_with_instance(schema, "[]", minimum == 0)
+        check_schema_with_instance(schema, '["a"]', True)
+        check_schema_with_instance(schema, '["a", 1]', False)
+
+
+def test_prefix_items_recursive_reference_still_accepts_finite_arrays():
+    schema = {"type": "array", "prefixItems": [{"$ref": "#"}], "items": False}
+    for value in ["[]", "[[]]", "[[[]]]"]:
+        check_schema_with_instance(schema, value, True)
+    check_schema_with_instance(schema, "[[], []]", False)
