@@ -1210,7 +1210,7 @@ Result<NullSpec, SchemaError> SchemaParser::ParseNull(const picojson::object&) {
 }
 
 Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "minContains", "maxContains"});
+  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "maxContains"});
   ArraySpec spec;
 
   if (schema.count("prefixItems")) {
@@ -1284,6 +1284,8 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
           SchemaErrorType::kInvalidSchema, "minContains must be an integer"
       );
     }
+    XGRAMMAR_LOG(WARNING) << "minContains is only approximated as a minimum total array length; "
+                             "matching items are not counted";
     spec.min_items = std::max(spec.min_items, schema.at("minContains").get<int64_t>());
   }
   if (schema.count("maxItems")) {

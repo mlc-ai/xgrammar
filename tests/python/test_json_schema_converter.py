@@ -2891,7 +2891,6 @@ def test_string_pattern_with_length_still_ignores_the_bound(capfd):
         ("uniqueItems", None),  # The helper diagnoses presence; it does not validate values.
         ("contains", False),
         ("contains", {}),
-        ("minContains", 0),
         ("maxContains", 0),
     ],
 )
@@ -2902,6 +2901,35 @@ def test_unsupported_keyword_warns_when_present(capfd, strict_mode, keyword, val
     warnings = re.findall(r"Keyword (\w+) is not supported", captured.err + captured.out)
     assert warnings == [keyword]
     assert str(grammar) == str(xgr.Grammar.from_json_schema(baseline, strict_mode=strict_mode))
+
+
+@pytest.mark.parametrize("strict_mode", [True, False])
+@pytest.mark.parametrize("min_contains, min_items", [(0, 0), (2, 0), (2, 3)])
+def test_min_contains_warns_about_length_approximation(capfd, strict_mode, min_contains, min_items):
+    baseline = {"type": "array", "items": {"type": "integer"}, "minItems": min_items}
+    schema = {**baseline, "minContains": min_contains}
+    grammar = xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
+    captured = capfd.readouterr()
+    output = captured.err + captured.out
+    message = (
+        "minContains is only approximated as a minimum total array length; "
+        "matching items are not counted"
+    )
+    assert output.count(message) == 1
+    assert "Keyword minContains is not supported" not in output
+    baseline["minItems"] = max(min_items, min_contains)
+    assert str(grammar) == str(xgr.Grammar.from_json_schema(baseline, strict_mode=strict_mode))
+    # Preserve the existing length approximation even when contains is absent.
+    assert _is_grammar_accept_string(grammar, "[]") == (baseline["minItems"] == 0)
+
+
+@pytest.mark.parametrize("strict_mode", [True, False])
+def test_invalid_min_contains_does_not_warn_about_approximation(capfd, strict_mode):
+    schema = {"type": "array", "items": {"type": "integer"}, "minContains": "invalid"}
+    with pytest.raises(Exception, match="minContains must be an integer"):
+        xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
+    captured = capfd.readouterr()
+    assert captured.err + captured.out == ""
 
 
 @pytest.mark.parametrize("strict_mode", [True, False])
@@ -2937,6 +2965,10 @@ def test_multiple_nested_unsupported_keywords_warn(capfd, strict_mode):
     grammar = xgr.Grammar.from_json_schema(schema, strict_mode=strict_mode)
     captured = capfd.readouterr()
     warnings = re.findall(r"Keyword (\w+) is not supported", captured.err + captured.out)
+    assert (captured.err + captured.out).count(
+        "minContains is only approximated as a minimum total array length; "
+        "matching items are not counted"
+    ) == 1
     assert warnings == [
         "not",
         "if",
@@ -2946,7 +2978,6 @@ def test_multiple_nested_unsupported_keywords_warn(capfd, strict_mode):
         "dependentSchemas",
         "uniqueItems",
         "contains",
-        "minContains",
         "maxContains",
     ]
     # Preserve the existing minContains-to-minItems approximation and ignored constraints.
