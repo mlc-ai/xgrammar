@@ -469,6 +469,11 @@ def test_lark_common_imports(
     _assert_language(f"%import common.{common_name}\nstart: {common_name}", accepted, rejected)
 
 
+def test_lark_regex_escaped_caret_in_char_class() -> None:
+    _assert_language(r"start: /[\^a]+/", accepted=["^", "a", "a^"], rejected=["b"])
+    _assert_language(r"start: /[\^]/", accepted=["^"], rejected=["a"])
+
+
 def test_lark_multi_import_alias_and_forward_import() -> None:
     grammar = """
         %ignore WS_INLINE

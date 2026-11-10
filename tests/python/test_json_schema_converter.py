@@ -1396,6 +1396,15 @@ def test_pattern_whitespace_class(char: str, is_accepted: bool):
     check_schema_with_instance(schema, instance, is_accepted=is_accepted, any_whitespace=False)
 
 
+# A non-ASCII pattern currently falls back to the regex-to-EBNF converter; an escaped "^" at the
+# start of a character class must stay a literal there.
+@pytest.mark.parametrize("prefix, is_accepted", [("^", True), ("a", True), ("b", False)])
+def test_pattern_escaped_caret_in_char_class_non_ascii(prefix: str, is_accepted: bool):
+    schema = {"type": "string", "pattern": r"^[\^a]é$"}
+    instance = json.dumps(f"{prefix}é", ensure_ascii=False)
+    check_schema_with_instance(schema, instance, is_accepted=is_accepted, any_whitespace=False)
+
+
 def test_complex_restrictions():
     class RestrictedModel(BaseModel):
         restricted_string: str = Field(..., pattern=r"[^\"]*")

@@ -139,7 +139,12 @@ std::string GrammarPrinter::PrintCharacterClass(const GrammarExpr& grammar_expr)
     result += "^";
   }
   for (auto i = 1; i < grammar_expr.data_len; i += 2) {
-    result += EscapeString(grammar_expr[i], kCustomEscapeMap);
+    if (i == 1 && !is_negative && grammar_expr[i] == '^') {
+      // A leading '^' would be parsed back as negation.
+      result += "\\^";
+    } else {
+      result += EscapeString(grammar_expr[i], kCustomEscapeMap);
+    }
     if (grammar_expr[i] == grammar_expr[i + 1]) {
       continue;
     }

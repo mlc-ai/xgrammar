@@ -349,6 +349,21 @@ def test_grammar_compiler_crossing_cache_same_grammar():
     assert contexta.serialize_json() == contextb.serialize_json()
 
 
+def test_grammar_compiler_cache_distinguishes_literal_caret_class():
+    # [\^a] and [^a] are different grammars. Grammar objects are cached by their printed form, so
+    # the two must not print the same.
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
+    negated = compiler.compile_grammar(xgr.Grammar.from_ebnf(r"root ::= [^a]"))
+    literal = compiler.compile_grammar(xgr.Grammar.from_ebnf(r"root ::= [\^a]"))
+
+    def accepts(compiled: xgr.CompiledGrammar, value: str) -> bool:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        return matcher.accept_string(value) and matcher.is_terminated()
+
+    assert accepts(negated, "b") and not accepts(negated, "a")
+    assert accepts(literal, "a") and accepts(literal, "^") and not accepts(literal, "b")
+
+
 @pytest.mark.hf_token_required
 def test_grammar_compiler_crossing_cache_different_grammar_with_same_fsm():
     grammar_a = """
