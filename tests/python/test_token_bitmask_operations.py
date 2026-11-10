@@ -409,6 +409,75 @@ def test_apply_token_bitmask_inplace_indices(
         torch.testing.assert_close(logits, logits_expected)
 
 
+@pytest.mark.parametrize("bitmask_ndim", (1, 2))
+@pytest.mark.parametrize("device", ("cpu", "cuda", "xpu"))
+@pytest.mark.parametrize("impl", ("torch_native", "torch_compile"))
+def test_apply_token_bitmask_inplace_torch_kernels_1d_logits(
+    impl: str, device: str, bitmask_ndim: int
+):
+    """The PyTorch kernels treat 1-D logits as a single row, like the CPU and Triton kernels."""
+    if not _is_device_available(device):
+        pytest.skip(reason=f"{device.upper()} device is not available")
+    if impl == "torch_compile" and device != "cpu" and not _is_triton_available():
+        pytest.skip(reason="Triton is not installed")
+    if impl == "torch_compile" and device == "xpu" and not _is_triton_xpu_available():
+        pytest.skip(reason="Triton does not support XPU (install triton-xpu)")
+
+    if impl == "torch_native":
+        from xgrammar.kernels.apply_token_bitmask_inplace_torch import (
+            apply_token_bitmask_inplace_torch as kernel,
+        )
+    else:
+        kernel = get_apply_token_bitmask_kernel("torch_compile")
+
+    neginf = float("-inf")
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool, device=device)
+    logits = torch.arange(1.0, 11.0, dtype=torch.float32, device=device)
+    expected = torch.where(bool_mask, logits, neginf)
+    # A 2-D single-row bitmask is what xgr.allocate_token_bitmask(1, vocab_size) returns.
+    bitmask = torch.tensor([0b1010101010], dtype=torch.int32, device=device)
+    if bitmask_ndim == 2:
+        bitmask = bitmask.unsqueeze(0)
+
+    kernel(logits, bitmask)
+    torch.testing.assert_close(logits, expected)
+
+
+@pytest.mark.thread_unsafe
+def test_apply_token_bitmask_inplace_auto_falls_back_to_torch_native(monkeypatch):
+    """Without usable Triton, auto dispatch on CUDA/XPU uses the native kernel, which must
+    handle 1-D logits with a single-row bitmask."""
+    if _gpu_device is None:
+        pytest.skip(reason="No CUDA or XPU device is available")
+
+    import xgrammar.kernels.apply_token_bitmask_inplace_torch as torch_kernel_module
+    import xgrammar.matcher as matcher_module
+
+    monkeypatch.setattr(matcher_module, "_is_triton_available", lambda: False)
+    monkeypatch.setattr(matcher_module, "_is_triton_xpu_available", lambda: False)
+    native_kernel = torch_kernel_module.apply_token_bitmask_inplace_torch
+    calls = []
+
+    def spy(*args, **kwargs):
+        calls.append(args)
+        return native_kernel(*args, **kwargs)
+
+    monkeypatch.setattr(torch_kernel_module, "apply_token_bitmask_inplace_torch", spy)
+
+    vocab_size = 10
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
+    logits = torch.arange(1.0, 11.0, dtype=torch.float32, device=_gpu_device)
+    expected = torch.where(bool_mask.to(_gpu_device), logits, float("-inf"))
+    bitmask = xgr.allocate_token_bitmask(1, vocab_size)
+    bitmask.copy_(bool_mask_to_bitmask(bool_mask.unsqueeze(0)))
+
+    xgr.apply_token_bitmask_inplace(logits, bitmask.to(_gpu_device))
+    _synchronize(_gpu_device)
+
+    assert len(calls) == 1
+    torch.testing.assert_close(logits, expected)
+
+
 @pytest.mark.parametrize("bad_index", [5, -1])
 def test_apply_token_bitmask_inplace_indices_out_of_bounds(bad_index: int):
     # An index that is out of range for the logits/bitmask batch would cause an out-of-bounds
