@@ -279,7 +279,8 @@ class FSM::Impl : public FSMImplBase<std::vector<std::vector<FSMEdge>>> {
   }
 
   void AddExcludeTokenEdge(int from, int to, const std::vector<int32_t>& token_ids) {
-    XGRAMMAR_DCHECK(!token_ids.empty()) << "Token exclude set must not be empty";
+    // An empty exclude set is allowed and accepts any token, e.g. ExcludeToken() in EBNF or
+    // AnyTokensFormat without exclude_tokens.
     XGRAMMAR_CHECK(edge_aux_data_.size() <= INT32_MAX)
         << "edge_aux_data_ overflow: too many auxiliary data entries";
     int32_t aux_index = static_cast<int32_t>(edge_aux_data_.size());

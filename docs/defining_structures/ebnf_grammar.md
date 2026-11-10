@@ -545,7 +545,7 @@ root ::= ExcludeToken(128010, 128011)
 
 **Arguments**
 
-- One or more positional arguments are required.
+- Positional arguments are optional. With no arguments, `ExcludeToken()` matches any single token.
 - Every argument must be a non-negative integer token ID.
 - Named arguments are not accepted.
 
