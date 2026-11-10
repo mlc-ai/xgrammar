@@ -2,6 +2,8 @@
 token.
 """
 
+import functools
+import importlib.util
 import math
 import warnings
 from typing import List, Literal, Optional, Tuple, Union
@@ -53,6 +55,31 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
 def reset_token_bitmask(bitmask: torch.Tensor) -> None:
     """Reset the bitmask to the full mask."""
     bitmask.fill_(_FULL_MASK)
+
+
+@functools.lru_cache(maxsize=None)
+def _is_triton_available() -> bool:
+    """Whether Triton is importable. XGrammar does not depend on Triton directly; it is
+    provided by PyTorch (``triton`` for CUDA/ROCm wheels, ``triton-xpu`` for XPU wheels)."""
+    return importlib.util.find_spec("triton") is not None
+
+
+@functools.lru_cache(maxsize=None)
+def _is_triton_xpu_available() -> bool:
+    """Whether the installed Triton can target Intel XPU devices.
+
+    The XPU build of Triton is distributed by PyTorch as ``triton-xpu`` (installed with
+    ``pip install triton-xpu --index-url https://download.pytorch.org/whl/xpu``) but is imported
+    as ``triton``. A CUDA-only ``triton`` from PyPI provides the same module without the Intel
+    backend, so check for the backend rather than only for the module.
+    """
+    if not _is_triton_available():
+        return False
+    try:
+        from triton.backends import backends
+    except Exception:
+        return False
+    return "intel" in backends
 
 
 def apply_token_bitmask_inplace(
@@ -139,7 +166,7 @@ def apply_token_bitmask_inplace(
         choose the backend according to the type of the logits.
 
         * CPU: CPU implementation
-        * Triton: Default CUDA implementation
+        * Triton: Default CUDA and Intel XPU implementation
         * Torch Compile: If the hardware is not the above, use this. This supports multiple backends, including CPU/CUDA/TPU/ROCm
         * CUDA: CUDA native implementation, helpful for C++-based inference engines
         * Torch Native: Support more backends such as Kunlun. Its performance may be worse than torch compile.
@@ -164,7 +191,11 @@ def apply_token_bitmask_inplace(
         if logits.device.type == "cpu":
             backend = "cpu"
         elif logits.device.type == "cuda":
-            backend = "triton"
+            # PyTorch >= 2.0 CUDA wheels ship Triton; older versions may not have it.
+            backend = "triton" if _is_triton_available() else "torch_native"
+        elif logits.device.type == "xpu":
+            # Without XPU-capable Triton, torch.compile cannot generate XPU kernels either.
+            backend = "triton" if _is_triton_xpu_available() else "torch_native"
         elif logits.device.type == "npu":
             backend = "torch_native"
         else:

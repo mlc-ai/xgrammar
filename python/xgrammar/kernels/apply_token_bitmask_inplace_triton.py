@@ -1,4 +1,4 @@
-from typing import List, Optional, Union
+from typing import List, NamedTuple, Optional, Union
 
 import torch
 
@@ -77,21 +77,51 @@ def apply_token_bitmask_inplace_kernel(
         )
 
 
+class _LaunchConfig(NamedTuple):
+    num_programs: int
+    """Number of persistent programs to launch, one per SM (CUDA) or Xe-core (XPU)."""
+    warp_size: int
+    """Number of threads in a warp (CUDA) or sub-group (XPU)."""
+    max_num_warps: Optional[int]
+    """Upper bound on warps per program imposed by the device, or None if no bound applies."""
+
+
+def _get_launch_config(device: torch.device) -> _LaunchConfig:
+    """Return the launch configuration of the persistent kernel for the given device.
+    Supports CUDA (NVIDIA / AMD ROCm) and Intel XPU devices."""
+    if device.type == "xpu":
+        props = torch.xpu.get_device_properties(device)
+        # Xe-cores are the closest analogue of CUDA SMs. Fall back to the EU count on older
+        # PyTorch versions that do not expose the sub-slice count.
+        num_programs = getattr(props, "gpu_subslice_count", 0) or props.max_compute_units
+        # Triton on Intel GPUs maps a warp to a sub-group, 32 lanes by default.
+        warp_size = 32
+        # A program runs as one work-group, which must not exceed the device limit. Some
+        # integrated GPUs allow fewer threads than the 1024 that fp32 logits would use.
+        max_work_group_size = getattr(props, "max_work_group_size", 1024)
+        return _LaunchConfig(num_programs, warp_size, max(1, max_work_group_size // warp_size))
+
+    props = torch.cuda.get_device_properties(device)
+    if torch.version.hip is not None and "gfx1" not in props.gcnArchName:
+        # For AMD GPUs (non-Navi)
+        warp_size = 64
+    else:
+        warp_size = 32
+    return _LaunchConfig(props.multi_processor_count, warp_size, max_num_warps=None)
+
+
 def apply_token_bitmask_inplace_triton(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
     vocab_size: Optional[int] = None,
     indices: Optional[Union[List[int], torch.Tensor]] = None,
 ):
-    NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
-
-    arch = torch.cuda.get_device_properties(0).gcnArchName
-    if torch.version.hip is not None and "gfx1" not in arch:
-        # For AMD GPUs (non-Navi)
-        WARP_SIZE = 64
-    else:
-        WARP_SIZE = 32
+    launch_config = _get_launch_config(logits.device)
+    NUM_SMS = launch_config.num_programs
+    num_warps = BLOCK_SIZE // launch_config.warp_size // (16 // logits.element_size())
+    if launch_config.max_num_warps is not None:
+        num_warps = min(num_warps, launch_config.max_num_warps)
 
     assert bitmask.dtype == torch.int32, "bitmask must be of type int32"
 
@@ -124,6 +154,6 @@ def apply_token_bitmask_inplace_triton(
         bitmask.stride()[0],
         NUM_SMS,
         BLOCK_SIZE,
-        num_warps=BLOCK_SIZE // WARP_SIZE // (16 // logits.element_size()),
+        num_warps=num_warps,
         num_stages=3,
     )
