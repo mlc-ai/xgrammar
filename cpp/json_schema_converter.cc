@@ -3005,6 +3005,88 @@ int32_t JSONSchemaConverter::GetAnyOrderRuleForProperties(
   return Sequence({first_separator, RuleRef(item_rule_id), repeated_items, last_separator});
 }
 
+std::optional<std::pair<uint8_t, int32_t>> JSONSchemaConverter::SplitLeadingByte(
+    int32_t expr_id, int depth
+) {
+  constexpr int kMaxDepth = 16;
+  if (depth > kMaxDepth) {
+    return std::nullopt;
+  }
+  // Copy the expression: adding expressions below may move the builder's storage.
+  auto expr = builder_.GetGrammarExpr(expr_id);
+  using ExprType = Grammar::Impl::GrammarExprType;
+  ExprType type = expr.type;
+  std::vector<int32_t> data(expr.begin(), expr.end());
+
+  switch (type) {
+    case ExprType::kByteString: {
+      if (data.empty() || data[0] >= 0x80) {
+        return std::nullopt;
+      }
+      std::string rest(data.begin() + 1, data.end());
+      return std::make_pair(
+          static_cast<uint8_t>(data[0]), rest.empty() ? Empty() : ByteString(rest)
+      );
+    }
+    case ExprType::kSequence: {
+      auto head = SplitLeadingByte(data[0], depth + 1);
+      if (!head.has_value()) {
+        return std::nullopt;
+      }
+      std::vector<int32_t> elements;
+      if (head->second != Empty()) {
+        elements.push_back(head->second);
+      }
+      elements.insert(elements.end(), data.begin() + 1, data.end());
+      return std::make_pair(head->first, Sequence(elements));
+    }
+    case ExprType::kChoices: {
+      auto split = SplitCommonLeadingByte(data, depth + 1);
+      if (!split.has_value()) {
+        return std::nullopt;
+      }
+      return std::make_pair(split->first, Choice(split->second));
+    }
+    case ExprType::kRuleRef: {
+      Grammar::Impl::Rule rule = builder_.GetRule(data[0]);
+      // A rule still being built has no body yet.
+      if (rule.body_expr_id < 0 || rule.HasRuleAttributes()) {
+        return std::nullopt;
+      }
+      auto result = SplitLeadingByte(rule.body_expr_id, depth + 1);
+      if (result.has_value() && rule.lookahead_assertion_id != -1) {
+        // The lookahead applies where the rule ends, so the rest keeps it in a rule of its own.
+        int32_t rest_rule_id = builder_.AddRuleWithHint(rule.name + "_rest", result->second);
+        builder_.UpdateLookaheadAssertion(rest_rule_id, rule.lookahead_assertion_id);
+        builder_.UpdateLookaheadExact(rest_rule_id, rule.is_exact_lookahead);
+        result->second = RuleRef(rest_rule_id);
+      }
+      return result;
+    }
+    default:
+      return std::nullopt;
+  }
+}
+
+std::optional<std::pair<uint8_t, std::vector<int32_t>>> JSONSchemaConverter::SplitCommonLeadingByte(
+    const std::vector<int32_t>& expr_ids, int depth
+) {
+  std::vector<int32_t> rests;
+  uint8_t byte = 0;
+  for (int32_t expr_id : expr_ids) {
+    auto split = SplitLeadingByte(expr_id, depth);
+    if (!split.has_value() || (!rests.empty() && split->first != byte)) {
+      return std::nullopt;
+    }
+    byte = split->first;
+    rests.push_back(split->second);
+  }
+  if (rests.empty()) {
+    return std::nullopt;
+  }
+  return std::make_pair(byte, std::move(rests));
+}
+
 int32_t JSONSchemaConverter::GetPartialRuleForProperties(
     const std::vector<ObjectSpec::Property>& properties,
     const std::unordered_set<std::string>& required,
@@ -3064,10 +3146,40 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
     return *additional_pattern;
   };
 
-  if (min_properties == 0 && max_properties == -1) {
-    // Case 1: No property number constraints
+  if (min_properties <= 1 && max_properties == -1) {
+    // Case 1: No property number constraints. The content always has a property, so
+    // minProperties 1 adds none.
     std::vector<int32_t> tails(properties.size(), Empty());
     std::vector<uint8_t> is_required(properties.size(), false);
+
+    // What may follow a separator: each property after the first, then the additional property.
+    // When they all start with the same byte (the opening quote of a JSON key), the separator
+    // before a choice among them matches that byte too, so the parser holds one state after the
+    // separator instead of one per property it could choose.
+    std::vector<int32_t> followers(property_patterns.begin() + 1, property_patterns.end());
+    if (allow_additional) {
+      followers.push_back(get_additional_pattern());
+    }
+    int32_t separator_before_key = middle_separator;
+    bool has_choice = false;
+    for (size_t index = 1; index < properties.size(); ++index) {
+      if (!required.count(properties[index].name) &&
+          (index + 1 < properties.size() || allow_additional)) {
+        has_choice = true;
+        break;
+      }
+    }
+    if (has_choice) {
+      if (auto split = SplitCommonLeadingByte(followers)) {
+        separator_before_key =
+            Sequence({middle_separator, ByteString(std::string(1, static_cast<char>(split->first)))}
+            );
+        followers = std::move(split->second);
+      }
+    }
+
+    // What may follow the separator after the current property, or -1 if nothing may.
+    int32_t after_separator = -1;
 
     if (allow_additional) {
       int32_t repeated_additional = Repeat(
@@ -3081,16 +3193,28 @@ int32_t JSONSchemaConverter::GetPartialRuleForProperties(
           repeated_additional
       );
       tails.back() = RuleRef(tail_rule_id);
+      after_separator = Sequence({followers.back(), tails.back()});
     }
 
+    bool tail_can_be_empty = true;
     for (int index = static_cast<int>(properties.size()) - 2; index >= 0; --index) {
-      int32_t with_property =
-          Sequence({middle_separator, property_patterns[index + 1], tails[index + 1]});
-      int32_t body = with_property;
-      if (!required.count(properties[index + 1].name)) {
-        body = Choice({tails[index + 1], with_property});
+      bool property_required = required.count(properties[index + 1].name);
+      int32_t next = Sequence({followers[index], tails[index + 1]});
+      int32_t body;
+      if (!property_required && after_separator != -1) {
+        after_separator = RuleRef(builder_.AddRuleWithHint(
+            rule_name + "_part_" + std::to_string(index) + "_next", Choice({next, after_separator})
+        ));
+        body = Sequence({separator_before_key, after_separator});
       } else {
+        after_separator = next;
+        body = Sequence({middle_separator, property_patterns[index + 1], tails[index + 1]});
+      }
+      if (property_required) {
         is_required[index + 1] = true;
+        tail_can_be_empty = false;
+      } else if (tail_can_be_empty) {
+        body = Choice({Empty(), body});
       }
       int32_t tail_rule_id =
           builder_.AddRuleWithHint(rule_name + "_part_" + std::to_string(index), body);

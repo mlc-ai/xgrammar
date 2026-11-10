@@ -470,6 +470,17 @@ class JSONSchemaConverter {
       const std::string& rule_name
   );
 
+  /*!
+   * \brief Split off the first byte of the expression when every string it matches starts with
+   * the same ASCII byte. Returns that byte and the expression for the rest, or std::nullopt.
+   */
+  std::optional<std::pair<uint8_t, int32_t>> SplitLeadingByte(int32_t expr_id, int depth = 0);
+
+  /*! \brief SplitLeadingByte for each expression, when they all start with the same byte. */
+  std::optional<std::pair<uint8_t, std::vector<int32_t>>> SplitCommonLeadingByte(
+      const std::vector<int32_t>& expr_ids, int depth = 0
+  );
+
   /*! \brief Generate partial rule for object properties.
    *  \param additional_property_override When set, used as the additional property
    *         pattern instead of the default GetKeyPattern() : value. This supports patternProperties
