@@ -29,6 +29,8 @@ _is_xpu_available = hasattr(torch, "xpu") and torch.xpu.is_available()
 # The device used to test the device-agnostic GPU kernels (triton, torch_compile).
 _gpu_device: Optional[str] = "cuda" if _is_cuda_available else "xpu" if _is_xpu_available else None
 _GPU_IMPLS = ("cuda", "triton", "torch_compile")
+# torch.compile was added in PyTorch 2.0; pyproject.toml allows older versions.
+_is_torch_compile_available = hasattr(torch, "compile")
 
 
 def _is_device_available(device: str) -> bool:
@@ -40,6 +42,8 @@ def _is_device_available(device: str) -> bool:
 
 
 def _skip_if_gpu_impl_unavailable(impl: str) -> None:
+    if impl == "torch_compile" and not _is_torch_compile_available:
+        pytest.skip(reason="torch.compile is not available")
     if impl == "cuda" and not _is_cuda_available:
         pytest.skip(reason="CUDA is not installed")
     if impl in ("triton", "torch_compile") and _gpu_device is None:
@@ -420,6 +424,8 @@ def test_apply_token_bitmask_inplace_torch_kernels_1d_logits(
     """The PyTorch kernels treat 1-D logits as a single row, like the CPU and Triton kernels."""
     if not _is_device_available(device):
         pytest.skip(reason=f"{device.upper()} device is not available")
+    if impl == "torch_compile" and not _is_torch_compile_available:
+        pytest.skip(reason="torch.compile is not available")
     if impl == "torch_compile" and device != "cpu" and not _is_triton_available():
         pytest.skip(reason="Triton is not installed")
     if impl == "torch_compile" and device == "xpu" and not _is_triton_xpu_available():
@@ -496,6 +502,8 @@ def test_triton_launch_config(
     """Check the Triton launch configuration, including the work-group cap on XPU, using
     faked device properties so that no GPU is needed."""
     pytest.importorskip("triton")
+    if device_type == "xpu" and not hasattr(torch, "xpu"):
+        pytest.skip(reason="This PyTorch version has no torch.xpu")
     from types import SimpleNamespace
 
     from xgrammar.kernels import apply_token_bitmask_inplace_triton as triton_kernel_module
