@@ -83,15 +83,21 @@ def apply_token_bitmask_inplace_triton(
     vocab_size: Optional[int] = None,
     indices: Optional[Union[List[int], torch.Tensor]] = None,
 ):
-    NUM_SMS = torch.cuda.get_device_properties("cuda").multi_processor_count
     BLOCK_SIZE = 4096
 
-    arch = torch.cuda.get_device_properties(0).gcnArchName
-    if torch.version.hip is not None and "gfx1" not in arch:
-        # For AMD GPUs (non-Navi)
-        WARP_SIZE = 64
-    else:
+    if logits.device.type == "xpu":
+        # Xe-cores are the closest analogue of CUDA SMs. Triton on Intel GPUs maps a warp to a
+        # 32-lane sub-group by default.
+        NUM_SMS = torch.xpu.get_device_properties(logits.device).gpu_subslice_count
         WARP_SIZE = 32
+    else:
+        props = torch.cuda.get_device_properties(logits.device)
+        NUM_SMS = props.multi_processor_count
+        if torch.version.hip is not None and "gfx1" not in props.gcnArchName:
+            # For AMD GPUs (non-Navi)
+            WARP_SIZE = 64
+        else:
+            WARP_SIZE = 32
 
     assert bitmask.dtype == torch.int32, "bitmask must be of type int32"
 
@@ -114,16 +120,20 @@ def apply_token_bitmask_inplace_triton(
 
     grid = (NUM_SMS,)
 
-    apply_token_bitmask_inplace_kernel[grid](
-        logits,
-        bitmask,
-        indices,
-        num_rows,
-        vocab_size,
-        logits.stride()[0],
-        bitmask.stride()[0],
-        NUM_SMS,
-        BLOCK_SIZE,
-        num_warps=BLOCK_SIZE // WARP_SIZE // (16 // logits.element_size()),
-        num_stages=3,
-    )
+    # Triton launches on the current device rather than the device of the arguments, so make
+    # the logits' device current. Otherwise, e.g. logits on xpu:1 are silently left unmasked.
+    # getattr(torch, ...) is what torch.get_device_module does, which needs PyTorch >= 2.4.
+    with getattr(torch, logits.device.type).device(logits.device):
+        apply_token_bitmask_inplace_kernel[grid](
+            logits,
+            bitmask,
+            indices,
+            num_rows,
+            vocab_size,
+            logits.stride()[0],
+            bitmask.stride()[0],
+            NUM_SMS,
+            BLOCK_SIZE,
+            num_warps=BLOCK_SIZE // WARP_SIZE // (16 // logits.element_size()),
+            num_stages=3,
+        )

@@ -99,12 +99,13 @@ class LogitsProcessor(transformers.LogitsProcessor):
             if not self.matchers[i].is_terminated():
                 self.matchers[i].fill_next_token_bitmask(self.token_bitmask, i)
 
-        # We only support masking logits on CUDA or CPU
+        # Mask logits on device for CUDA and XPU; otherwise mask them on CPU
         device_type = scores.device.type
-        if device_type != "cuda":
+        on_device = device_type in ("cuda", "xpu")
+        if not on_device:
             scores = scores.to("cpu")
         xgr.apply_token_bitmask_inplace(scores, self.token_bitmask.to(scores.device))
-        if device_type != "cuda":
+        if not on_device:
             scores = scores.to(device_type)
 
         # NOTE: Cannot reset here because __call__ is not invoked when stop token

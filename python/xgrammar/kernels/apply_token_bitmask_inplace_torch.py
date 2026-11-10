@@ -44,6 +44,12 @@ def apply_token_bitmask_inplace_torch(
     vocab_size: Optional[int] = None,
     indices: Optional[List[int]] = None,
 ) -> None:
+    # Treat 1-D inputs as a single row, matching the CPU and Triton kernels. Unsqueezing returns
+    # a view, so the in-place update still reaches the caller's logits.
+    if logits.dim() == 1:
+        logits = logits.unsqueeze(0)
+    if bitmask.dim() == 1:
+        bitmask = bitmask.unsqueeze(0)
     vocab_size = min(logits.shape[-1], bitmask.shape[-1] * 32) if vocab_size is None else vocab_size
     if indices is None:
         apply_token_bitmask_inplace_kernel_no_indices_torch(logits, bitmask, vocab_size)
