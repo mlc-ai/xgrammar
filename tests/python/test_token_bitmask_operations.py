@@ -16,6 +16,7 @@ except ModuleNotFoundError:
     MLX_AVAILABLE = False
 
 import xgrammar as xgr
+from xgrammar.matcher import _is_triton_available, _is_triton_xpu_available
 from xgrammar.testing import (
     _get_masked_tokens_from_bitmask,
     _is_single_token_bitmask,
@@ -24,6 +25,54 @@ from xgrammar.testing import (
 )
 
 _is_cuda_available = torch.cuda.is_available()
+_is_xpu_available = hasattr(torch, "xpu") and torch.xpu.is_available()
+# The device used to test the device-agnostic GPU kernels (triton, torch_compile).
+_gpu_device: Optional[str] = "cuda" if _is_cuda_available else "xpu" if _is_xpu_available else None
+_GPU_IMPLS = ("cuda", "triton", "torch_compile")
+# torch.compile was added in PyTorch 2.0; pyproject.toml allows older versions.
+_is_torch_compile_available = hasattr(torch, "compile")
+
+
+def _is_device_available(device: str) -> bool:
+    if device == "cuda":
+        return _is_cuda_available
+    if device == "xpu":
+        return _is_xpu_available
+    return True
+
+
+def _skip_if_gpu_impl_unavailable(impl: str) -> None:
+    if impl == "torch_compile" and not _is_torch_compile_available:
+        pytest.skip(reason="torch.compile is not available")
+    if impl == "cuda" and not _is_cuda_available:
+        pytest.skip(reason="CUDA is not installed")
+    if impl in ("triton", "torch_compile") and _gpu_device is None:
+        pytest.skip(reason="No CUDA or XPU device is available")
+    # torch.compile also generates GPU kernels with Triton.
+    if impl in ("triton", "torch_compile"):
+        if not _is_triton_available():
+            pytest.skip(reason="Triton is not installed")
+        if _gpu_device == "xpu" and not _is_triton_xpu_available():
+            pytest.skip(reason="Triton does not support XPU (install triton-xpu)")
+
+
+def _impl_device(impl: str) -> str:
+    """The device a GPU kernel implementation should be tested on."""
+    if impl == "cuda":
+        return "cuda"
+    assert _gpu_device is not None
+    return _gpu_device
+
+
+def _synchronize(device: str) -> None:
+    """Wait for the given device, e.g. "xpu" (the current XPU) or "xpu:1". No-op on CPU."""
+    device_type = torch.device(device).type
+    if device_type == "cuda":
+        torch.cuda.synchronize(device)
+    elif device_type == "xpu":
+        torch.xpu.synchronize(device)
+
+
 _is_mlx_metal_available = torch.backends.mps.is_available() and MLX_AVAILABLE
 
 
@@ -68,10 +117,10 @@ def test_is_single_token_bitmask():
     assert _is_single_token_bitmask(bitmask, vocab_size, batch_index) == (False, -1)
 
 
-@pytest.mark.parametrize("device", ("cpu", "cuda"))
+@pytest.mark.parametrize("device", ("cpu", "cuda", "xpu"))
 def test_apply_token_bitmask_inplace(device: str):
-    if device == "cuda" and not _is_cuda_available:
-        pytest.skip(reason="CUDA is not installed")
+    if not _is_device_available(device):
+        pytest.skip(reason=f"{device.upper()} device is not available")
 
     neginf = float("-inf")
     bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool, device=device)
@@ -85,10 +134,10 @@ def test_apply_token_bitmask_inplace(device: str):
     torch.testing.assert_close(logits, expected)
 
 
-@pytest.mark.parametrize("device", ("cpu", "cuda"))
+@pytest.mark.parametrize("device", ("cpu", "cuda", "xpu"))
 def test_apply_token_bitmask_inplace_shape_stride_mismatch(device: str):
-    if device == "cuda" and not _is_cuda_available:
-        pytest.skip(reason="CUDA is not installed")
+    if not _is_device_available(device):
+        pytest.skip(reason=f"{device.upper()} device is not available")
 
     col = 100
     compacted_col = (col + 31) // 32
@@ -158,9 +207,8 @@ def get_apply_token_bitmask_kernel(impl: str) -> Callable:
 
 @pytest.mark.parametrize("impl", ("cpu", "cuda", "triton", "metal", "torch_compile"))
 def test_apply_token_bitmask_inplace_kernel(impl: str, num_parallel_threads: int):
-    if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
-        pytest.skip(reason="CUDA is not installed")
-    elif impl == "metal" and not _is_mlx_metal_available:
+    _skip_if_gpu_impl_unavailable(impl)
+    if impl == "metal" and not _is_mlx_metal_available:
         pytest.skip(reason="MLX is not installed")
     elif impl == "metal" and num_parallel_threads > 1:
         pytest.skip(reason="MLX crashes under multithreading")
@@ -172,12 +220,13 @@ def test_apply_token_bitmask_inplace_kernel(impl: str, num_parallel_threads: int
     logits = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0], dtype=torch.float32)
     expected = torch.where(bool_mask, logits, neginf)
 
-    if impl in ["cuda", "triton", "torch_compile"]:
-        logits_gpu = logits.to("cuda")
-        bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to("cuda")
+    if impl in _GPU_IMPLS:
+        device = _impl_device(impl)
+        logits_gpu = logits.to(device)
+        bitmask = torch.tensor([0b1010101010], dtype=torch.int32).to(device)
         kernel(logits_gpu, bitmask)
-        torch.cuda.synchronize()
-        torch.testing.assert_close(logits_gpu, expected.to("cuda"))
+        _synchronize(device)
+        torch.testing.assert_close(logits_gpu, expected.to(device))
     elif impl == "metal":
         # Import MLX only when needed for the Metal test
         import mlx.core as mx
@@ -218,8 +267,7 @@ batch_size__vocab_size__masked_cnt__stride__logits_dtype = [
 def test_apply_token_bitmask_inplace_kernel_large(
     batch_size: int, vocab_size: int, masked_cnt: int, stride: int, logits_dtype: str, impl: str
 ):
-    if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
-        pytest.skip(reason="CUDA is not installed")
+    _skip_if_gpu_impl_unavailable(impl)
 
     kernel = get_apply_token_bitmask_kernel(impl)
 
@@ -247,16 +295,17 @@ def test_apply_token_bitmask_inplace_kernel_large(
     )
 
     bitmask = bool_mask_to_bitmask(bool_mask)
-    if impl in ["cuda", "triton", "torch_compile"]:
-        logits_gpu = logits.to("cuda")
-        bitmask_gpu = bitmask.to("cuda")
-        indices = batch_indices.to("cuda") if stride != 1 else None
+    if impl in _GPU_IMPLS:
+        device = _impl_device(impl)
+        logits_gpu = logits.to(device)
+        bitmask_gpu = bitmask.to(device)
+        indices = batch_indices.to(device) if stride != 1 else None
         f = lambda: kernel(logits_gpu, bitmask_gpu, indices=indices)
 
-        torch.cuda.synchronize()
+        _synchronize(device)
         f()
-        torch.cuda.synchronize()
-        torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
+        _synchronize(device)
+        torch.testing.assert_close(logits_gpu, logits_expected.to(device))
 
         try:
             from triton.testing import do_bench
@@ -301,8 +350,7 @@ def test_apply_token_bitmask_inplace_vocab_size(
     vocab_size: Optional[int],
     impl: str,
 ):
-    if impl in ["triton", "torch_compile"] and not _is_cuda_available:
-        pytest.skip(reason="CUDA is not installed")
+    _skip_if_gpu_impl_unavailable(impl)
 
     kernel = get_apply_token_bitmask_kernel(impl)
 
@@ -315,11 +363,12 @@ def test_apply_token_bitmask_inplace_vocab_size(
     logits_expected = logits.clone()
     logits_expected[..., :vocab_size] = float("-inf")
 
-    if impl in ["triton", "torch_compile"]:
-        logits_gpu = logits.to("cuda")
-        bitmask_gpu = bitmask.to("cuda")
+    if impl in _GPU_IMPLS:
+        device = _impl_device(impl)
+        logits_gpu = logits.to(device)
+        bitmask_gpu = bitmask.to(device)
         kernel(logits_gpu, bitmask_gpu, vocab_size=vocab_size)
-        torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
+        torch.testing.assert_close(logits_gpu, logits_expected.to(device))
     else:
         assert impl == "cpu"
         kernel(logits, bitmask, vocab_size=vocab_size)
@@ -341,8 +390,7 @@ logits_batch_size__bitmask_batch_size__vocab_size__indices = [
 def test_apply_token_bitmask_inplace_indices(
     logits_batch_size: int, bitmask_batch_size: int, vocab_size: int, indices: List[int], impl: str
 ):
-    if impl in ["cuda", "triton", "torch_compile"] and not _is_cuda_available:
-        pytest.skip(reason="CUDA is not installed")
+    _skip_if_gpu_impl_unavailable(impl)
 
     kernel = get_apply_token_bitmask_kernel(impl)
 
@@ -355,15 +403,270 @@ def test_apply_token_bitmask_inplace_indices(
         logits_expected[indices], ~bool_mask[indices], float("-inf")
     )
 
-    if impl in ["cuda", "triton", "torch_compile"]:
-        logits_gpu = logits.to("cuda")
-        bitmask_gpu = bitmask.to("cuda")
+    if impl in _GPU_IMPLS:
+        device = _impl_device(impl)
+        logits_gpu = logits.to(device)
+        bitmask_gpu = bitmask.to(device)
         kernel(logits_gpu, bitmask_gpu, indices=indices)
-        torch.testing.assert_close(logits_gpu, logits_expected.to("cuda"))
+        torch.testing.assert_close(logits_gpu, logits_expected.to(device))
     else:
         assert impl == "cpu"
         kernel(logits, bitmask, indices=indices)
         torch.testing.assert_close(logits, logits_expected)
+
+
+@pytest.mark.parametrize("bitmask_ndim", (1, 2))
+@pytest.mark.parametrize("device", ("cpu", "cuda", "xpu"))
+@pytest.mark.parametrize("impl", ("torch_native", "torch_compile"))
+def test_apply_token_bitmask_inplace_torch_kernels_1d_logits(
+    impl: str, device: str, bitmask_ndim: int
+):
+    """The PyTorch kernels treat 1-D logits as a single row, like the CPU and Triton kernels."""
+    if not _is_device_available(device):
+        pytest.skip(reason=f"{device.upper()} device is not available")
+    if impl == "torch_compile" and not _is_torch_compile_available:
+        pytest.skip(reason="torch.compile is not available")
+    if impl == "torch_compile" and device != "cpu" and not _is_triton_available():
+        pytest.skip(reason="Triton is not installed")
+    if impl == "torch_compile" and device == "xpu" and not _is_triton_xpu_available():
+        pytest.skip(reason="Triton does not support XPU (install triton-xpu)")
+
+    if impl == "torch_native":
+        from xgrammar.kernels.apply_token_bitmask_inplace_torch import (
+            apply_token_bitmask_inplace_torch as kernel,
+        )
+    else:
+        kernel = get_apply_token_bitmask_kernel("torch_compile")
+
+    neginf = float("-inf")
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool, device=device)
+    logits = torch.arange(1.0, 11.0, dtype=torch.float32, device=device)
+    expected = torch.where(bool_mask, logits, neginf)
+    # A 2-D single-row bitmask is what xgr.allocate_token_bitmask(1, vocab_size) returns.
+    bitmask = torch.tensor([0b1010101010], dtype=torch.int32, device=device)
+    if bitmask_ndim == 2:
+        bitmask = bitmask.unsqueeze(0)
+
+    kernel(logits, bitmask)
+    torch.testing.assert_close(logits, expected)
+
+
+# (device_type, props, hip_version, expected (num_programs, warp_size, max_num_warps),
+#  expected num_warps for fp32 / fp16 logits)
+triton_launch_config_cases = [
+    # Intel discrete GPU: 1024-thread work-groups, the cap does not reduce the warp count.
+    (
+        "xpu",
+        dict(gpu_subslice_count=20, max_compute_units=160, max_work_group_size=1024),
+        None,
+        (20, 32, 32),
+        (32, 16),
+    ),
+    # Intel GPU with 512-thread work-groups: fp32 is capped from 32 to 16 warps.
+    (
+        "xpu",
+        dict(gpu_subslice_count=8, max_compute_units=64, max_work_group_size=512),
+        None,
+        (8, 32, 16),
+        (16, 16),
+    ),
+    # Older PyTorch without gpu_subslice_count / max_work_group_size: fall back to the EU
+    # count and a 1024-thread limit.
+    ("xpu", dict(max_compute_units=96), None, (96, 32, 32), (32, 16)),
+    # NVIDIA: no cap.
+    ("cuda", dict(multi_processor_count=132, gcnArchName=""), None, (132, 32, None), (32, 16)),
+    # AMD non-Navi: 64-wide wavefronts, no cap.
+    (
+        "cuda",
+        dict(multi_processor_count=304, gcnArchName="gfx942"),
+        "6.2",
+        (304, 64, None),
+        (16, 8),
+    ),
+]
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize(
+    "device_type, props, hip_version, expected_config, expected_num_warps",
+    triton_launch_config_cases,
+)
+def test_triton_launch_config(
+    monkeypatch,
+    device_type: str,
+    props: dict,
+    hip_version: Optional[str],
+    expected_config: Tuple[int, int, Optional[int]],
+    expected_num_warps: Tuple[int, int],
+):
+    """Check the Triton launch configuration, including the work-group cap on XPU, using
+    faked device properties so that no GPU is needed."""
+    pytest.importorskip("triton")
+    if device_type == "xpu" and not hasattr(torch, "xpu"):
+        pytest.skip(reason="This PyTorch version has no torch.xpu")
+    from types import SimpleNamespace
+
+    from xgrammar.kernels import apply_token_bitmask_inplace_triton as triton_kernel_module
+
+    device_module = torch.xpu if device_type == "xpu" else torch.cuda
+    monkeypatch.setattr(
+        device_module, "get_device_properties", lambda device=None: SimpleNamespace(**props)
+    )
+    monkeypatch.setattr(torch.version, "hip", hip_version)
+
+    config = triton_kernel_module._get_launch_config(torch.device(device_type, 0))
+    assert tuple(config) == expected_config
+
+    block_size = 4096
+    num_warps = tuple(
+        triton_kernel_module._get_num_warps(
+            config, block_size, torch.empty((), dtype=dtype).element_size()
+        )
+        for dtype in (torch.float32, torch.float16)
+    )
+    assert num_warps == expected_num_warps
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("device_type", ("cuda", "xpu"))
+def test_triton_launches_on_logits_device(monkeypatch, device_type: str):
+    """The Triton kernel must launch while the logits' device is current: Triton launches on
+    the current device, so logits on e.g. xpu:1 would otherwise be silently left unmasked.
+    The device switch and the kernel launch are replaced with recording stand-ins, so no GPU
+    is needed. test_apply_token_bitmask_inplace_non_current_device covers real devices."""
+    pytest.importorskip("triton")
+    import contextlib
+
+    from xgrammar.kernels import apply_token_bitmask_inplace_triton as triton_kernel_module
+
+    target_device = torch.device(device_type, 1)
+    current_device = [torch.device(device_type, 0)]
+    launch_devices = []
+
+    @contextlib.contextmanager
+    def fake_device_guard(device: torch.device):
+        previous = current_device[0]
+        current_device[0] = device
+        try:
+            yield
+        finally:
+            current_device[0] = previous
+
+    class FakeKernel:
+        def __getitem__(self, grid):
+            def launch(*args, **kwargs):
+                launch_devices.append(current_device[0])
+
+            return launch
+
+    monkeypatch.setattr(triton_kernel_module, "_device_guard", fake_device_guard)
+    monkeypatch.setattr(triton_kernel_module, "apply_token_bitmask_inplace_kernel", FakeKernel())
+    monkeypatch.setattr(
+        triton_kernel_module,
+        "_get_launch_config",
+        lambda device: triton_kernel_module._LaunchConfig(4, 32, None),
+    )
+
+    # Report target_device as the device of the (CPU) logits; the kernel itself is faked.
+    class LogitsOnTargetDevice(torch.Tensor):
+        @property
+        def device(self):
+            return target_device
+
+    logits = torch.zeros(2, 64).as_subclass(LogitsOnTargetDevice)
+    bitmask = torch.zeros(2, 2, dtype=torch.int32)
+    triton_kernel_module.apply_token_bitmask_inplace_triton(logits, bitmask)
+
+    assert launch_devices == [target_device]
+    # The previous current device is restored after the launch.
+    assert current_device[0] == torch.device(device_type, 0)
+
+
+def _gpu_device_count() -> int:
+    if _gpu_device == "cuda":
+        return torch.cuda.device_count()
+    if _gpu_device == "xpu":
+        return torch.xpu.device_count()
+    return 0
+
+
+def _gpu_current_device_index() -> int:
+    assert _gpu_device is not None
+    if _gpu_device == "cuda":
+        return torch.cuda.current_device()
+    return torch.xpu.current_device()
+
+
+@pytest.mark.parametrize("impl", ("auto", "triton", "torch_native"))
+def test_apply_token_bitmask_inplace_non_current_device(impl: str):
+    """Masking logits on a device other than the current one, e.g. xpu:1 while xpu:0 is
+    current, must update the logits on that device. Needs at least two CUDA or XPU devices."""
+    device_count = _gpu_device_count()
+    if device_count < 2:
+        pytest.skip(reason="At least two CUDA or XPU devices are required")
+    if impl == "triton":
+        _skip_if_gpu_impl_unavailable(impl)
+
+    # Use a device that is not the current one, whichever device is current.
+    current_index = _gpu_current_device_index()
+    target_index = (current_index + 1) % device_count
+    assert target_index != current_index
+    device = f"{_gpu_device}:{target_index}"
+    neginf = float("-inf")
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool, device=device)
+    logits = torch.arange(1.0, 11.0, dtype=torch.float32, device=device)
+    expected = torch.where(bool_mask, logits, neginf)
+    bitmask = torch.tensor([[0b1010101010]], dtype=torch.int32, device=device)
+
+    if impl == "auto":
+        xgr.apply_token_bitmask_inplace(logits, bitmask)
+    elif impl == "triton":
+        get_apply_token_bitmask_kernel("triton")(logits, bitmask)
+    else:
+        from xgrammar.kernels.apply_token_bitmask_inplace_torch import (
+            apply_token_bitmask_inplace_torch,
+        )
+
+        apply_token_bitmask_inplace_torch(logits, bitmask)
+    _synchronize(device)
+    torch.testing.assert_close(logits, expected)
+    # The current device is unchanged.
+    assert _gpu_current_device_index() == current_index
+
+
+@pytest.mark.thread_unsafe
+def test_apply_token_bitmask_inplace_auto_falls_back_to_torch_native(monkeypatch):
+    """Without usable Triton, auto dispatch on CUDA/XPU uses the native kernel, which must
+    handle 1-D logits with a single-row bitmask."""
+    if _gpu_device is None:
+        pytest.skip(reason="No CUDA or XPU device is available")
+
+    import xgrammar.kernels.apply_token_bitmask_inplace_torch as torch_kernel_module
+    import xgrammar.matcher as matcher_module
+
+    monkeypatch.setattr(matcher_module, "_is_triton_available", lambda: False)
+    monkeypatch.setattr(matcher_module, "_is_triton_xpu_available", lambda: False)
+    native_kernel = torch_kernel_module.apply_token_bitmask_inplace_torch
+    calls = []
+
+    def spy(*args, **kwargs):
+        calls.append(args)
+        return native_kernel(*args, **kwargs)
+
+    monkeypatch.setattr(torch_kernel_module, "apply_token_bitmask_inplace_torch", spy)
+
+    vocab_size = 10
+    bool_mask = torch.tensor([0, 1, 0, 1, 0, 1, 0, 1, 0, 1], dtype=torch.bool)
+    logits = torch.arange(1.0, 11.0, dtype=torch.float32, device=_gpu_device)
+    expected = torch.where(bool_mask.to(_gpu_device), logits, float("-inf"))
+    bitmask = xgr.allocate_token_bitmask(1, vocab_size)
+    bitmask.copy_(bool_mask_to_bitmask(bool_mask.unsqueeze(0)))
+
+    xgr.apply_token_bitmask_inplace(logits, bitmask.to(_gpu_device))
+    _synchronize(_gpu_device)
+
+    assert len(calls) == 1
+    torch.testing.assert_close(logits, expected)
 
 
 @pytest.mark.parametrize("bad_index", [5, -1])

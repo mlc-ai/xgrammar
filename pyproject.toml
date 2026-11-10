@@ -25,7 +25,6 @@ dependencies = [
   # upper cap here would force resolver conflicts on downstream packages.
   # v5 requires Python >=3.10, so on Python 3.8/3.9 pip resolves to v4.
   "transformers>=4.38.0",
-  "triton; platform_system == 'Linux' and platform_machine == 'x86_64'",
   "numpy",
   "typing-extensions>=4.9.0",
 ]

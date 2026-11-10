@@ -6,7 +6,7 @@ XGrammar Python Package can be installed directly from a prebuilt package or bui
 
 XGrammar supports various platforms:
 * Operating Systems: Linux, macOS, and Windows
-* Hardware: CPU, NVIDIA GPUs, AMD GPUs, Apple Silicon, TPU, etc.
+* Hardware: CPU, NVIDIA GPUs, AMD GPUs, Intel GPUs, Apple Silicon, TPU, etc.
 * Python: 3.9 and later.
 
 We provide Python wheels for XGrammar via pip.
@@ -20,6 +20,19 @@ For use with MPS on Apple Silicon, install with:
 ```bash
 python -m pip install "xgrammar[metal]"
 ```
+
+XGrammar applies the token bitmask on GPUs with Triton, which comes with PyTorch: CUDA and
+ROCm builds of PyTorch include `triton`, and Intel GPU (XPU) builds include `triton-xpu`. For
+Intel GPUs, install PyTorch from the PyTorch XPU index before installing XGrammar:
+
+```bash
+python -m pip install torch --index-url https://download.pytorch.org/whl/xpu
+python -m pip install triton-xpu --index-url https://download.pytorch.org/whl/xpu  # if not already installed
+python -m pip install xgrammar
+```
+
+If Triton is unavailable or cannot target the device, XGrammar falls back to a native PyTorch
+implementation, which is slower.
 
 We also provide conda packages for XGrammar:
 
