@@ -86,6 +86,13 @@ class _LaunchConfig(NamedTuple):
     """Upper bound on warps per program imposed by the device, or None if no bound applies."""
 
 
+def _device_guard(device: torch.device):
+    """Context manager that makes the given CUDA or XPU device the current device."""
+    if device.type == "xpu":
+        return torch.xpu.device(device)
+    return torch.cuda.device(device)
+
+
 def _get_launch_config(device: torch.device) -> _LaunchConfig:
     """Return the launch configuration of the persistent kernel for the given device.
     Supports CUDA (NVIDIA / AMD ROCm) and Intel XPU devices."""
@@ -110,6 +117,15 @@ def _get_launch_config(device: torch.device) -> _LaunchConfig:
     return _LaunchConfig(props.multi_processor_count, warp_size, max_num_warps=None)
 
 
+def _get_num_warps(launch_config: _LaunchConfig, block_size: int, element_size: int) -> int:
+    """Warps per program: enough for each thread to handle 16 bytes of logits, capped by the
+    device limit if there is one."""
+    num_warps = block_size // launch_config.warp_size // (16 // element_size)
+    if launch_config.max_num_warps is not None:
+        num_warps = min(num_warps, launch_config.max_num_warps)
+    return num_warps
+
+
 def apply_token_bitmask_inplace_triton(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
@@ -119,9 +135,7 @@ def apply_token_bitmask_inplace_triton(
     BLOCK_SIZE = 4096
     launch_config = _get_launch_config(logits.device)
     NUM_SMS = launch_config.num_programs
-    num_warps = BLOCK_SIZE // launch_config.warp_size // (16 // logits.element_size())
-    if launch_config.max_num_warps is not None:
-        num_warps = min(num_warps, launch_config.max_num_warps)
+    num_warps = _get_num_warps(launch_config, BLOCK_SIZE, logits.element_size())
 
     assert bitmask.dtype == torch.int32, "bitmask must be of type int32"
 
@@ -144,16 +158,19 @@ def apply_token_bitmask_inplace_triton(
 
     grid = (NUM_SMS,)
 
-    apply_token_bitmask_inplace_kernel[grid](
-        logits,
-        bitmask,
-        indices,
-        num_rows,
-        vocab_size,
-        logits.stride()[0],
-        bitmask.stride()[0],
-        NUM_SMS,
-        BLOCK_SIZE,
-        num_warps=num_warps,
-        num_stages=3,
-    )
+    # Triton launches on the current device rather than the device of the arguments, so make
+    # the logits' device current. Otherwise, e.g. logits on xpu:1 are silently left unmasked.
+    with _device_guard(logits.device):
+        apply_token_bitmask_inplace_kernel[grid](
+            logits,
+            bitmask,
+            indices,
+            num_rows,
+            vocab_size,
+            logits.stride()[0],
+            bitmask.stride()[0],
+            NUM_SMS,
+            BLOCK_SIZE,
+            num_warps=num_warps,
+            num_stages=3,
+        )
