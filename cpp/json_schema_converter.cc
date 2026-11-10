@@ -2753,9 +2753,7 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
   if (spec.format.has_value()) {
     auto regex = JSONFormatToRegexPattern(*spec.format);
     if (regex.has_value()) {
-      // The built-in format regexes use constructs that the FSM regex engine does not fully
-      // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
-      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+      return Sequence({ByteString("\""), RegexExpression(*regex, false), ByteString("\"")});
     }
   }
   // Check for pattern
@@ -3997,7 +3995,7 @@ int32_t XMLToolCallingConverter::GenerateString(
     if (spec.format.has_value()) {
       auto regex = JSONFormatToRegexPattern(*spec.format, /*raw_string=*/true);
       if (regex.has_value()) {
-        return RegexExpression(*regex, false, true);
+        return RegexExpression(*regex, false);
       }
     }
     if (spec.pattern.has_value()) {
