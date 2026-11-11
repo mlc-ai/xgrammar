@@ -1502,10 +1502,17 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
         AppendAtomicRow(token);
       }
     } else {
+      // Atomic prediction used one new history row, while the byte path used one per byte.
+      // Rules entered after the token, including pending parents of other new rules, must
+      // refer to the row where their completion map is merged. Older origins stay unchanged.
+      const int32_t merged_pos = rule_id_to_completable_states_.size() - 1;
       auto byte_states = GetLatestScanableStates();
       std::vector<ParserState> merged = byte_states;
       StateEqualForParsing state_eq;
-      for (const auto& s : atomic_states) {
+      for (auto& s : atomic_states) {
+        if (s.rule_start_pos == size_before_token) {
+          s.rule_start_pos = merged_pos;
+        }
         if (std::find_if(merged.begin(), merged.end(), [&](const auto& m) {
               return state_eq(m, s);
             }) == merged.end()) {
@@ -1523,7 +1530,10 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
       bool final_char_budget_entered = HasEnteredCharBudget();
       PopLastStates(1);
 
-      for (const auto& cs : atomic_completable) {
+      for (auto& cs : atomic_completable) {
+        if (cs.second.rule_start_pos == size_before_token) {
+          cs.second.rule_start_pos = merged_pos;
+        }
         if (std::find_if(merged_completable.begin(), merged_completable.end(), [&](const auto& m) {
               return m.first == cs.first && state_eq(m.second, cs.second);
             }) == merged_completable.end()) {
