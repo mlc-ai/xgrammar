@@ -227,6 +227,12 @@ class Grammar(XGRObject):
             Whether to use any whitespace. If True, the generated grammar will ignore the
             indent parameter, and allow any whitespace.
 
+            Setting this to False can degrade generation quality with schemas that allow additional
+            properties, possibly because restricting whitespace steers prose into unconstrained keys.
+            The output can still satisfy the schema. If extra keys are not needed, set
+            additionalProperties to false. See
+            <https://github.com/mlc-ai/xgrammar/issues/851> for more details.
+
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.
 

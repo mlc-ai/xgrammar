@@ -291,3 +291,6 @@ python/xgrammar/tvm_ffi_binding/
 
 # Generated package version
 python/xgrammar/_version.py
+
+# Prepared tokenizer artifacts for local CI validation
+.ci/

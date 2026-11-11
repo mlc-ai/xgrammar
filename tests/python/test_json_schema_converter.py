@@ -1,3 +1,4 @@
+import copy
 import json
 import re
 import sys
@@ -280,6 +281,288 @@ def test_enum_const():
     instance = MainModel(foo="a", values=1, bars="a", str_values='a\n\r"', field=Field.FOO)
     check_schema_grammar_builds(schema, any_whitespace=False)
     check_schema_with_instance(schema, instance, any_whitespace=False)
+
+
+@pytest.mark.parametrize(
+    "keyword, literal_key, use_ref",
+    [
+        ("const", "default", False),
+        ("enum", "title", False),
+        ("const", "title", True),
+        ("enum", "default", True),
+    ],
+)
+def test_schema_cache_key_preserves_literal_data(keyword: str, literal_key: str, use_ref: bool):
+    # Even schema-looking objects inside a literal are data, not schemas.
+    left_value = [{literal_key: "left", "properties": {"default": {"description": "left"}}}]
+    right_value = [{literal_key: "right", "properties": {"default": {"description": "right"}}}]
+    definitions = {
+        name: {keyword: value if keyword == "const" else [value]}
+        for name, value in [("left", left_value), ("right", right_value)]
+    }
+    schema = {
+        "type": "object",
+        "properties": (
+            {name: {"$ref": f"#/$defs/{name}"} for name in definitions} if use_ref else definitions
+        ),
+        "required": ["left", "right"],
+        "additionalProperties": False,
+    }
+    if use_ref:
+        schema["$defs"] = definitions
+
+    check_schema_with_instance(
+        schema,
+        {"left": left_value, "right": right_value},
+        any_whitespace=False,
+        separators=(",", ":"),
+    )
+    check_schema_with_instance(
+        schema,
+        {"left": left_value, "right": left_value},
+        is_accepted=False,
+        any_whitespace=False,
+        separators=(",", ":"),
+    )
+
+
+@pytest.mark.parametrize("property_name", ["default", "title"])
+@pytest.mark.parametrize("difference", ["type", "presence"])
+def test_schema_cache_key_preserves_property_names(property_name: str, difference: str):
+    left_schema = {
+        "type": "object",
+        "properties": {property_name: {"type": "integer"}},
+        "additionalProperties": False,
+    }
+    right_schema = {
+        "type": "object",
+        "properties": {property_name: {"type": "string"}} if difference == "type" else {},
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {"left": left_schema, "right": right_schema},
+        "required": ["left", "right"],
+        "additionalProperties": False,
+    }
+    right_value = {property_name: "text"} if difference == "type" else {}
+    check_schema_with_instance(schema, {"left": {property_name: 1}, "right": right_value})
+    check_schema_with_instance(
+        schema, {"left": {property_name: 1}, "right": {property_name: 1}}, is_accepted=False
+    )
+
+
+def test_schema_cache_key_preserves_literal_member_order():
+    left_value = [{"first": 1, "second": 2}]
+    right_value = [{"second": 2, "first": 1}]
+    schema = {
+        "type": "object",
+        "properties": {"left": {"const": left_value}, "right": {"const": right_value}},
+        "required": ["left", "right"],
+        "additionalProperties": False,
+    }
+    # Literal grammars emit object members in their declared order.
+    check_schema_with_instance(
+        schema,
+        {"left": left_value, "right": right_value},
+        any_whitespace=False,
+        separators=(",", ":"),
+    )
+    check_schema_with_instance(
+        schema,
+        {"left": left_value, "right": left_value},
+        is_accepted=False,
+        any_whitespace=False,
+        separators=(",", ":"),
+    )
+
+
+def test_schema_cache_key_preserves_property_order():
+    left = {
+        "type": "object",
+        "properties": {"first": {"type": "integer"}, "second": {"type": "string"}},
+        "required": ["first", "second"],
+        "additionalProperties": False,
+    }
+    right = {**left, "properties": dict(reversed(list(left["properties"].items())))}
+    schema = {
+        "type": "object",
+        "properties": {"left": left, "right": right},
+        "required": ["left", "right"],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(
+        schema,
+        {"left": {"first": 1, "second": "text"}, "right": {"second": "text", "first": 1}},
+        any_whitespace=False,
+    )
+    check_schema_with_instance(
+        schema,
+        {"left": {"first": 1, "second": "text"}, "right": {"first": 1, "second": "text"}},
+        is_accepted=False,
+        any_whitespace=False,
+    )
+
+
+@pytest.mark.parametrize("items_key", ["items", "prefixItems"])
+def test_schema_cache_key_reuses_parent_with_nested_annotations(items_key: str):
+    item = {"type": "string", "description": "original"}
+    parent = {
+        "type": "object",
+        "properties": {
+            "values": {"type": "array", items_key: [item] if items_key == "prefixItems" else item}
+        },
+        "required": ["values"],
+        "additionalProperties": False,
+    }
+    candidate = copy.deepcopy(parent)
+    schema = {
+        "$defs": {"Parent": parent},
+        "type": "object",
+        "properties": {"seed": {"$ref": "#/$defs/Parent"}, "candidate": candidate},
+        "required": ["seed", "candidate"],
+        "additionalProperties": False,
+    }
+    # The ref seeds the parent rule cache. An equivalent inline schema must reuse
+    # that rule even when annotations differ several schema levels below it.
+    original_grammar = _json_schema_to_ebnf(schema, any_whitespace=False)
+    candidate_items = candidate["properties"]["values"][items_key]
+    candidate_item = candidate_items[0] if items_key == "prefixItems" else candidate_items
+    candidate_item["description"] = "changed"
+    assert _json_schema_to_ebnf(schema, any_whitespace=False) == original_grammar
+    check_schema_with_instance(schema, {"seed": {"values": ["a"]}, "candidate": {"values": ["b"]}})
+
+
+def test_schema_cache_key_reuses_parent_with_ignored_metadata():
+    parent = {"type": "integer", "x-meta": {"default": {"const": "a"}}}
+    candidate = copy.deepcopy(parent)
+    schema = {
+        "$defs": {"Parent": parent},
+        "type": "object",
+        "properties": {"seed": {"$ref": "#/$defs/Parent"}, "candidate": candidate},
+        "required": ["seed", "candidate"],
+        "additionalProperties": False,
+    }
+    original_grammar = _json_schema_to_ebnf(schema, any_whitespace=False)
+    candidate["x-meta"]["default"]["const"] = "b"
+    assert _json_schema_to_ebnf(schema, any_whitespace=False) == original_grammar
+    check_schema_with_instance(schema, {"seed": 1, "candidate": 2})
+    check_schema_with_instance(schema, {"seed": 1, "candidate": "b"}, is_accepted=False)
+
+    # Parent cache reuse must not replace the original reference target with "a".
+    schema["properties"]["target"] = {"$ref": "#/properties/candidate/x-meta/default"}
+    schema["required"].append("target")
+    check_schema_with_instance(schema, {"seed": 1, "candidate": 2, "target": "b"})
+    check_schema_with_instance(
+        schema, {"seed": 1, "candidate": 2, "target": "a"}, is_accepted=False
+    )
+
+
+@pytest.mark.parametrize("target_key", ["default", "x-custom"])
+def test_schema_cache_key_ref_target_outside_schema_keywords(target_key: str):
+    left_value = {"default": "left"}
+    right_value = {"default": "right"}
+    # Even targets omitted from cache keys must remain available in the original root.
+    schema = {
+        target_key: {"default": {"const": left_value}, "examples": {"const": right_value}},
+        "type": "object",
+        "properties": {
+            "left": {"$ref": f"#/{target_key}/default"},
+            "right": {"$ref": f"#/{target_key}/examples"},
+        },
+        "required": ["left", "right"],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(
+        schema,
+        {"left": left_value, "right": right_value},
+        any_whitespace=False,
+        separators=(",", ":"),
+    )
+    check_schema_with_instance(
+        schema,
+        {"left": left_value, "right": left_value},
+        is_accepted=False,
+        any_whitespace=False,
+        separators=(",", ":"),
+    )
+
+
+@pytest.mark.parametrize("invalid_key", ["1", "true", "[]"])
+def test_schema_cache_key_property_names_does_not_reuse_basic_any(invalid_key: str):
+    schema = {"type": "object", "propertyNames": {}, "additionalProperties": True}
+    check_schema_with_instance(schema, '{"name":2}', any_whitespace=False, separators=(",", ":"))
+    check_schema_with_instance(
+        schema,
+        "{" + invalid_key + ":2}",
+        is_accepted=False,
+        any_whitespace=False,
+        separators=(",", ":"),
+    )
+
+
+@pytest.mark.parametrize("value_first", [True, False])
+def test_schema_cache_key_distinguishes_implicit_property_name_type(value_first: bool):
+    constraint = {"pattern": "^a$"}
+    schema = {"type": "object", "propertyNames": constraint}
+    if value_first:
+        # Properties are parsed before propertyNames, without an implicit type.
+        schema.update(properties={"a": constraint}, additionalProperties={"type": "integer"})
+    else:
+        # additionalProperties is parsed after propertyNames, without an implicit type.
+        schema["additionalProperties"] = constraint
+    check_schema_with_instance(schema, {"a": 1})
+    check_schema_with_instance(schema, {"b": 1}, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "constraint",
+    [
+        {"const": "a"},
+        {"enum": ["a", "b"]},
+        {"$ref": "#/$defs/Base"},
+        {"anyOf": [{"const": "a"}, {"const": "b"}]},
+        {"oneOf": [{"const": "a"}, {"const": "b"}]},
+        {"allOf": [{"const": "a"}]},
+    ],
+)
+def test_schema_cache_key_reuses_rules_when_default_type_is_ignored(constraint: Dict[str, Any]):
+    schema = {
+        "type": "object",
+        "$defs": {"Base": {"const": "a"}, "Target": constraint},
+        "properties": {
+            "seed": {"$ref": "#/$defs/Target"},
+            "candidate": {
+                "type": "object",
+                "propertyNames": constraint,
+                "additionalProperties": True,
+            },
+        },
+        "required": ["seed", "candidate"],
+        "additionalProperties": False,
+    }
+    # The ref seeds a value rule that propertyNames can reuse: these branches
+    # take precedence over type parsing and do not use the implicit string type.
+    ebnf = _json_schema_to_ebnf(schema, any_whitespace=False)
+    rules = dict(line.split(" ::= ", 1) for line in ebnf.splitlines() if " ::= " in line)
+    assert "root_prop_1_name" not in rules
+    assert "defs_Target" in rules["root_prop_1_prop"]
+    check_schema_with_instance(schema, {"seed": "a", "candidate": {"a": 1}})
+    check_schema_with_instance(schema, {"seed": "a", "candidate": {"wrong": 1}}, is_accepted=False)
+
+
+def test_schema_cache_key_escapes_keys():
+    schema = {
+        "type": "object",
+        "properties": {
+            "left": {"type": "integer", 'a":0,"const': 1},
+            "right": {"type": "integer", "a": 0, "const": 1},
+        },
+        "required": ["left", "right"],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(schema, {"left": 0, "right": 1})
+    check_schema_with_instance(schema, {"left": 0, "right": 0}, is_accepted=False)
 
 
 @pytest.mark.parametrize(
@@ -1086,6 +1369,31 @@ def test_restricted_string():
         is_accepted=False,
         any_whitespace=False,
     )
+
+
+# \s in a JSON Schema pattern follows the ECMAScript dialect, so it matches every WhiteSpace and
+# LineTerminator code point, not only ASCII whitespace.
+@pytest.mark.parametrize(
+    "char, is_accepted",
+    [
+        (" ", True),
+        ("\u00a0", True),  # no-break space
+        ("\u2003", True),  # em space
+        ("\u2028", True),  # line separator
+        ("\u3000", True),  # ideographic space
+        ("\ufeff", True),  # zero width no-break space
+        ("\u200b", False),  # zero width space is not WhiteSpace
+        ("x", False),
+    ],
+)
+def test_pattern_whitespace_class(char: str, is_accepted: bool):
+    schema = {
+        "type": "object",
+        "properties": {"v": {"type": "string", "pattern": r"^a\sb$"}},
+        "required": ["v"],
+    }
+    instance = json.dumps({"v": f"a{char}b"}, ensure_ascii=False)
+    check_schema_with_instance(schema, instance, is_accepted=is_accepted, any_whitespace=False)
 
 
 def test_complex_restrictions():

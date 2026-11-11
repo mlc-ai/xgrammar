@@ -520,6 +520,8 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   std::string FindJumpForwardString();
 
+  std::vector<int32_t> FindJumpForwardTokens() const;
+
   void Rollback(int num_tokens);
 
   bool IsTerminated() const;
@@ -580,6 +582,12 @@ class GrammarMatcher::Impl : public EarleyParser {
    * \returns Whether the stop token can be accepted.
    */
   bool AcceptStopToken();
+
+  /*!
+   * \brief Check whether a stop token can be consumed as a grammar terminal and complete the
+   * grammar. The parser state is left unchanged.
+   */
+  bool CanAcceptStopTokenAsTerminal(int32_t token_id);
 
   bool IsStopTokenAccepted() const;
 
@@ -816,6 +824,41 @@ bool GrammarMatcher::Impl::AcceptStopToken() {
   token_length_history.push_back(0);
   stop_token_is_accepted_ = true;
   return true;
+}
+
+bool GrammarMatcher::Impl::CanAcceptStopTokenAsTerminal(int32_t token_id) {
+  const auto& decoded_vocab = tokenizer_info_.GetDecodedVocab();
+  if (token_id >= static_cast<int32_t>(decoded_vocab.size())) {
+    return false;
+  }
+  const bool atomic_success = AdvanceAtomicToken(token_id);
+  if (atomic_success) {
+    bool accepted = is_completed_.back();
+    PopLastStates(1);
+    if (accepted) {
+      return true;
+    }
+  }
+  const auto& token = decoded_vocab[token_id];
+  int num_advanced = 0;
+  while (num_advanced < static_cast<int>(token.size()) &&
+         Advance(static_cast<uint8_t>(token[num_advanced]))) {
+    ++num_advanced;
+  }
+  if (!atomic_success && !has_char_budget_rules_ && num_advanced < static_cast<int>(token.size())) {
+    int32_t mid_token_row = FindMidTokenExcludeEdgeRow(num_advanced, token_id);
+    if (mid_token_row > 0) {
+      PopLastStates(num_advanced - mid_token_row);
+      const bool advanced = AdvanceAtomicToken(token_id);
+      const bool accepted = advanced && is_completed_.back();
+      PopLastStates(mid_token_row + static_cast<int>(advanced));
+      return accepted;
+    }
+  }
+  bool accepted =
+      num_advanced > 0 && num_advanced == static_cast<int>(token.size()) && is_completed_.back();
+  PopLastStates(num_advanced);
+  return accepted;
 }
 
 bool GrammarMatcher::Impl::IsTerminated() const {
@@ -1301,13 +1344,17 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
                        << "\", current state:\n"
                        << states_str;
   }
-  // Handle the stop token
+  // Stop tokens can also be grammar terminals, but consuming one must complete the grammar
+  // regardless of whether termination without a stop token is enabled.
   if (is_stop_token) {
     bool accepted = AcceptStopToken();
+    bool as_terminal = !accepted && CanAcceptStopTokenAsTerminal(token_id);
     if (debug_print) {
-      XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << accepted;
+      XGRAMMAR_LOG(INFO) << "The token is an end token. Is accepted: " << (accepted || as_terminal);
     }
-    return accepted ? FinishAccept(consumed_past_deadline) : false;
+    if (!as_terminal) {
+      return accepted ? FinishAccept(consumed_past_deadline) : false;
+    }
   }
 
   const auto& token = tokenizer_info_.GetDecodedVocab()[token_id];
@@ -1546,6 +1593,7 @@ bool GrammarMatcher::Impl::AcceptToken(int32_t token_id, bool debug_print) {
     ApplyCharacterBudgetEnforcementToFixedPoint(debug_print);
   }
   record_char_budget_relaxation_ = false;
+  stop_token_is_accepted_ = is_stop_token;
   return FinishAccept(consumed_past_deadline);
 }
 
@@ -1898,7 +1946,6 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   SkipExpiredGuard skip_expired_guard(this, skip_expired);
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_range = tokenizer_info_.GetTrieSubtreeNodesRange();
-  const auto& adaptive_token_mask_cache = compiled_grammar_->adaptive_token_mask_cache;
   // We need to have a copy, because scanable_state_history_ will be modified during the
   // FillNextTokenBitmask process, which can lead to undefined behavior.
   std::vector<ParserState> latest_states;
@@ -1924,13 +1971,14 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                        << ", num of states=" << latest_states.size();
   }
 
-  std::vector<std::pair<ParserState, decltype(adaptive_token_mask_cache.cbegin())>>
-      latest_states_with_masks;
+  // Lazy insertion can rehash the cache. Pointers to immutable entries remain valid;
+  // unordered_map iterators do not. Entries are never erased during this grammar's lifetime.
+  std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
-    auto adaptive_token_mask_it = adaptive_token_mask_cache.find(state);
-    XGRAMMAR_CHECK(adaptive_token_mask_it != adaptive_token_mask_cache.end()) << state;
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+    const AdaptiveTokenMask* adaptive_token_mask_pointer =
+        &compiled_grammar_->GetAdaptiveTokenMask(state);
+    const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
     if (state.char_budget_deadline >= 0) {
       int32_t remaining_chars = state.char_budget_deadline - GetCurrentCharIndex();
       if (remaining_chars <= tokenizer_info_.ImplPtr()->GetMaxTokenChars()) {
@@ -1938,7 +1986,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         continue;
       }
     }
-    latest_states_with_masks.push_back(std::make_pair(state, adaptive_token_mask_it));
+    latest_states_with_masks.emplace_back(state, adaptive_token_mask_pointer);
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -1999,8 +2047,8 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
   }
 
   const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
-  for (const auto& [state, adaptive_token_mask_it] : latest_states_with_masks) {
-    const auto& adaptive_token_mask = adaptive_token_mask_it->second;
+  for (const auto& [state, adaptive_token_mask_pointer] : latest_states_with_masks) {
+    const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
     // rejected list.
@@ -2218,6 +2266,11 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
       const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
       const auto& current_edges = fsm.GetFsm().GetFsm().GetEdges(state.element_id);
       for (const auto& edge : current_edges) {
+        // Token-level alternatives are not forced byte continuations.
+        if (edge.IsToken() || edge.IsExcludeToken()) {
+          can_find_next_char = false;
+          break;
+        }
         if (!edge.IsCharRange()) {
           continue;
         }
@@ -2255,6 +2308,71 @@ std::string GrammarMatcher::Impl::FindJumpForwardString() {
   // Rollback all chars accepted
   PopLastStates(num_accepted_chars);
   return result;
+}
+
+std::vector<int32_t> GrammarMatcher::Impl::FindJumpForwardTokens() const {
+  if (IsTerminated() || IsCompleted()) {
+    return {};
+  }
+
+  // All lookahead and token validation happens on a copy. In particular, querying must not
+  // change token history, captures, or pending budget enforcement on the live matcher.
+  Impl trial(*this);
+  const std::string forced_bytes = trial.FindJumpForwardString();
+  const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
+  std::vector<int32_t> tokens;
+  bool last_is_prefix = false;
+
+  for (size_t offset = 0; offset < forced_bytes.size();) {
+    auto begin = vocab.begin();
+    auto end = vocab.end();
+    int32_t token_id = -1;
+    size_t token_length = 0;
+    bool is_prefix = false;
+
+    // Narrow the sorted vocabulary by one byte at a time, remembering the longest complete
+    // token. Removing exact matches from the range leaves only strictly longer extensions.
+    for (size_t depth = 0; offset + depth < forced_bytes.size() && begin != end; ++depth) {
+      const uint8_t byte = static_cast<uint8_t>(forced_bytes[offset + depth]);
+      begin = std::lower_bound(begin, end, byte, [depth](const auto& entry, uint8_t value) {
+        return static_cast<uint8_t>(entry.second[depth]) < value;
+      });
+      end = std::upper_bound(begin, end, byte, [depth](uint8_t value, const auto& entry) {
+        return value < static_cast<uint8_t>(entry.second[depth]);
+      });
+      int32_t exact_id = -1;
+      while (begin != end && begin->second.size() == depth + 1) {
+        const int32_t id = begin->first;
+        if (std::find(stop_token_ids_.begin(), stop_token_ids_.end(), id) ==
+                stop_token_ids_.end() &&
+            (exact_id == -1 || id < exact_id)) {
+          exact_id = id;
+        }
+        ++begin;
+      }
+      if (exact_id != -1) {
+        token_id = exact_id;
+        token_length = depth + 1;
+        is_prefix = std::any_of(begin, end, [&](const auto& entry) {
+          return std::find(stop_token_ids_.begin(), stop_token_ids_.end(), entry.first) ==
+                 stop_token_ids_.end();
+        });
+      }
+    }
+
+    if (token_id == -1 || !trial.AcceptToken(token_id)) {
+      break;
+    }
+    tokens.push_back(token_id);
+    last_is_prefix = is_prefix;
+    offset += token_length;
+  }
+
+  // Withhold at most one newly proposed token; never retokenize or roll back accepted tokens.
+  if (!tokens.empty() && last_is_prefix) {
+    tokens.pop_back();
+  }
+  return tokens;
 }
 
 void GrammarMatcher::Impl::Rollback(int num_tokens) {
@@ -2603,9 +2721,11 @@ void GrammarMatcher::Impl::SetTokenBitmask(
     }
   }
   // Overridden stop tokens can occur in the compiler's accepted token set.
-  // Apply their termination policy after constructing either mask representation.
+  // Apply their policy after constructing either mask representation: a stop signal is allowed
+  // after completion in normal mode; stop-token content must itself complete the grammar.
   for (int id : stop_token_ids_) {
-    next_token_bitset.Set(id, can_reach_end);
+    bool allowed_as_signal = !terminate_without_stop_token_ && can_reach_end;
+    next_token_bitset.Set(id, allowed_as_signal || CanAcceptStopTokenAsTerminal(id));
   }
 }
 
@@ -2852,6 +2972,10 @@ bool GrammarMatcher::TraverseDraftTree(
 }
 
 std::string GrammarMatcher::FindJumpForwardString() { return pimpl_->FindJumpForwardString(); }
+
+std::vector<int32_t> GrammarMatcher::FindJumpForwardTokens() const {
+  return pimpl_->FindJumpForwardTokens();
+}
 
 void GrammarMatcher::Rollback(int num_tokens) { pimpl_->Rollback(num_tokens); }
 

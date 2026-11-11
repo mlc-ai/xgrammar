@@ -1,7 +1,25 @@
 import os
+import socket
 from pathlib import Path
 
 import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def forbid_ci_network():
+    """Prove offline test jobs cannot silently fall back to HTTP downloads."""
+    if os.environ.get("XGRAMMAR_TEST_OFFLINE") != "1":
+        yield
+        return
+
+    def forbidden(*args, **kwargs):
+        raise RuntimeError("Network access attempted during offline CI tests")
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(socket.socket, "connect", forbidden)
+        patch.setattr(socket.socket, "connect_ex", forbidden)
+        yield
+
 
 try:
     import pytest_run_parallel  # noqa: F401

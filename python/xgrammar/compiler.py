@@ -111,6 +111,7 @@ class GrammarCompiler(XGRObject):
         max_threads: int = 8,
         cache_enabled: bool = True,
         cache_limit_bytes: int = -1,
+        enable_dynamic_compilation: bool = False,
     ):
         """Construct the compiler.
 
@@ -128,6 +129,14 @@ class GrammarCompiler(XGRObject):
         cache_limit_bytes : int, default: -1
             The maximum memory usage for the cache in the specified unit.
             Note that the actual memory usage may slightly exceed this value.
+
+        enable_dynamic_compilation : bool, default: False
+            Whether to generate reusable token mask cache entries when they are first needed.
+            When False, all entries are generated while compiling the grammar.
+            This reduces upfront work but moves mask construction to first use during decoding.
+            With a finite cache_limit_bytes, growing compiled grammars are not retained in the
+            compiler cache; the bounded rule-level cache remains available. Serializing a dynamic
+            compiled grammar materializes all masks before writing the existing eager format.
         """
         if not isinstance(tokenizer_info, TokenizerInfo):
             raise ValueError(
@@ -137,7 +146,11 @@ class GrammarCompiler(XGRObject):
 
         self._init_handle(
             _core.GrammarCompiler(
-                tokenizer_info._handle, max_threads, cache_enabled, cache_limit_bytes
+                tokenizer_info._handle,
+                max_threads,
+                cache_enabled,
+                cache_limit_bytes,
+                enable_dynamic_compilation,
             )
         )
 
@@ -159,6 +172,11 @@ class GrammarCompiler(XGRObject):
         ----------
         schema : Union[str, Type[BaseModel], Dict[str, Any]]
             The schema string or Pydantic model or JSON schema dict.
+
+        any_whitespace : bool, default: True
+            Whether to use any whitespace. If True, the generated grammar will ignore the
+            indent parameter, and allow any whitespace. See
+            :meth:`xgrammar.Grammar.from_json_schema` for details and generation quality warnings.
 
         indent : Optional[int], default: None
             The number of spaces for indentation. If None, the output will be in one line.

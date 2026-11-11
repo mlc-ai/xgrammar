@@ -385,6 +385,22 @@ void AddCodepointRangesToFSM(
   }
 }
 
+/*! \brief The code points matched by \s. The regex dialect is ECMAScript, where \s is WhiteSpace
+ * (TAB, VT, FF, ZWNBSP and every Space_Separator code point) plus LineTerminator (LF, CR, LS, PS).
+ * Unlike \d and \w, it is not ASCII-only. */
+const std::vector<CodepointRange> kWhitespaceClassRanges = {
+    {0x09, 0x0D},
+    {0x20, 0x20},
+    {0xA0, 0xA0},
+    {0x1680, 0x1680},
+    {0x2000, 0x200A},
+    {0x2028, 0x2029},
+    {0x202F, 0x202F},
+    {0x205F, 0x205F},
+    {0x3000, 0x3000},
+    {0xFEFF, 0xFEFF},
+};
+
 /*! \brief One parsed regex escape (or literal): either a single codepoint, or a (possibly
  * negated) set of codepoint ranges for class escapes like \d, \D, \w, \W, \s, \S. */
 struct RegexEscapeItem {
@@ -467,10 +483,10 @@ Result<RegexEscapeItem> ParseRegexEscape(const std::string& regex, size_t* pos, 
       item.negated = true;
       return ResultOk(std::move(item));
     case 's':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = kWhitespaceClassRanges;
       return ResultOk(std::move(item));
     case 'S':
-      item.ranges = {{0x09, 0x0D}, {' ', ' '}};
+      item.ranges = kWhitespaceClassRanges;
       item.negated = true;
       return ResultOk(std::move(item));
     case 'x': {
@@ -1220,7 +1236,8 @@ Result<RegexIR> ParseRegexToIR(
     const std::string& regex_with_flags,
     GrammarBuilder* builder,
     const std::string& rule_hint,
-    bool merge_repeats
+    bool merge_repeats,
+    bool json_string = false
 ) {
   RegexIR ir;
   std::string regex = regex_with_flags;
@@ -1505,7 +1522,8 @@ Result<RegexIR> ParseRegexToIR(
           lower_bound = 0;
         }
         std::string name_hint = (rule_hint.empty() ? "regex" : rule_hint) + "_repeat";
-        int32_t inner_rule_id = builder->AddRuleWithHint(name_hint, builder->AddRegex(inner_regex));
+        int32_t inner_rule_id =
+            builder->AddRuleWithHint(name_hint, builder->AddRegex(inner_regex, json_string));
         builder->UpdateLookaheadExact(inner_rule_id, true);
         if (upper_bound == RegexIR::kRepeatNoUpperBound) {
           // {n,} == {n}{0,}: a repeat edge for the mandatory part, then a starred rule
@@ -1597,9 +1615,12 @@ Result<RegexIR> ParseRegexToIR(
 }  // namespace
 
 Result<FSMWithStartEnd> RegexFSMBuilder::Build(
-    const std::string& regex, GrammarBuilder* builder, const std::string& rule_hint
+    const std::string& regex,
+    GrammarBuilder* builder,
+    const std::string& rule_hint,
+    bool json_string
 ) {
-  auto ir_result = ParseRegexToIR(regex, builder, rule_hint, /*merge_repeats=*/true);
+  auto ir_result = ParseRegexToIR(regex, builder, rule_hint, /*merge_repeats=*/true, json_string);
   if (ir_result.IsErr()) {
     return ResultErr(std::move(ir_result).UnwrapErr());
   }
@@ -1621,7 +1642,7 @@ Result<FSMWithStartEnd> RegexFSMBuilder::BuildWithForbiddenChars(
     GrammarBuilder* builder,
     const std::string& rule_hint
 ) {
-  auto build_result = Build(regex, builder, rule_hint);
+  auto build_result = Build(regex, builder, rule_hint, true);
   if (build_result.IsErr() || forbidden_chars.none()) {
     return build_result;
   }

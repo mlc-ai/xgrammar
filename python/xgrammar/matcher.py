@@ -416,12 +416,38 @@ class GrammarMatcher(XGRObject):
 
         This method does not change the matcher state.
 
+        The result contains only complete UTF-8 characters. If the forced bytes stop inside a
+        multi-byte character (for example, when the grammar allows both "é" and "è", only their
+        shared first byte is forced) or start inside one (after accepting a token that splits a
+        character), the result stops before that character. The omitted bytes are still forced
+        by the grammar, and the forced continuation becomes available again once the model has
+        produced them. :meth:`find_jump_forward_tokens` returns them as token ids only when the
+        vocabulary has tokens that cover them exactly and no longer token extends the last one;
+        for the "é" | "è" example it also returns an empty list.
+
         Returns
         -------
         jump_forward_string : str
             The jump-forward string.
         """
         return str(self._handle.find_jump_forward_string())
+
+    def find_jump_forward_tokens(self) -> List[int]:
+        """Find token ids to append for jump-forward decoding.
+
+        Greedily match the longest decoded vocabulary tokens in the forced continuation, omitting
+        the last token if it is a strict prefix of a longer ordinary token. The matcher and already
+        accepted token boundaries remain unchanged. Stop and special tokens are excluded.
+
+        Accept each returned token with :meth:`accept_token` and prefill them before sampling
+        again. This tokenization may differ from the model tokenizer's encoding.
+
+        Returns
+        -------
+        jump_forward_tokens : List[int]
+            Empty if no jump is available or the matcher has completed or terminated.
+        """
+        return list(self._handle.find_jump_forward_tokens())
 
     def rollback(self, num_tokens: int = 1) -> None:
         """Rollback the matcher to a previous state by several tokens.
