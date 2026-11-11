@@ -42,6 +42,7 @@ from xgrammar.structural_tag import (
     DispatchFormat,
     JSONSchemaFormat,
     OptionalFormat,
+    RegexFormat,
     RepeatFormat,
     SequenceFormat,
     StructuralTag,
@@ -3374,7 +3375,7 @@ def test_token_markers_required_dispatches_on_tool_call_token(model: str):
         assert tag.end == TokenFormat(token="</tool_call>")
         # The tool name and any template text stay literal inside the tag.
         assert isinstance(tag.content, SequenceFormat)
-        assert isinstance(tag.content.elements[0], ConstStringFormat)
+        assert any(isinstance(element, ConstStringFormat) for element in tag.content.elements)
         assert any(isinstance(element, JSONSchemaFormat) for element in tag.content.elements)
 
 
@@ -3408,7 +3409,8 @@ def test_token_markers_qwen_3_coder_keeps_function_wrapper_literal():
     tag = fmt.tags[0]
     assert tag.content == SequenceFormat(
         elements=[
-            ConstStringFormat(value="\n<function=get_weather>\n"),
+            RegexFormat(pattern=r"\s*"),
+            ConstStringFormat(value="<function=get_weather>\n"),
             JSONSchemaFormat(json_schema=_TOKEN_MARKER_SCHEMA, style="qwen_xml"),
             ConstStringFormat(value="\n</function>\n"),
         ]
@@ -3569,6 +3571,36 @@ def _accepts_tokens(compiler, structural_tag: StructuralTag, token_ids: List[int
 def _completes(compiler, structural_tag: StructuralTag, token_ids: List[int]) -> bool:
     matcher = xgr.GrammarMatcher(compiler.compile_structural_tag(structural_tag))
     return all(matcher.accept_token(token_id) for token_id in token_ids) and matcher.is_completed()
+
+
+@pytest.mark.parametrize("token_markers", [False, True])
+@pytest.mark.parametrize("choice", ["auto", "required", "forced"])
+def test_qwen_xml_whitespace_after_tool_call(choice: str, token_markers: bool):
+    vocab = [bytes([i]) for i in range(256)]
+    vocab.extend([b"<tool_call>", b"</tool_call>", b"<think>", b"</think>", b"<eos>"])
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo(vocab, stop_token_ids=[vocab.index(b"<eos>")]))
+    tag = get_model_structural_tag(
+        "qwen_3_coder",
+        tools=_TOKEN_MARKER_TOOLS,
+        tool_choice=(
+            {"type": "function", "function": {"name": "get_weather"}}
+            if choice == "forced"
+            else choice
+        ),
+        reasoning=False,
+        token_markers=token_markers,
+    )
+    begin = [vocab.index(b"<tool_call>")] if token_markers else list(b"<tool_call>")
+    end = [vocab.index(b"</tool_call>")] if token_markers else list(b"</tool_call>")
+    body = b"<function=get_weather>\n<parameter=city>Leon</parameter>\n</function>\n"
+    for space in (b"", b"\n", b" ", b"\r\n\t  ", "\u00a0".encode()):
+        assert _completes(compiler, tag, begin + list(space + body) + end)
+    assert not _completes(compiler, tag, begin + list(b"x" + body) + end)
+    assert not _completes(compiler, tag, begin + list(body.replace(b"city", b"unknown")) + end)
+    other = begin + list(body.replace(b"get_weather", b"get_time")) + end
+    assert _completes(compiler, tag, other) == (choice != "forced")
+    unknown = begin + list(body.replace(b"get_weather", b"unknown")) + end
+    assert not _completes(compiler, tag, unknown)
 
 
 @pytest.mark.hf_token_required
