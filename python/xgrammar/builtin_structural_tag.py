@@ -2042,35 +2042,34 @@ def get_harmony_structural_tag(
 
     call_tags = [tag for tag in tags if tag.end == CALL_END]
     message_tags = [tag for tag in tags if tag.end != CALL_END]
-    if parallel_tool_calls or not call_tags:
+    if tool_choice == "auto" and (parallel_tool_calls or not call_tags):
         tags_with_separator = TagsWithSeparatorFormat(tags=tags, separator=TAG_SEPARATOR)
         return StructuralTag(format=tags_with_separator)
 
     # Harmony carries tool calls, analysis and final messages in one message stream, so
     # capping the stream at a single message would also forbid an ordinary reasoning or
-    # final message. Cap the tool-call messages alone: any number of other messages, then
-    # at most one tool call, which ends the turn.
-    one_call = TagsWithSeparatorFormat(
-        tags=call_tags, separator=TAG_SEPARATOR, at_least_one=True, stop_after_first=True
+    # final message. Cap the tool-call messages alone: other messages first, then the
+    # calls, which end the turn. "required" and forced need a call; a forced tool, or
+    # parallel_tool_calls=False, allows exactly one.
+    calls = TagsWithSeparatorFormat(
+        tags=call_tags,
+        separator=TAG_SEPARATOR,
+        at_least_one=True,
+        stop_after_first=not parallel_tool_calls or tool_choice == "forced",
     )
     if not message_tags:
-        return StructuralTag(format=OptionalFormat(content=one_call))
-    messages_then_call = SequenceFormat(
+        return StructuralTag(format=calls)
+    messages_then_calls = SequenceFormat(
         elements=[
             TagsWithSeparatorFormat(tags=message_tags, separator=TAG_SEPARATOR, at_least_one=True),
             ConstStringFormat(value=TAG_SEPARATOR),
-            one_call,
+            calls,
         ]
     )
-    return StructuralTag(
-        format=OrFormat(
-            elements=[
-                TagsWithSeparatorFormat(tags=message_tags, separator=TAG_SEPARATOR),
-                one_call,
-                messages_then_call,
-            ]
-        )
-    )
+    elements = [calls, messages_then_calls]
+    if tool_choice == "auto":
+        elements.insert(0, TagsWithSeparatorFormat(tags=message_tags, separator=TAG_SEPARATOR))
+    return StructuralTag(format=OrFormat(elements=elements))
 
 
 @register_model_structural_tag("deepseek_v3_2")
