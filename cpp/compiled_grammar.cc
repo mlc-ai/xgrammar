@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <tuple>
 #include <unordered_set>
 #include <vector>
 
@@ -59,21 +60,29 @@ int NextStateOnByte(const CompactFSM& fsm, int state, uint8_t byte) {
   return -1;
 }
 
+/*! \brief Whether rule-level semantics beyond its body and lookahead are attached to a rule. */
+bool HasRuleSemantics(const Grammar& grammar, int32_t rule_id) {
+  return grammar->GetRule(rule_id).HasRuleAttributes() ||
+         grammar->GetSuffixStopInfo(rule_id) != nullptr;
+}
+
 /*!
- * \brief Whether rule `rule_id` matches exactly one codepoint of a character class through a
- * deterministic byte FSM, with no rule-level semantics attached. Sets `first_bytes` to the bytes
- * such a codepoint can start with.
+ * \brief Whether rule `rule_id` matches exactly one codepoint of a character class, or one match
+ * of a regex, through a deterministic byte FSM whose accepting states have no outgoing edges, with
+ * no rule-level semantics attached. Sets `first_bytes` to the bytes such a match can start with.
  */
-bool IsPlainCharacterClassRule(const Grammar& grammar, int32_t rule_id, ByteSet* first_bytes) {
+bool IsSingleMatchByteRule(const Grammar& grammar, int32_t rule_id, ByteSet* first_bytes) {
   const auto& rule = grammar->GetRule(rule_id);
   if (rule_id == grammar->GetRootRuleId() || rule.lookahead_assertion_id != -1 ||
-      rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() || rule.is_lazy ||
-      rule.temperature.has_value() || grammar->GetSuffixStopInfo(rule_id) != nullptr) {
+      HasRuleSemantics(grammar, rule_id)) {
     return false;
   }
   const auto body = UnwrapSingleElement(grammar, grammar->GetGrammarExpr(rule.body_expr_id));
   const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
-  if (body.type != Grammar::Impl::GrammarExprType::kCharacterClass || !rule_fsm.has_value()) {
+  // A large counted repetition inside a regex has a kRegex body rule (RegexFSMBuilder).
+  if ((body.type != Grammar::Impl::GrammarExprType::kCharacterClass &&
+       body.type != Grammar::Impl::GrammarExprType::kRegex) ||
+      !rule_fsm.has_value()) {
     return false;
   }
   const auto& fsm = rule_fsm->GetFsm();
@@ -115,12 +124,14 @@ struct RepetitionFollowBytes {
 /*!
  * \brief The rules whose start state gets the counted-repetition fast path.
  *
- * A rule qualifies when it matches one codepoint of a character class (IsPlainCharacterClassRule)
- * and every reference to it is a repeat edge that is followed, in the referring rule, only by
- * character edges whose bytes no codepoint of the class starts with. Then a token that starts
- * inside the class stays in the repetition up to its first byte outside the class and cannot leave
- * it earlier, so its legality depends only on the repetition bounds and the repetitions done in
- * the parent: see PopulateRepeatInteriorBitsets.
+ * A rule qualifies when it matches one codepoint of a character class or one match of a regex
+ * (IsSingleMatchByteRule) and every reference to it is a repeat edge that is followed, in the
+ * referring rule, only by character edges whose bytes no match of the rule starts with. A
+ * repetition that can end the referring rule, as in the regex of a JSON string pattern, is also
+ * followed by the bytes after every rule reference to that rule, so these must be character edges
+ * too. Then a token that starts inside the class stays in the repetition up to its first byte
+ * outside the class and cannot leave it earlier, so its legality depends only on the repetition
+ * bounds and the repetitions done in the parent: see PopulateRepeatInteriorBitsets.
  *
  * \return For each rule, the bytes that can follow its repetitions, or nullopt when the rule does
  * not qualify.
@@ -135,19 +146,51 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
       return std::vector<std::optional<RepetitionFollowBytes>>(num_rules);
     }
     ByteSet bytes;
-    if (IsPlainCharacterClassRule(grammar, rule_id, &bytes)) {
+    if (IsSingleMatchByteRule(grammar, rule_id, &bytes)) {
       first_bytes[rule_id] = bytes;
     }
+  }
+  if (std::none_of(first_bytes.begin(), first_bytes.end(), [](const auto& bytes) {
+        return bytes.has_value();
+      })) {
+    return std::vector<std::optional<RepetitionFollowBytes>>(num_rules);
   }
 
   std::vector<bool> disqualified(num_rules, false);
   std::vector<bool> referenced(num_rules, false);
   std::vector<RepetitionFollowBytes> follow_bytes(num_rules, {ByteSet().set(), ByteSet()});
+  auto add_follow_bytes =
+      [&](int32_t body_rule_id, const ByteSet& under_all, const ByteSet& under_any) {
+        if ((under_any & *first_bytes[body_rule_id]).any()) {
+          disqualified[body_rule_id] = true;
+        }
+        follow_bytes[body_rule_id].under_all &= under_all;
+        follow_bytes[body_rule_id].under_any |= under_any;
+      };
+  // The bytes after each rule, for the repetitions that end their rule: unknown unless every
+  // reference to the rule is a rule reference followed only by character edges.
+  std::vector<RepetitionFollowBytes> rule_follow_bytes(num_rules, {ByteSet().set(), ByteSet()});
+  std::vector<bool> rule_follow_unknown(num_rules, false);
+  rule_follow_unknown[grammar->GetRootRuleId()] = true;
+  std::vector<std::tuple<int32_t, int32_t, ByteSet>> repetitions_ending_rule;
+  auto bytes_after = [](const auto& fsm, int state) -> std::optional<ByteSet> {
+    ByteSet bytes;
+    for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+      if (!edge.IsCharRange() || edge.max > 0xFF) {
+        return std::nullopt;
+      }
+      for (int byte = edge.min; byte <= edge.max; ++byte) {
+        bytes.set(byte);
+      }
+    }
+    return bytes;
+  };
   for (int32_t rule_id = 0; rule_id < num_rules; ++rule_id) {
     if (const auto* suffix_stop_info = grammar->GetSuffixStopInfo(rule_id)) {
       for (int32_t ref : {suffix_stop_info->body_rule_id, suffix_stop_info->marker_rule_id}) {
         if (ref >= 0) {
           disqualified[ref] = true;
+          rule_follow_unknown[ref] = true;
         }
       }
     }
@@ -155,12 +198,21 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
     if (!rule_fsm.has_value()) {
       continue;
     }
+    const auto& fsm = rule_fsm->GetFsm();
     std::unordered_set<int> reachable_states;
-    rule_fsm->GetFsm().GetReachableStates(&reachable_states);
+    fsm.GetReachableStates(&reachable_states);
     for (int state : reachable_states) {
-      for (const auto& edge : rule_fsm->GetFsm().GetFsm().GetEdges(state)) {
+      for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
         if (edge.IsRuleRef()) {
-          disqualified[edge.GetRefRuleId()] = true;
+          const int32_t ref = edge.GetRefRuleId();
+          disqualified[ref] = true;
+          const auto bytes = bytes_after(fsm, edge.target);
+          if (!bytes.has_value() || fsm.IsEndState(edge.target)) {
+            rule_follow_unknown[ref] = true;
+          } else {
+            rule_follow_bytes[ref].under_all &= *bytes;
+            rule_follow_bytes[ref].under_any |= *bytes;
+          }
           continue;
         }
         if (!edge.IsRepeatRef()) {
@@ -168,35 +220,36 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
         }
         const auto info = grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
         const int32_t body_rule_id = info.RuleId();
+        rule_follow_unknown[body_rule_id] = true;
         if (!first_bytes[body_rule_id].has_value()) {
           continue;
         }
         referenced[body_rule_id] = true;
-        if (rule_fsm->GetFsm().IsEndState(edge.target)) {
+        const auto bytes = bytes_after(fsm, edge.target);
+        if (!bytes.has_value()) {
           disqualified[body_rule_id] = true;
           continue;
         }
-        ByteSet bytes;
-        for (const auto& follow_edge : rule_fsm->GetFsm().GetFsm().GetEdges(edge.target)) {
-          if (!follow_edge.IsCharRange() || follow_edge.max > 0xFF) {
-            disqualified[body_rule_id] = true;
-            break;
-          }
-          for (int byte = follow_edge.min; byte <= follow_edge.max; ++byte) {
-            bytes.set(byte);
-          }
+        if (fsm.IsEndState(edge.target)) {
+          repetitions_ending_rule.emplace_back(body_rule_id, rule_id, *bytes);
+        } else {
+          add_follow_bytes(body_rule_id, *bytes, *bytes);
         }
-        if ((bytes & *first_bytes[body_rule_id]).any()) {
-          disqualified[body_rule_id] = true;
-        }
-        follow_bytes[body_rule_id].under_all &= bytes;
-        follow_bytes[body_rule_id].under_any |= bytes;
         // The expander writes INT32_MAX for an unbounded counted repetition.
         XGRAMMAR_DCHECK(info.Upper() >= 0);
         follow_bytes[body_rule_id].max_upper =
             std::max(follow_bytes[body_rule_id].max_upper, info.Upper());
       }
     }
+  }
+  for (const auto& [body_rule_id, rule_id, bytes] : repetitions_ending_rule) {
+    const auto& after_rule = rule_follow_bytes[rule_id];
+    if (rule_follow_unknown[rule_id] || after_rule.under_any.none() ||
+        HasRuleSemantics(grammar, rule_id)) {
+      disqualified[body_rule_id] = true;
+      continue;
+    }
+    add_follow_bytes(body_rule_id, bytes | after_rule.under_all, bytes | after_rule.under_any);
   }
 
   std::vector<std::optional<RepetitionFollowBytes>> result(num_rules);
