@@ -3629,6 +3629,33 @@ def test_multiple_pattern_properties_with_properties():
     )
 
 
+@pytest.mark.parametrize(
+    "keys",
+    [
+        {"patternProperties": {"^[a-z]+$": {"type": "integer"}}},
+        {"propertyNames": {"pattern": "^[a-z]+$"}},
+    ],
+)
+def test_pattern_key_object_separator_once(keys: Dict[str, Any]):
+    """The separator before each key of a patternProperties/propertyNames object is matched once."""
+    schema = {"type": "object", **keys}
+    instance = {"a": 1, "b": 2}
+
+    check_schema_with_instance(schema, instance, any_whitespace=False, indent=2)
+    check_schema_with_instance(
+        schema, '{\n  "a": 1,\n  \n  "b": 2\n}', is_accepted=False, any_whitespace=False, indent=2
+    )
+
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=True, max_whitespace_cnt=2)
+    assert _is_grammar_accept_string(grammar, '{"a": 1,  "b": 2}')
+    assert not _is_grammar_accept_string(grammar, '{"a": 1,   "b": 2}')
+
+    # One whitespace run after each comma: the separator is not repeated inside root_prop.
+    ebnf = _json_schema_to_ebnf(json.dumps(schema), any_whitespace=True)
+    assert 'root_properties ::= (([ \\n\\r\\t]* "," [ \\n\\r\\t]* root_prop))' in ebnf
+    assert "root_prop ::= (([ " not in ebnf
+
+
 def test_forward_slash_in_const():
     # Regression: picojson used to serialize const/enum strings with "\/"
     # for every "/", which the EBNF lexer then rejected as an invalid
