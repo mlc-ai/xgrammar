@@ -91,7 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-14, macos-15-intel]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-15, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
         include:
           # Native Windows ARM64 PyTorch wheels are available for Python 3.11-3.13.
@@ -99,7 +99,7 @@ jobs:
           - {os: windows-11-vs2026-arm, python: '3.12'}
           - {os: windows-11-vs2026-arm, python: '3.13'}
         exclude:
-          - os: macos-14
+          - os: macos-15
             python: '3.14t'
           - os: macos-15-intel
             python: '3.13'
@@ -144,6 +144,15 @@ jobs:
         if: matrix.os == 'windows-11-vs2026-arm'
         run: pip install torch --index-url https://download.pytorch.org/whl/cpu
 
+      - name: Constrain SentencePiece on macOS Intel
+        if: matrix.os == 'macos-15-intel'
+        run: |
+          # SentencePiece 0.2.3 lacks macOS Intel wheels, and its bundled Protobuf
+          # source build fails with this job's LLVM 17 / Xcode SDK combination.
+          # This also preserves the stricter <0.2.2 requirement for Python 3.8/3.9.
+          echo 'sentencepiece<0.2.3' > "$RUNNER_TEMP/sentencepiece-constraints.txt"
+          echo "PIP_CONSTRAINT=$RUNNER_TEMP/sentencepiece-constraints.txt" >> "$GITHUB_ENV"
+
       - name: Build xgrammar from source
         run: |
           echo "set(XGRAMMAR_BUILD_CXX_TESTS ON)" >> cmake/config.cmake
@@ -154,7 +163,7 @@ jobs:
 
       # Test with MLX (which is optional) under macOS arm64
       - name: Install MLX
-        if: matrix.os == 'macos-14' && !endsWith(matrix.python, 't')
+        if: matrix.os == 'macos-15' && !endsWith(matrix.python, 't')
         run: |
           # Keep the transformers bound in sync with pyproject.toml.
           pip install mlx-lm "transformers>=4.38.0"
