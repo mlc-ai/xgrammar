@@ -247,6 +247,12 @@ def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object
         ('root ::= "<" s{1,2} ">"\ns ::= [^<>]{2,3}', ["<", "<a", "<aa", "<aaaa"]),
         # Repetitions of one class followed by different bytes.
         ('root ::= "(" [^()]{2,} ")" | "<" [^()]{0,3} "("', ["(", "(aa", "<", "<a"]),
+        # A regex repetition that ends its rule, followed by a class byte in one parent, by
+        # different bytes, by the end of the root, and by the end of another rule.
+        ('root ::= "(" r ")" | "[" r "a"\nr ::= Regex("[a-z]{1,130}")', ["(", "[" + "a" * 129]),
+        ('root ::= "(" r ")" | "[" r "]"\nr ::= Regex("[a-z]{1,130}")', ["(", "[" + "a" * 130]),
+        ('root ::= "(" r\nr ::= Regex("[a-z]{1,130}")', ["(", "(" + "a" * 130]),
+        ('root ::= "(" s ")"\ns ::= r\nr ::= Regex("[a-z]{1,130}")', ["(", "(" + "a" * 129]),
     ],
 )
 def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: list[str]) -> None:
@@ -256,6 +262,31 @@ def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: li
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
     for text in prefixes:
         _assert_mask_matches_replay(compiled, tokenizer_info, text)
+
+
+@pytest.mark.parametrize(
+    "compile_args",
+    [
+        {"schema": {"type": "string", "pattern": "^[a-z0-9_-]{1,200}$"}},
+        {"grammar": 'root ::= "\\"" Regex("[a-z0-9_-]{1,200}") "\\""'},
+        {"grammar": 'root ::= "\\"" r "\\""\nr ::= Regex("[a-z0-9_-]{1,200}")'},
+    ],
+)
+def test_large_regex_repetition_is_counted(compile_args: dict[str, object]) -> None:
+    """A regex repetition above the unroll threshold becomes a repeat edge to a regex rule. In a
+    JSON string pattern the repetition also ends the regex rule, and the parent decides what follows
+    it. The body state still decides every token from the repetition bounds."""
+    vocab = ["a", "ab", "a-1", "_", "a" * 8, '"', 'a"', "a>", "<", ">", "!", "a!", "Z"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    if "schema" in compile_args:
+        compiled = compiler.compile_json_schema(compile_args["schema"])
+    else:
+        compiled = compiler.compile_grammar(compile_args["grammar"])
+    cache = json.loads(compiled.serialize_json())["adaptive_token_mask_cache"]
+    assert not any(mask.get("uncertain_indices") for _, mask in cache)
+    for consumed in (0, 1, 192, 193, 199, 200):
+        _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
 
 
 @pytest.mark.parametrize(
