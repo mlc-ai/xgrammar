@@ -115,10 +115,13 @@ class Grammar::Impl {
     int32_t marker_rule_id = -1;
     /*! \brief Capture name for the marker bytes. */
     std::string stop_capture_name = {};
+    /*! \brief Complete the rule after its first fully consumed marker, even if its body
+     * has not reached an accepting state. Used for raw XML string boundaries. */
+    std::string end_on = {};
 
     bool IsEmpty() const {
       return hidden_suffix_bytes == 0 && hidden_stop_bytes == 0 && body_rule_id == -1 &&
-             marker_rule_id == -1 && stop_capture_name.empty();
+             marker_rule_id == -1 && stop_capture_name.empty() && end_on.empty();
     }
   };
 
@@ -466,7 +469,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &Grammar::Impl::SuffixStopInfo::hidden_stop_bytes,
     &Grammar::Impl::SuffixStopInfo::body_rule_id,
     &Grammar::Impl::SuffixStopInfo::marker_rule_id,
-    &Grammar::Impl::SuffixStopInfo::stop_capture_name
+    &Grammar::Impl::SuffixStopInfo::stop_capture_name,
+    &Grammar::Impl::SuffixStopInfo::end_on
 );
 
 XGRAMMAR_MEMBER_TABLE(
