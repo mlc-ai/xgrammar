@@ -2743,6 +2743,30 @@ def test_relative_json_pointer_format(instance: str, accepted: bool):
 
 
 @pytest.mark.parametrize(
+    "format_name",
+    [
+        "date",
+        "date-time",
+        "duration",
+        "email",
+        "hostname",
+        "ipv4",
+        "ipv6",
+        "time",
+        "uri",
+        "uri-reference",
+        "uri-template",
+        "uuid",
+    ],
+)
+def test_builtin_format_compiles_to_regex_fsm(format_name: str):
+    """Built-in formats compile to one FSM rule like `pattern` does. The regex-to-EBNF expansion
+    accepts the same strings but leaves most tokens uncertain in the token mask cache."""
+    grammar = xgr.Grammar.from_json_schema({"type": "string", "format": format_name})
+    assert "Regex(" in str(grammar)
+
+
+@pytest.mark.parametrize(
     "format_name, instance",
     [
         ("email", r'"\"\a\"@b"'),
