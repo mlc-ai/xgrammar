@@ -26,6 +26,7 @@
 namespace xgrammar {
 
 class RuleLevelCache;
+class LocalCompletionSummaryTable;
 
 /******************* CompiledGrammar Datastructures *******************/
 
@@ -161,6 +162,12 @@ class CompiledGrammar::Impl {
 
   /*! \brief Reusable cache shared by grammars created from the same compiler. */
   std::shared_ptr<RuleLevelCache> rule_level_cache;
+
+  /*!
+   * \brief Vocabulary classifications for repeatable single-delimiter rules, built per rule on
+   * first use. Derived JIT-only data; serialized grammars contain materialized masks instead.
+   */
+  std::shared_ptr<LocalCompletionSummaryTable> local_completion_summaries;
 
   /*! \brief Tag dispatch data needed to generate token masks on demand. */
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
