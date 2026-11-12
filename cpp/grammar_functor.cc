@@ -26,6 +26,7 @@
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_impl.h"
+#include "regex_converter.h"
 #include "suffix_automata.h"
 #include "support/container.h"
 #include "support/encoding.h"
@@ -1294,8 +1295,9 @@ class GrammarFSMBuilderImpl {
     int32_t num_original_rules = (*grammar)->NumRules();
     GrammarBuilder grammar_builder = GrammarBuilder::FromMutableGrammar(grammar);
     for (int i = 0; i < (*grammar)->NumRules(); ++i) {
-      auto rule_fsm = BuildRuleFSM(*grammar, i, &grammar_builder);
-      per_rule_fsms.push_back(rule_fsm.AddToCompleteFSM(&complete_fsm, &state_mapping));
+      per_rule_fsms.push_back(
+          AddRuleFSM(*grammar, i, &grammar_builder, &complete_fsm, &state_mapping)
+      );
     }
 
     // The rules created during FSM building missed the AllowEmptyRuleAnalyzer pass; complete
@@ -1371,6 +1373,14 @@ class GrammarFSMBuilderImpl {
  private:
   static FSMWithStartEnd BuildRuleFSM(
       const Grammar& grammar, int rule_id, GrammarBuilder* grammar_builder = nullptr
+  );
+  /*! \brief Append the FSM of a rule to the complete FSM, reusing a cached FSM of that shape. */
+  static FSMWithStartEndWithSize AddRuleFSM(
+      const Grammar& grammar,
+      int rule_id,
+      GrammarBuilder* grammar_builder,
+      FSM* complete_fsm,
+      std::vector<int>* state_mapping
   );
   static FSMWithStartEnd BuildExpressionFSM(
       const GrammarExpr& expr,
@@ -1523,6 +1533,118 @@ void GrammarFSMBuilderImpl::BuildCharacterClassStar(
   end_states->push_back(start_state);
 }
 
+namespace {
+
+/*!
+ * \brief Rule automata built before, keyed by the shape of the rule body with every referenced
+ * rule replaced by the order of its first appearance. Building a rule automaton only copies rule
+ * ids onto edges, so a body of the same shape gives the same automaton up to those ids.
+ */
+class RuleFSMShapeCache {
+ public:
+  struct Entry {
+    FSMWithStartEnd fsm;
+    std::vector<int32_t> rule_ids;
+  };
+
+  /*!
+   * \brief Append the shape of `expr` to `key` and its referenced rules to `rule_ids`. Returns
+   * false for bodies that are not cached (regexes, dispatches and token sets).
+   */
+  static bool AppendShape(
+      const Grammar& grammar,
+      const Grammar::Impl::GrammarExpr& expr,
+      std::vector<int32_t>* key,
+      std::vector<int32_t>* rule_ids
+  ) {
+    using ExprType = Grammar::Impl::GrammarExprType;
+    constexpr size_t kMaxKeySize = 1 << 16;
+    if (key->size() > kMaxKeySize) {
+      return false;
+    }
+    const auto placeholder = [&](int32_t rule_id) {
+      auto found = std::find(rule_ids->begin(), rule_ids->end(), rule_id);
+      if (found == rule_ids->end()) {
+        rule_ids->push_back(rule_id);
+        return static_cast<int32_t>(rule_ids->size()) - 1;
+      }
+      return static_cast<int32_t>(found - rule_ids->begin());
+    };
+    key->push_back(static_cast<int32_t>(expr.type));
+    switch (expr.type) {
+      case ExprType::kEmptyStr:
+        return true;
+      case ExprType::kByteString:
+      case ExprType::kCharacterClass:
+      case ExprType::kCharacterClassStar:
+        key->push_back(expr.size());
+        key->insert(key->end(), expr.begin(), expr.end());
+        return true;
+      case ExprType::kRuleRef:
+        key->push_back(placeholder(expr[0]));
+        return true;
+      case ExprType::kRepeat:
+        key->push_back(placeholder(expr[0]));
+        key->push_back(expr[1]);
+        key->push_back(expr[2]);
+        return true;
+      case ExprType::kSequence:
+      case ExprType::kChoices:
+        key->push_back(expr.size());
+        for (int32_t child : expr) {
+          if (!AppendShape(grammar, grammar->GetGrammarExpr(child), key, rule_ids)) {
+            return false;
+          }
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  std::shared_ptr<const Entry> Get(const std::vector<int32_t>& key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto found = entries_.find(key);
+    return found == entries_.end() ? nullptr : found->second;
+  }
+
+  /*! \brief Keep the automaton (unless the cache is full or it is large) and return its entry. */
+  std::shared_ptr<const Entry> Put(
+      std::vector<int32_t> key, FSMWithStartEnd fsm, std::vector<int32_t> rule_ids
+  ) {
+    constexpr size_t kMaxEntries = 1 << 14;
+    constexpr int kMaxStates = 1 << 12;
+    const bool keep = fsm.NumStates() <= kMaxStates;
+    auto entry = std::make_shared<const Entry>(Entry{std::move(fsm), std::move(rule_ids)});
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (keep && entries_.size() < kMaxEntries) {
+      entries_.emplace(std::move(key), entry);
+    }
+    return entry;
+  }
+
+  static RuleFSMShapeCache& Global() {
+    static RuleFSMShapeCache* cache = new RuleFSMShapeCache();
+    return *cache;
+  }
+
+ private:
+  struct KeyHash {
+    size_t operator()(const std::vector<int32_t>& key) const {
+      uint64_t hash = 0;
+      for (int32_t value : key) {
+        HashCombineBinary(hash, static_cast<uint64_t>(value));
+      }
+      return hash;
+    }
+  };
+
+  std::mutex mutex_;
+  std::unordered_map<std::vector<int32_t>, std::shared_ptr<const Entry>, KeyHash> entries_;
+};
+
+}  // namespace
+
 FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(
     const Grammar& grammar, int rule_id, GrammarBuilder* grammar_builder
 ) {
@@ -1530,6 +1652,31 @@ FSMWithStartEnd GrammarFSMBuilderImpl::BuildRuleFSM(
   return BuildExpressionFSM(
       grammar->GetGrammarExpr(rule.body_expr_id), grammar, &rule.name, grammar_builder
   );
+}
+
+FSMWithStartEndWithSize GrammarFSMBuilderImpl::AddRuleFSM(
+    const Grammar& grammar,
+    int rule_id,
+    GrammarBuilder* grammar_builder,
+    FSM* complete_fsm,
+    std::vector<int>* state_mapping
+) {
+  const auto& rule = grammar->GetRule(rule_id);
+  const auto& body = grammar->GetGrammarExpr(rule.body_expr_id);
+  std::vector<int32_t> key;
+  std::vector<int32_t> rule_ids;
+  key.reserve(256);
+  if (!RuleFSMShapeCache::AppendShape(grammar, body, &key, &rule_ids)) {
+    return BuildRuleFSM(grammar, rule_id, grammar_builder)
+        .AddToCompleteFSM(complete_fsm, state_mapping);
+  }
+  auto& cache = RuleFSMShapeCache::Global();
+  auto entry = cache.Get(key);
+  if (entry == nullptr) {
+    auto built = BuildExpressionFSM(body, grammar, &rule.name, grammar_builder);
+    entry = cache.Put(std::move(key), std::move(built), rule_ids);
+  }
+  return entry->fsm.AddToCompleteFSMWithRuleIds(complete_fsm, entry->rule_ids, rule_ids);
 }
 
 FSMWithStartEnd GrammarFSMBuilderImpl::BuildExpressionFSM(
@@ -1843,13 +1990,51 @@ void GrammarFSMBuilderImpl::AppendFSM(
 void GrammarFSMBuilderImpl::BuildRegex(
     const std::string& regex, bool json_string, int start_state, std::vector<int32_t>* end_states
 ) {
+  // Raw regexes use the automaton of their EBNF expansion when it is regular. This preserves
+  // CFG terminal semantics rather than changing main's regex dialect or UTF-8 rules.
+  if (!json_string) {
+    if (auto regular = GrammarFSMBuilder::RegularRegexFSM(regex)) {
+      AppendFSM(std::move(*regular), start_state, end_states);
+      return;
+    }
+  }
+  // Schemas repeat the same pattern many times. An automaton that needed no helper rule is
+  // self-contained, so it is built once per process and copied afterwards.
+  static std::mutex cache_mutex;
+  static std::map<std::pair<std::string, bool>, FSMWithStartEnd> cache;
+  constexpr size_t kMaxCachedRegexes = 512;
+  // Without a grammar builder large repetitions are expanded in place rather than into helper
+  // rules, which is a different automaton for the same regex; those builds are not shared.
+  if (grammar_builder_ != nullptr) {
+    std::unique_lock<std::mutex> lock(cache_mutex);
+    auto found = cache.find(std::make_pair(regex, json_string));
+    if (found != cache.end()) {
+      FSMWithStartEnd copy = found->second;
+      lock.unlock();
+      AppendFSM(std::move(copy), start_state, end_states);
+      return;
+    }
+  }
   const std::string rule_hint = rule_name_ != nullptr ? *rule_name_ : "";
+  const int32_t rules_before = grammar_builder_ != nullptr ? grammar_builder_->NumRules() : -1;
   auto build_result =
       json_string
           ? RegexFSMBuilder::BuildWithForbiddenChars(
                 regex, GrammarFSMBuilder::JSONStringForbiddenChars(), grammar_builder_, rule_hint
             )
           : RegexFSMBuilder::Build(regex, grammar_builder_, rule_hint);
+  if (build_result.IsOk() && grammar_builder_ != nullptr &&
+      grammar_builder_->NumRules() == rules_before) {
+    auto fsm = std::move(build_result).Unwrap();
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex);
+      if (cache.size() < kMaxCachedRegexes) {
+        cache.emplace(std::make_pair(regex, json_string), fsm);
+      }
+    }
+    AppendFSM(std::move(fsm), start_state, end_states);
+    return;
+  }
   if (build_result.IsErr()) {
     auto error = std::move(build_result).UnwrapErr();
     if (rule_name_ != nullptr) {
@@ -4094,6 +4279,36 @@ std::optional<FSMWithStartEnd> GrammarFSMBuilder::Choices(
 
 Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex, bool json_string) {
   return GrammarFSMBuilderImpl::Regex(regex, json_string);
+}
+
+std::optional<FSMWithStartEnd> GrammarFSMBuilder::RegularRegexFSM(const std::string& regex) {
+  static std::mutex mutex;
+  static std::map<std::string, std::optional<FSMWithStartEnd>> cache;
+  constexpr size_t kMaxEntries = 512;
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    auto found = cache.find(regex);
+    if (found != cache.end()) return found->second;
+  }
+  std::optional<FSMWithStartEnd> result;
+  try {
+    // The regex engine remains the authority on which regexes are valid; a regex it rejects
+    // keeps its existing handling (an error, or the caller's CFG fallback).
+    if (Regex(regex, false).IsOk()) {
+      auto regular = FromRegularGrammar(Grammar::FromEBNF(RegexToEBNF(regex)), 10000);
+      if (regular.IsOk()) {
+        auto fsm = std::move(regular).Unwrap();
+        auto minimized = fsm.MinimizeDFA(1024);
+        if (minimized.IsOk()) fsm = std::move(minimized).Unwrap();
+        result = std::move(fsm);
+      }
+    }
+  } catch (const std::exception&) {
+    // Unsupported dialect features keep the other backends.
+  }
+  std::lock_guard<std::mutex> lock(mutex);
+  if (cache.size() < kMaxEntries) cache.emplace(regex, result);
+  return result;
 }
 
 Result<FSMWithStartEnd> GrammarFSMBuilder::FromRegularGrammar(

@@ -413,6 +413,13 @@ class GrammarFSMBuilder {
    * an error. Intended for the existing RegexToEBNF fallback, not arbitrary CFGs.
    * \param max_num_states Bound on the intermediate automaton size.
    */
+  /*!
+   * \brief The automaton of a raw (non JSON-string) regex, obtained by lowering its EBNF
+   * expansion, so that it accepts exactly what the CFG expansion accepts. std::nullopt when the
+   * expansion is not regular or too large. Results are cached per process.
+   */
+  static std::optional<FSMWithStartEnd> RegularRegexFSM(const std::string& regex);
+
   static Result<FSMWithStartEnd> FromRegularGrammar(
       const Grammar& grammar, int max_num_states = 100000
   );
