@@ -31,6 +31,17 @@ class LocalCompletionSummaryTable;
 /******************* CompiledGrammar Datastructures *******************/
 
 /*!
+ * \brief The uncertain tokens of a mask at the start of a rule that ends at one delimiter byte,
+ * ordered by the bytes that follow the delimiter. Every token with the same suffix has the same
+ * result in a given parent context, so the matcher resolves each distinct suffix once.
+ */
+struct LocalCompletionCrossings {
+  uint8_t completion_byte;
+  /*! \brief (sorted vocabulary index, offset of the suffix in the token), sorted by suffix. */
+  std::vector<std::pair<int32_t, int32_t>> by_suffix;
+};
+
+/*!
  * \brief Preprocessed information, for a given specific ParserState, divides the token set
  * into three categories: accepted, rejected, and uncertain.
  * Accepted: tokens that can be determined by the current ParserState to be acceptable
@@ -91,6 +102,13 @@ struct AdaptiveTokenMask {
   std::vector<int32_t> repeat_interior_char_counts;
   std::vector<DynamicBitset> repeat_interior_bitsets;
   std::vector<std::pair<int32_t, int32_t>> repeat_exit_tokens;
+
+  /*!
+   * \brief Suffix grouping of uncertain_indices, when this mask comes from a local-completion
+   * summary. Derived JIT-only data; never serialized. Valid only while it lists exactly the
+   * uncertain tokens.
+   */
+  std::shared_ptr<const LocalCompletionCrossings> local_completion_crossings;
 
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;

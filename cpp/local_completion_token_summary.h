@@ -7,12 +7,16 @@
 #ifndef XGRAMMAR_LOCAL_COMPLETION_TOKEN_SUMMARY_H_
 #define XGRAMMAR_LOCAL_COMPLETION_TOKEN_SUMMARY_H_
 
+#include <algorithm>
 #include <array>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
 #include <string>
+#include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -30,7 +34,21 @@ namespace xgrammar {
 // Tokens ending exactly at the delimiter are accepted, matching main's mask semantics.
 // Tokens with a suffix after it remain uncertain and use the existing runtime parser.
 struct LocalCompletionTokenSummary {
+  // The classification without any lookahead assertion.
   AdaptiveTokenMask mask;
+  uint8_t completion_byte = 0;
+  // For mask.uncertain_indices[i], where the bytes after the delimiter start in the token.
+  std::vector<int32_t> suffix_offsets;
+  // Positions into mask.uncertain_indices, ordered by suffix.
+  std::vector<int32_t> suffix_order;
+
+  // Masks adapted to a lookahead assertion, keyed by (has lookahead, its hash, is exact). The
+  // summary is shared across grammars through the tokenizer, so these are too.
+  mutable std::mutex derived_mutex;
+  mutable std::map<std::tuple<bool, uint64_t, bool>, std::shared_ptr<const AdaptiveTokenMask>>
+      adapted_masks;
+  // Owned by the delegated mask builder (first-byte slices of `mask`).
+  mutable std::shared_ptr<const void> delegate_tokens;
 };
 
 namespace local_completion {
@@ -358,6 +376,41 @@ inline std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTo
       }
     }
   }
+  // The summary depends only on this automaton and the vocabulary: number the states in
+  // breadth-first byte order to obtain a canonical key and share the result per tokenizer.
+  std::vector<int32_t> cache_key{-1001};
+  {
+    std::vector<int32_t> canonical_id(num_states, -1);
+    std::vector<int32_t> order{start};
+    canonical_id[start] = 0;
+    for (size_t position = 0; position < order.size(); ++position) {
+      const int32_t state = order[position];
+      cache_key.push_back(dfa.IsEndState(state) ? -2 : -3);
+      int32_t run_target = -4;
+      for (int32_t byte = 0; byte < 256; ++byte) {
+        int32_t target = transitions[state][byte];
+        if (target != FSM::kNoNextState) {
+          if (canonical_id[target] == -1) {
+            canonical_id[target] = static_cast<int32_t>(order.size());
+            order.push_back(target);
+          }
+          target = canonical_id[target];
+        } else {
+          target = -1;
+        }
+        if (target != run_target) {
+          cache_key.push_back(byte);
+          cache_key.push_back(target);
+          run_target = target;
+        }
+      }
+    }
+  }
+  auto& shared_cache = tokenizer_info.ImplPtr()->GetVocabularySummaryCache();
+  if (auto cached = shared_cache.Get(cache_key)) {
+    return std::static_pointer_cast<const LocalCompletionTokenSummary>(cached);
+  }
+
   // The optimization is useful only for a repeatable local prefix. Since every DFA state is
   // reachable from start, an incoming edge to start proves that start belongs to a non-trivial
   // SCC (including a self-loop), rather than describing a one-shot delimiter rule.
@@ -385,7 +438,9 @@ inline std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTo
   auto summary = std::make_shared<LocalCompletionTokenSummary>();
   DynamicBitset accepted_prefix_tokens(tokenizer_info.GetVocabSize());
   std::vector<int32_t> crossing_indices;
+  std::vector<int32_t> crossing_offsets;
   crossing_indices.reserve(sorted_vocab.size() / 16);
+  crossing_offsets.reserve(sorted_vocab.size() / 16);
 
   enum class PreviousDecision : uint8_t { kNone, kCrossing, kRejected };
   PreviousDecision previous_decision = PreviousDecision::kNone;
@@ -401,6 +456,7 @@ inline std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTo
           accepted_prefix_tokens.Set(sorted_vocab[token_index].first);
         } else {
           crossing_indices.push_back(token_index);
+          crossing_offsets.push_back(previous_decision_prefix);
         }
       }
       continue;
@@ -427,6 +483,7 @@ inline std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTo
           accepted_prefix_tokens.Set(sorted_vocab[token_index].first);
         } else {
           crossing_indices.push_back(token_index);
+          crossing_offsets.push_back(previous_decision_prefix);
         }
         break;
       }
@@ -454,7 +511,27 @@ inline std::shared_ptr<const LocalCompletionTokenSummary> BuildLocalCompletionTo
   summary->mask = AdaptiveTokenMask(
       tokenizer_info.GetVocabSize(), sorted_vocab, accepted, rejected, crossing_indices
   );
-  return summary;
+  summary->completion_byte = static_cast<uint8_t>(completion_byte);
+  summary->suffix_order.resize(crossing_indices.size());
+  for (int32_t i = 0; i < static_cast<int32_t>(crossing_indices.size()); ++i) {
+    summary->suffix_order[i] = i;
+  }
+  const auto suffix_of = [&](int32_t position) {
+    return std::string_view(sorted_vocab[crossing_indices[position]].second)
+        .substr(crossing_offsets[position]);
+  };
+  std::sort(
+      summary->suffix_order.begin(),
+      summary->suffix_order.end(),
+      [&](int32_t lhs, int32_t rhs) {
+        const auto lhs_suffix = suffix_of(lhs), rhs_suffix = suffix_of(rhs);
+        return lhs_suffix != rhs_suffix ? lhs_suffix < rhs_suffix : lhs < rhs;
+      }
+  );
+  summary->suffix_offsets = std::move(crossing_offsets);
+  return std::static_pointer_cast<const LocalCompletionTokenSummary>(
+      shared_cache.Put(cache_key, summary)
+  );
 }
 
 }  // namespace local_completion

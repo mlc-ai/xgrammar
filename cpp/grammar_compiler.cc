@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -838,6 +839,24 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
       initial_state_.element_id == grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart()) {
     const auto summary = local_completion_summaries_->Get(grammar_, tokenizer_info_, init_rule_id_);
     if (summary) {
+      // The adapted mask depends only on the summary and the lookahead assertion, so it is kept
+      // with the summary and shared by every grammar using this tokenizer.
+      const int32_t summary_lookahead_id = grammar_->GetRule(init_rule_id_).lookahead_assertion_id;
+      std::optional<std::tuple<bool, uint64_t, bool>> adapted_key;
+      if (summary_lookahead_id == -1) {
+        adapted_key = std::make_tuple(false, uint64_t{0}, false);
+      } else if (auto hash = GrammarFSMHasher::HashSequence(grammar_, summary_lookahead_id)) {
+        adapted_key = std::make_tuple(
+            true, *hash, static_cast<bool>(grammar_->GetRule(init_rule_id_).is_exact_lookahead)
+        );
+      }
+      if (adapted_key.has_value()) {
+        std::lock_guard<std::mutex> lock(summary->derived_mutex);
+        auto found = summary->adapted_masks.find(*adapted_key);
+        if (found != summary->adapted_masks.end()) {
+          return *found->second;
+        }
+      }
       AdaptiveTokenMask mask = summary->mask;
       AdaptCacheWithLookahead(&mask, is_root_rule);
       // Lookahead can change which sparse representation is smaller. Match the fresh
@@ -862,6 +881,41 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
           IntsetComplement(&mask.rejected_indices, vocab_size, excluded);
           mask.accepted_indices.clear();
           mask.store_type = AdaptiveTokenMask::StoreType::kRejected;
+        }
+      }
+      // Group the tokens that stayed uncertain by the bytes after the delimiter.
+      {
+        const auto& all_uncertain = summary->mask.uncertain_indices;
+        std::vector<uint8_t> kept(all_uncertain.size(), 0);
+        size_t position = 0;
+        for (int32_t index : mask.uncertain_indices) {
+          while (position < all_uncertain.size() && all_uncertain[position] < index) ++position;
+          if (position < all_uncertain.size() && all_uncertain[position] == index) {
+            kept[position] = 1;
+          }
+        }
+        auto crossings = std::make_shared<LocalCompletionCrossings>();
+        crossings->completion_byte = summary->completion_byte;
+        crossings->by_suffix.reserve(mask.uncertain_indices.size());
+        for (int32_t ordered : summary->suffix_order) {
+          if (kept[ordered]) {
+            crossings->by_suffix.emplace_back(
+                all_uncertain[ordered], summary->suffix_offsets[ordered]
+            );
+          }
+        }
+        // Lookahead adaptation only removes uncertain tokens; anything else disables grouping.
+        if (crossings->by_suffix.size() == mask.uncertain_indices.size()) {
+          mask.local_completion_crossings = std::move(crossings);
+        }
+      }
+      if (adapted_key.has_value()) {
+        constexpr size_t kMaxAdaptedMasks = 16;
+        std::lock_guard<std::mutex> lock(summary->derived_mutex);
+        if (summary->adapted_masks.size() < kMaxAdaptedMasks) {
+          summary->adapted_masks.emplace(
+              *adapted_key, std::make_shared<const AdaptiveTokenMask>(mask)
+          );
         }
       }
       return mask;
