@@ -358,10 +358,21 @@ void TokenizerInfo::Impl::BuildTokenIdToSortedVocabIndex() {
 
 void TokenizerInfo::Impl::BuildTokenCharData() {
   token_char_counts_.assign(sorted_decoded_vocab_.size(), 0);
+  sorted_vocab_lcp_with_previous_.assign(sorted_decoded_vocab_.size(), 0);
   int32_t max_chars = 0;
   for (int32_t index = 0; index < static_cast<int32_t>(sorted_decoded_vocab_.size()); ++index) {
+    const auto& token = sorted_decoded_vocab_[index].second;
+    if (index > 0) {
+      const auto& previous = sorted_decoded_vocab_[index - 1].second;
+      int32_t lcp = 0;
+      while (lcp < static_cast<int32_t>(std::min(previous.size(), token.size())) &&
+             previous[lcp] == token[lcp]) {
+        ++lcp;
+      }
+      sorted_vocab_lcp_with_previous_[index] = lcp;
+    }
     int32_t count = 0;
-    for (uint8_t byte : sorted_decoded_vocab_[index].second) {
+    for (uint8_t byte : token) {
       count += (byte & 0xC0) != 0x80;
     }
     token_char_counts_[index] = count;

@@ -283,6 +283,20 @@ void PopulateRepeatInteriorBitsets(
 ) {
   using StoreType = AdaptiveTokenMask::StoreType;
   const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
+  // JIT passes one newly generated entry. Most states cannot use this fast path, so avoid
+  // rescanning every rule and FSM edge when this entry is not even a plain class start state.
+  // Keep the grammar-wide eligibility proof below for every possible candidate.
+  if (cache->size() == 1) {
+    auto& [state, mask] = *cache->begin();
+    ByteSet first_bytes;
+    if (state.rule_id < 0 || !IsPlainCharacterClassRule(grammar, state.rule_id, &first_bytes) ||
+        state.element_id != grammar->per_rule_fsms[state.rule_id]->GetFsm().GetStart()) {
+      mask.repeat_interior_char_counts.clear();
+      mask.repeat_interior_bitsets.clear();
+      mask.repeat_exit_tokens.clear();
+      return;
+    }
+  }
   const auto counted_repetition_bodies = FindCountedRepetitionBodies(grammar);
   for (auto& [state, mask] : *cache) {
     mask.repeat_interior_char_counts.clear();
