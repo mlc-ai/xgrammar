@@ -87,14 +87,16 @@ jobs:
       HF_HUB_OFFLINE: "1"
       XGRAMMAR_TEST_OFFLINE: "1"
     name: Run unit tests on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner || matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        # setup-python provides Python 3.8 and 3.9 on Ubuntu 24.04 x64.
-        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-latest, macos-15, macos-15-intel]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-15, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
         include:
+          # Keep the required check name while using an image that supports Python 3.8 and 3.9.
+          - {os: ubuntu-latest, python: '3.8', runner: ubuntu-24.04}
+          - {os: ubuntu-latest, python: '3.9', runner: ubuntu-24.04}
           # Native Windows ARM64 PyTorch wheels are available for Python 3.11-3.13.
           - {os: windows-11-vs2026-arm, python: '3.11'}
           - {os: windows-11-vs2026-arm, python: '3.12'}
