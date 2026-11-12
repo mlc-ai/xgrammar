@@ -1995,13 +1995,15 @@ Result<FSMWithStartEnd> GrammarFSMBuilderImpl::Regex(const std::string& regex, b
  * \brief Lower the regular subset used by RegexToEBNF without changing terminal semantics.
  *
  * A shared callee entry/exit would let one call return to another call's continuation. Inline
- * each finite call instead, and connect only direct tail self-references to that call's own
- * entry. The entry is private even when the caller's start also has an optional exit.
+ * each finite call instead, and connect tail-recursive calls only when they share the same
+ * return state. Each entry is private even when the caller's start also has an optional exit.
  */
 class RegularGrammarFSMBuilder {
  public:
   RegularGrammarFSMBuilder(const Grammar& grammar, int max_num_states)
-      : grammar_(grammar), max_num_states_(max_num_states), active_(grammar->NumRules(), false) {}
+      : grammar_(grammar),
+        max_num_states_(max_num_states),
+        active_calls_(grammar->NumRules(), {-1, -1}) {}
 
   Result<FSMWithStartEnd> Build() {
     if (max_num_states_ < 2) {
@@ -2043,10 +2045,15 @@ class RegularGrammarFSMBuilder {
     return true;
   }
 
-  bool BuildRule(int rule_id, int start, int end) {
+  bool BuildRule(int rule_id, int start, int end, bool tail = false) {
     const auto& rule = grammar_->GetRule(rule_id);
-    if (active_[rule_id]) {
-      return Fail("mutual or non-tail recursion involving rule " + rule.name);
+    const auto [active_entry, active_end] = active_calls_[rule_id];
+    if (active_entry >= 0) {
+      if (tail && end == active_end) {
+        fsm_.AddEpsilonEdge(start, active_entry);
+        return true;
+      }
+      return Fail("non-tail recursion involving rule " + rule.name);
     }
     if (depth_ >= 256) {
       return Fail("rule call depth exceeds 256");
@@ -2061,19 +2068,16 @@ class RegularGrammarFSMBuilder {
       return false;
     }
     fsm_.AddEpsilonEdge(start, entry);
-    active_[rule_id] = true;
+    active_calls_[rule_id] = {entry, end};
     ++depth_;
-    bool ok = BuildExpression(
-        grammar_->GetGrammarExpr(rule.body_expr_id), entry, end, rule_id, entry, true
-    );
+    bool ok =
+        BuildExpression(grammar_->GetGrammarExpr(rule.body_expr_id), entry, end, rule_id, true);
     --depth_;
-    active_[rule_id] = false;
+    active_calls_[rule_id] = {-1, -1};
     return ok;
   }
 
-  bool BuildExpression(
-      const GrammarExpr& expr, int start, int end, int rule_id, int rule_start, bool tail
-  ) {
+  bool BuildExpression(const GrammarExpr& expr, int start, int end, int rule_id, bool tail) {
     switch (expr.type) {
       case ExprType::kEmptyStr:
         fsm_.AddEpsilonEdge(start, end);
@@ -2086,20 +2090,25 @@ class RegularGrammarFSMBuilder {
       case ExprType::kCharacterClass:
       case ExprType::kCharacterClassStar:
         return Append(GrammarFSMBuilderImpl::CharacterClass(expr), start, end);
-      case ExprType::kRuleRef:
-        if (expr[0] == rule_id) {
-          if (!tail) {
-            return Fail("non-tail self-recursion in rule " + grammar_->GetRule(rule_id).name);
-          }
-          fsm_.AddEpsilonEdge(start, rule_start);
-          return true;
+      case ExprType::kRegex: {
+        auto result = GrammarFSMBuilderImpl::Regex(grammar_->GetRegexString(expr), expr[0]);
+        if (result.IsErr()) {
+          return Fail(std::move(result).UnwrapErr().what());
         }
-        return BuildRule(expr[0], start, end);
+        return Append(std::move(result).Unwrap(), start, end);
+      }
+      case ExprType::kTagDispatch: {
+        auto leaf = GrammarFSMBuilderImpl::TagDispatch(grammar_->GetTagDispatch(expr));
+        if (!leaf.has_value() || !leaf->IsLeaf()) {
+          return Fail("tag dispatch with rule calls is not a plain regular terminal");
+        }
+        return Append(*leaf, start, end);
+      }
+      case ExprType::kRuleRef:
+        return BuildRule(expr[0], start, end, tail);
       case ExprType::kChoices:
         for (int child : expr) {
-          if (!BuildExpression(
-                  grammar_->GetGrammarExpr(child), start, end, rule_id, rule_start, tail
-              )) {
+          if (!BuildExpression(grammar_->GetGrammarExpr(child), start, end, rule_id, tail)) {
             return false;
           }
         }
@@ -2113,7 +2122,6 @@ class RegularGrammarFSMBuilder {
                               current,
                               next,
                               rule_id,
-                              rule_start,
                               tail && i + 1 == expr.size()
                           )) {
             return false;
@@ -2162,7 +2170,7 @@ class RegularGrammarFSMBuilder {
   const Grammar& grammar_;
   int max_num_states_;
   FSM fsm_;
-  std::vector<bool> active_;
+  std::vector<std::pair<int, int>> active_calls_;
   int depth_ = 0;
   std::string error_;
 };
