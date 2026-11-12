@@ -8,7 +8,7 @@
         <link rel="prefetch" href="../_static/img/logo_dark.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.1 and Furo 2025.12.19 -->
-        <title>Structural Tag Usage - XGrammar 0.2.8</title>
+        <title>Structural Tag Usage - XGrammar 0.2.9</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
@@ -165,7 +165,7 @@
       </label>
     </div>
     <div class="header-center">
-      <a href="../index.html"><div class="brand">XGrammar 0.2.8</div></a>
+      <a href="../index.html"><div class="brand">XGrammar 0.2.9</div></a>
     </div>
     <div class="header-right">
       <div class="theme-toggle-container theme-toggle-header">
@@ -190,7 +190,7 @@
     <img class="sidebar-logo only-dark" src="../_static/img/logo_dark.svg" alt="Dark Logo"/>
   </div>
   
-  <span class="sidebar-brand-text">XGrammar 0.2.8</span>
+  <span class="sidebar-brand-text">XGrammar 0.2.9</span>
   
 </a><form class="sidebar-search-container" method="get" action="../search.html" role="search">
   <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
@@ -388,7 +388,7 @@ string level.</p></li>
 <p>This matches <code class="docutils literal notranslate"><span class="pre">&lt;think&gt;...&lt;/think&gt;</span></code>.</p>
 </section>
 <section id="minimal-triggered-tags">
-<h3>Minimal <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code><a class="headerlink" href="#minimal-triggered-tags" title="Link to this heading">¶</a></h3>
+<span id="minimal-triggered_tags"></span><h3>Minimal <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code><a class="headerlink" href="#minimal-triggered-tags" title="Link to this heading">¶</a></h3>
 <p>Use <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code> when the model should be free to emit normal text, but switch into a
 structured region after seeing a trigger.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
@@ -443,7 +443,7 @@ structured region after seeing a trigger.</p>
 <section id="primitive-formats">
 <h3>Primitive Formats<a class="headerlink" href="#primitive-formats" title="Link to this heading">¶</a></h3>
 <section id="const-string">
-<h4><code class="docutils literal notranslate"><span class="pre">const_string</span></code><a class="headerlink" href="#const-string" title="Link to this heading">¶</a></h4>
+<span id="const_string"></span><h4><code class="docutils literal notranslate"><span class="pre">const_string</span></code><a class="headerlink" href="#const-string" title="Link to this heading">¶</a></h4>
 <p>Matches one exact string.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -472,7 +472,7 @@ structured region after seeing a trigger.</p>
 </div>
 </section>
 <section id="json-schema">
-<h4><code class="docutils literal notranslate"><span class="pre">json_schema</span></code><a class="headerlink" href="#json-schema" title="Link to this heading">¶</a></h4>
+<span id="json_schema"></span><h4><code class="docutils literal notranslate"><span class="pre">json_schema</span></code><a class="headerlink" href="#json-schema" title="Link to this heading">¶</a></h4>
 <p>Matches content that conforms to a JSON Schema.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -563,7 +563,7 @@ reject non-empty lists.</p>
 </pre></div>
 </div>
 <section id="property-ordering-with-any-order">
-<h5>Property ordering with <code class="docutils literal notranslate"><span class="pre">any_order</span></code><a class="headerlink" href="#property-ordering-with-any-order" title="Link to this heading">¶</a></h5>
+<span id="property-ordering-with-any_order"></span><h5>Property ordering with <code class="docutils literal notranslate"><span class="pre">any_order</span></code><a class="headerlink" href="#property-ordering-with-any-order" title="Link to this heading">¶</a></h5>
 <p>By default (<code class="docutils literal notranslate"><span class="pre">&quot;any_order&quot;:</span> <span class="pre">false</span></code>) properties must appear in their declared order and are fully validated (no duplicate keys, all required keys present). With <code class="docutils literal notranslate"><span class="pre">&quot;any_order&quot;:</span> <span class="pre">true</span></code>, any property (<strong>required</strong>, <strong>optional</strong>, or <strong>additional</strong> / <strong>pattern</strong>) may appear in any position. Each entry must still be a valid property — a permitted key with a value matching that key’s schema (so <code class="docutils literal notranslate"><span class="pre">additionalProperties:</span> <span class="pre">false</span></code> still rejects undeclared keys) — but the grammar no longer tracks <em>which</em> keys appear: required keys need not all be present, and duplicates are allowed. The only remaining bound is on the <strong>total number of entries</strong>, which must be between <code class="docutils literal notranslate"><span class="pre">max(minProperties,</span> <span class="pre">number</span> <span class="pre">of</span> <span class="pre">required</span> <span class="pre">properties)</span></code> and <code class="docutils literal notranslate"><span class="pre">maxProperties</span></code>. For example, with <code class="docutils literal notranslate"><span class="pre">required:</span> <span class="pre">[&quot;a&quot;,</span> <span class="pre">&quot;b&quot;]</span></code> and <code class="docutils literal notranslate"><span class="pre">additionalProperties:</span> <span class="pre">false</span></code>, any object holding at least two valid <code class="docutils literal notranslate"><span class="pre">a</span></code>/<code class="docutils literal notranslate"><span class="pre">b</span></code> entries is accepted, even <code class="docutils literal notranslate"><span class="pre">{&quot;a&quot;:</span> <span class="pre">..,</span> <span class="pre">&quot;a&quot;:</span> <span class="pre">..}</span></code> (<code class="docutils literal notranslate"><span class="pre">a</span></code> duplicated and <code class="docutils literal notranslate"><span class="pre">b</span></code> absent). It applies to every object, including nested ones.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
 <span class="w">    </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"json_schema"</span><span class="p">,</span>
@@ -658,7 +658,7 @@ consume almost anything when you still need precise structure afterward.</p>
 <p>As with <code class="docutils literal notranslate"><span class="pre">grammar</span></code>, avoid overly broad patterns when later structure still needs to be enforced.</p>
 </section>
 <section id="any-text">
-<h4><code class="docutils literal notranslate"><span class="pre">any_text</span></code><a class="headerlink" href="#any-text" title="Link to this heading">¶</a></h4>
+<span id="any_text"></span><h4><code class="docutils literal notranslate"><span class="pre">any_text</span></code><a class="headerlink" href="#any-text" title="Link to this heading">¶</a></h4>
 <p>Matches arbitrary text.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -987,7 +987,7 @@ upper limit.</p>
 </div>
 </section>
 <section id="triggered-tags">
-<h4><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code><a class="headerlink" href="#triggered-tags" title="Link to this heading">¶</a></h4>
+<span id="triggered_tags"></span><h4><code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code><a class="headerlink" href="#triggered-tags" title="Link to this heading">¶</a></h4>
 <p>Allows arbitrary text until a trigger is encountered, then dispatches to one of several tags.
 After the tag ends, arbitrary text is allowed again until the next trigger.</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -1078,7 +1078,7 @@ After the tag ends, arbitrary text is allowed again until the next trigger.</p>
 </ul>
 </section>
 <section id="tags-with-separator">
-<h4><code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code><a class="headerlink" href="#tags-with-separator" title="Link to this heading">¶</a></h4>
+<span id="tags_with_separator"></span><h4><code class="docutils literal notranslate"><span class="pre">tags_with_separator</span></code><a class="headerlink" href="#tags-with-separator" title="Link to this heading">¶</a></h4>
 <p>Matches zero, one, or more tags separated by a fixed separator, with no extra text outside the tag
 sequence.</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -1230,7 +1230,7 @@ consumes that end delimiter.</p>
 <p>When <code class="docutils literal notranslate"><span class="pre">token</span></code> is a string, it is resolved with <code class="docutils literal notranslate"><span class="pre">tokenizer_info</span></code>.</p>
 </section>
 <section id="exclude-token">
-<h4><code class="docutils literal notranslate"><span class="pre">exclude_token</span></code><a class="headerlink" href="#exclude-token" title="Link to this heading">¶</a></h4>
+<span id="exclude_token"></span><h4><code class="docutils literal notranslate"><span class="pre">exclude_token</span></code><a class="headerlink" href="#exclude-token" title="Link to this heading">¶</a></h4>
 <p>Matches any single token except those in <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code>.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -1257,7 +1257,7 @@ consumes that end delimiter.</p>
 <p>When used inside a token-level <code class="docutils literal notranslate"><span class="pre">tag</span></code>, the enclosing end token is automatically excluded.</p>
 </section>
 <section id="any-tokens">
-<h4><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code><a class="headerlink" href="#any-tokens" title="Link to this heading">¶</a></h4>
+<span id="any_tokens"></span><h4><code class="docutils literal notranslate"><span class="pre">any_tokens</span></code><a class="headerlink" href="#any-tokens" title="Link to this heading">¶</a></h4>
 <p>Matches zero or more tokens, excluding those in <code class="docutils literal notranslate"><span class="pre">exclude_tokens</span></code>.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -1292,7 +1292,7 @@ token-level <code class="docutils literal notranslate"><span class="pre">tag</sp
 2,147,483,647.</p>
 </section>
 <section id="token-triggered-tags">
-<h4><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code><a class="headerlink" href="#token-triggered-tags" title="Link to this heading">¶</a></h4>
+<span id="token_triggered_tags"></span><h4><code class="docutils literal notranslate"><span class="pre">token_triggered_tags</span></code><a class="headerlink" href="#token-triggered-tags" title="Link to this heading">¶</a></h4>
 <p>Token-level version of <code class="docutils literal notranslate"><span class="pre">triggered_tags</span></code>.</p>
 <div class="table-wrapper colwidths-auto docutils container">
 <table class="docutils align-default">
@@ -1358,7 +1358,7 @@ token-level <code class="docutils literal notranslate"><span class="pre">tag</sp
 </div>
 </section>
 <section id="token-dispatch">
-<h4><code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code><a class="headerlink" href="#token-dispatch" title="Link to this heading">¶</a></h4>
+<span id="token_dispatch"></span><h4><code class="docutils literal notranslate"><span class="pre">token_dispatch</span></code><a class="headerlink" href="#token-dispatch" title="Link to this heading">¶</a></h4>
 <p>Token-level version of <code class="docutils literal notranslate"><span class="pre">dispatch</span></code>. Patterns are token IDs or token strings instead of text
 strings.</p>
 <div class="table-wrapper colwidths-auto docutils container">
@@ -1657,7 +1657,7 @@ the model expects a pure separated list of calls</p></li>
       
     </aside>
   </div>
-</div><script src="../_static/documentation_options.js?v=b01fafc3"></script>
+</div><script src="../_static/documentation_options.js?v=14672bda"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/scripts/furo.js?v=46bd48cc"></script>
