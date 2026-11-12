@@ -16,6 +16,7 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -632,6 +633,14 @@ class GrammarMatcher::Impl : public EarleyParser {
 
   /*! \brief Fill the bitmask from the current states, optionally excluding the states whose
    * budget deadline has passed. */
+  /*!
+   * \brief Resolve the uncertain tokens of a local-completion mask by distinct suffix.
+   * \return false if the fast path does not apply; nothing has been changed in that case.
+   */
+  bool FillLocalCompletionCrossings(
+      const ParserState& state, const AdaptiveTokenMask& adaptive_token_mask
+  );
+
   void FillBitmaskForStates(
       int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
   );
@@ -1938,6 +1947,97 @@ static std::optional<RepeatEdgeRef> GetRepeatEdgeInfo(
   return std::nullopt;
 }
 
+bool GrammarMatcher::Impl::FillLocalCompletionCrossings(
+    const ParserState& state, const AdaptiveTokenMask& adaptive_token_mask
+) {
+  const auto& crossings = *adaptive_token_mask.local_completion_crossings;
+  const auto& entries = crossings.by_suffix;
+  if (entries.empty()) {
+    return true;
+  }
+  const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const bool record_rejected = adaptive_token_mask.store_type == StoreType::kRejected;
+  const int32_t initial_history_size = static_cast<int32_t>(scanable_state_history_.size());
+  const auto restore_parser = [&]() {
+    PopLastStates(static_cast<int32_t>(scanable_state_history_.size()) - initial_history_size);
+  };
+  PushOneStateToCheck(state);
+  // The delimiter alone is the shortest way through the rule; whatever content a token has
+  // before it leaves the parser in the same parent configuration.
+  if (!Advance(crossings.completion_byte) || IsCompleted()) {
+    restore_parser();
+    return false;
+  }
+  const auto suffix = [&](const std::pair<int32_t, int32_t>& entry) {
+    return std::string_view(sorted_decoded_vocab[entry.first].second).substr(entry.second);
+  };
+  const auto reject = [&](size_t begin, size_t end) {
+    if (!record_rejected) return;
+    for (size_t position = begin; position < end; ++position) {
+      if (!tmp_accepted_bitset_[sorted_decoded_vocab[entries[position].first].first]) {
+        tmp_rejected_indices_delta_.push_back(entries[position].first);
+      }
+    }
+  };
+  std::string_view previous_suffix;
+  int32_t previous_matched_size = 0;
+  for (size_t position = 0; position < entries.size();) {
+    const std::string_view current_suffix = suffix(entries[position]);
+    size_t group_end = position + 1;
+    while (group_end < entries.size() && suffix(entries[group_end]) == current_suffix) {
+      ++group_end;
+    }
+    int32_t common_prefix_length = static_cast<int32_t>(
+        std::mismatch(
+            current_suffix.begin(),
+            current_suffix.end(),
+            previous_suffix.begin(),
+            previous_suffix.end()
+        )
+            .first -
+        current_suffix.begin()
+    );
+    common_prefix_length = std::min(common_prefix_length, previous_matched_size);
+    PopLastStates(previous_matched_size - common_prefix_length);
+
+    int32_t matched_size = common_prefix_length;
+    bool accepted = true;
+    for (; matched_size < static_cast<int32_t>(current_suffix.size()); ++matched_size) {
+      if (!Advance(static_cast<uint8_t>(current_suffix[matched_size]))) {
+        accepted = false;
+        break;
+      }
+    }
+    if (accepted) {
+      if (!record_rejected) {
+        for (size_t entry = position; entry < group_end; ++entry) {
+          tmp_accepted_bitset_.Set(sorted_decoded_vocab[entries[entry].first].first, true);
+        }
+      }
+    } else {
+      // Every suffix sharing the failed prefix fails at the same byte.
+      const std::string_view failed_prefix = current_suffix.substr(0, matched_size + 1);
+      while (group_end < entries.size()) {
+        const std::string_view candidate = suffix(entries[group_end]);
+        if (candidate.size() < failed_prefix.size() ||
+            candidate.compare(0, failed_prefix.size(), failed_prefix) != 0) {
+          break;
+        }
+        ++group_end;
+      }
+      reject(position, group_end);
+    }
+    position = group_end;
+    previous_suffix = current_suffix;
+    previous_matched_size = matched_size;
+  }
+  restore_parser();
+  if (record_rejected) {
+    std::sort(tmp_rejected_indices_delta_.begin(), tmp_rejected_indices_delta_.end());
+  }
+  return true;
+}
+
 void GrammarMatcher::Impl::FillBitmaskForStates(
     int32_t* bitmask_data_ptr, int index, bool skip_expired, bool debug_print
 ) {
@@ -2060,6 +2160,21 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     // tokens, so we will just find the accepted tokens, and vice versa.
 
     tmp_rejected_indices_delta_.clear();
+
+    // At the start of a rule that ends at one delimiter byte, every uncertain token is some
+    // content, the delimiter, and a suffix; the parent only ever sees the suffix. Resolve each
+    // distinct suffix once instead of replaying every token.
+    if (adaptive_token_mask.local_completion_crossings != nullptr && !has_char_budget_rules_ &&
+        !skip_expired && !capture_recording_ && !grammar_->has_token_edges &&
+        adaptive_token_mask.local_completion_crossings->by_suffix.size() ==
+            adaptive_token_mask.uncertain_indices.size() &&
+        FillLocalCompletionCrossings(state, adaptive_token_mask)) {
+      if (adaptive_token_mask.store_type == StoreType::kRejected) {
+        IntsetUnion(&tmp_rejected_indices_delta_, adaptive_token_mask.rejected_indices);
+        IntsetIntersection(&tmp_rejected_indices_, tmp_rejected_indices_delta_);
+      }
+      continue;
+    }
 
     // Examine only the current one ParserState
     PushOneStateToCheck(state);
