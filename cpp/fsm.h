@@ -786,6 +786,16 @@ class FSMWithStartEnd : public FSMWithStartEndBase<FSM> {
   FSMWithStartEndWithSize AddToCompleteFSM(FSM* complete_fsm, std::vector<int>* state_mapping);
 
   /*!
+   * \brief Same as AddToCompleteFSM, without changing this FSM, and with every reference to rule
+   * from_rule_ids[i] (on rule and repeat edges) added as a reference to to_rule_ids[i].
+   */
+  FSMWithStartEndWithSize AddToCompleteFSMWithRuleIds(
+      FSM* complete_fsm,
+      const std::vector<int32_t>& from_rule_ids,
+      const std::vector<int32_t>& to_rule_ids
+  ) const;
+
+  /*!
    * \brief Transform the FSMWithStartEnd to a CompactFSMWithStartEnd.
    * \return The CompactFSMWithStartEnd.
    */
