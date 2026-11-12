@@ -1029,6 +1029,185 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   }
 }
 
+/*!
+ * \brief Fill AdaptiveTokenMask::repeat_stay_* for a state of a rule made only of byte and
+ * epsilon edges. An uncertain token gets a need when all its bytes can be consumed by the rest
+ * of this rule followed by whole further passes through it; the need is the smallest number of
+ * passes involved, counting the current one. Whether the rule is actually repeated, and how
+ * many passes are left, is only known to the matcher.
+ */
+static void PopulateRepeatStayHints(
+    const Grammar& grammar,
+    const TokenizerInfo& tokenizer_info,
+    const ParserState& state,
+    AdaptiveTokenMask* mask
+) {
+  constexpr size_t kMinUncertainTokens = 256;
+  constexpr size_t kMaxReachableStates = 4096;
+  constexpr size_t kMaxExactNeeds = 3;
+  if (mask->uncertain_indices.size() < kMinUncertainTokens ||
+      !mask->repeat_interior_bitsets.empty() || !mask->repeat_exit_tokens.empty() ||
+      state.rule_id < 0 || state.rule_id == grammar->GetRootRuleId() || state.sub_element_id != 0 ||
+      state.partial_codepoint != 0 || state.repeat_count != 0) {
+    return;
+  }
+  const auto& rule = grammar->GetRule(state.rule_id);
+  if (rule.is_lazy || rule.max_tokens != -1 || rule.max_chars != -1 || !rule.capture_name.empty() ||
+      rule.lookahead_assertion_id != -1 || rule.temperature.has_value() ||
+      grammar->GetSuffixStopInfo(state.rule_id) != nullptr ||
+      grammar->GetGrammarExpr(rule.body_expr_id).type ==
+          Grammar::Impl::GrammarExprType::kTagDispatch) {
+    return;
+  }
+  const auto& rule_fsm = grammar->per_rule_fsms[state.rule_id]->GetFsm();
+  const auto& fsm = rule_fsm.GetFsm();
+  {
+    std::vector<int32_t> queue{rule_fsm.GetStart(), state.element_id};
+    std::unordered_set<int32_t> seen(queue.begin(), queue.end());
+    for (size_t i = 0; i < queue.size(); ++i) {
+      for (const auto& edge : fsm.GetEdges(queue[i])) {
+        if (!edge.IsCharRange() && !edge.IsEpsilon()) {
+          return;
+        }
+        if (seen.insert(edge.target).second) {
+          if (queue.size() == kMaxReachableStates) {
+            return;
+          }
+          queue.push_back(edge.target);
+        }
+      }
+    }
+  }
+
+  // One way of being somewhere in the rule: `fresh` means a pass just began and has consumed
+  // nothing; `passes` counts the passes begun, or for a fresh element the passes completed.
+  struct Element {
+    int32_t state;
+    bool fresh;
+    int32_t passes;
+  };
+  using Config = std::vector<Element>;
+  const auto add = [](Config* config, int32_t fsm_state, bool fresh, int32_t passes) {
+    for (auto& element : *config) {
+      if (element.state == fsm_state && element.fresh == fresh) {
+        if (passes < element.passes) {
+          element.passes = passes;
+          return true;
+        }
+        return false;
+      }
+    }
+    config->push_back({fsm_state, fresh, passes});
+    return true;
+  };
+  // Epsilon closure, and a fresh pass after every element that completes the rule. An element
+  // can be improved after it was expanded, so expand until nothing changes.
+  const auto close = [&](Config* config) {
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      for (size_t i = 0; i < config->size(); ++i) {
+        const Element element = (*config)[i];
+        for (const auto& edge : fsm.GetEdges(element.state)) {
+          if (edge.IsEpsilon()) {
+            changed = add(config, edge.target, element.fresh, element.passes) || changed;
+          }
+        }
+        if (!element.fresh && rule_fsm.IsEndState(element.state)) {
+          changed = add(config, rule_fsm.GetStart(), true, element.passes) || changed;
+        }
+      }
+    }
+  };
+  Config initial;
+  add(&initial, state.element_id, false, 1);
+  close(&initial);
+  // A rule that can match nothing would make the pass count meaningless.
+  for (const auto& element : initial) {
+    if (element.fresh && rule_fsm.IsEndState(element.state)) {
+      return;
+    }
+  }
+  {
+    Config from_start;
+    add(&from_start, rule_fsm.GetStart(), false, 1);
+    close(&from_start);
+    for (const auto& element : from_start) {
+      if (element.fresh) {
+        return;
+      }
+    }
+  }
+
+  const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
+  std::vector<Config> path{initial};
+  std::vector<int32_t> needs(mask->uncertain_indices.size(), 0);
+  const std::string* previous = nullptr;
+  for (size_t position = 0; position < mask->uncertain_indices.size(); ++position) {
+    const auto& token = sorted_vocab[mask->uncertain_indices[position]].second;
+    size_t common = 0;
+    if (previous != nullptr) {
+      common = std::mismatch(token.begin(), token.end(), previous->begin(), previous->end()).first -
+               token.begin();
+      common = std::min(common, path.size() - 1);
+    }
+    path.resize(common + 1);
+    previous = &token;
+    bool alive = true;
+    for (size_t i = common; i < token.size(); ++i) {
+      const auto byte = static_cast<uint8_t>(token[i]);
+      Config next;
+      for (const auto& element : path.back()) {
+        for (const auto& edge : fsm.GetEdges(element.state)) {
+          if (edge.IsCharRange() && byte >= edge.min && byte <= edge.max) {
+            add(&next, edge.target, false, element.passes + (element.fresh ? 1 : 0));
+          }
+        }
+      }
+      if (next.empty()) {
+        alive = false;
+        break;
+      }
+      close(&next);
+      path.push_back(std::move(next));
+    }
+    if (!alive || token.empty()) {
+      continue;
+    }
+    int32_t need = std::numeric_limits<int32_t>::max();
+    for (const auto& element : path.back()) {
+      need = std::min(need, element.passes);
+    }
+    needs[position] = need;
+  }
+
+  std::vector<int32_t> levels;
+  for (int32_t need : needs) {
+    if (need > 0) {
+      levels.push_back(need);
+    }
+  }
+  std::sort(levels.begin(), levels.end());
+  levels.erase(std::unique(levels.begin(), levels.end()), levels.end());
+  if (levels.empty()) {
+    return;
+  }
+  // Keep the smallest needs exact and fold the rest into the largest one.
+  if (levels.size() > kMaxExactNeeds + 1) {
+    levels.erase(levels.begin() + kMaxExactNeeds, levels.end() - 1);
+  }
+  for (int32_t level : levels) {
+    DynamicBitset bitset(tokenizer_info.GetVocabSize());
+    for (size_t position = 0; position < needs.size(); ++position) {
+      if (needs[position] > 0 && needs[position] <= level) {
+        bitset.Set(sorted_vocab[mask->uncertain_indices[position]].first, true);
+      }
+    }
+    mask->repeat_stay_needs.push_back(level);
+    mask->repeat_stay_bitsets.push_back(std::move(bitset));
+  }
+}
+
 const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const ParserState& state) {
   if (!enable_dynamic_compilation) {
     auto iterator = adaptive_token_mask_cache.find(state);
@@ -1068,6 +1247,20 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
   decltype(adaptive_token_mask_cache) generated_cache;
   generated_cache.try_emplace(cache_state, std::move(generated_mask));
   PopulateRepeatInteriorBitsets(grammar, tokenizer_info, &generated_cache);
+  std::call_once(repeat_body_rules_once, [this]() {
+    repeat_body_rules.assign(grammar->NumRules(), false);
+    const auto& complete_fsm = grammar->complete_fsm;
+    for (int fsm_state = 0; fsm_state < complete_fsm.NumStates(); ++fsm_state) {
+      for (const auto& edge : complete_fsm.GetEdges(fsm_state)) {
+        if (edge.IsRepeatRef()) {
+          repeat_body_rules[complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId()] = true;
+        }
+      }
+    }
+  });
+  if (cache_state.rule_id >= 0 && repeat_body_rules[cache_state.rule_id]) {
+    PopulateRepeatStayHints(grammar, tokenizer_info, cache_state, &generated_cache.begin()->second);
+  }
   std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
   return adaptive_token_mask_cache
       .try_emplace(cache_state, std::move(generated_cache.begin()->second))
