@@ -1015,6 +1015,74 @@ CompactFSMWithStartEnd FSMWithStartEnd::ToCompact() {
   return CompactFSMWithStartEnd(fsm_.ToCompact(), start_, ends_, is_dfa_);
 }
 
+FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSMWithRuleIds(
+    FSM* complete_fsm,
+    const std::vector<int32_t>& from_rule_ids,
+    const std::vector<int32_t>& to_rule_ids
+) const {
+  const auto renamed = [&](int32_t rule_id) {
+    auto found = std::find(from_rule_ids.begin(), from_rule_ids.end(), rule_id);
+    XGRAMMAR_DCHECK(found != from_rule_ids.end());
+    return to_rule_ids[found - from_rule_ids.begin()];
+  };
+  const int offset = complete_fsm->NumStates();
+  const int num_nodes = fsm_.NumStates();
+  for (int state = 0; state < num_nodes; ++state) {
+    complete_fsm->AddState();
+  }
+  int num_edges = 0;
+  for (int state = 0; state < num_nodes; ++state) {
+    const auto& edges = fsm_.GetEdges(state);
+    num_edges += static_cast<int>(edges.size());
+    if (std::any_of(edges.begin(), edges.end(), [](const FSMEdge& edge) {
+          return edge.IsAuxEdge();
+        })) {
+      // Repeat edges keep their bounds in auxiliary data, which the complete FSM allocates.
+      for (const auto& edge : edges) {
+        if (edge.IsRepeatRef()) {
+          const auto info = fsm_.GetRepeatEdgeInfo(edge.GetAuxIndex());
+          complete_fsm->AddRepeatEdge(
+              state + offset,
+              edge.target + offset,
+              renamed(info.RuleId()),
+              info.Lower(),
+              info.Upper()
+          );
+        } else {
+          XGRAMMAR_CHECK(!edge.IsAuxEdge()) << "Token edges are not cached by rule shape";
+          complete_fsm->AddEdge(
+              state + offset,
+              edge.target + offset,
+              edge.min,
+              edge.IsRuleRef() ? renamed(edge.max) : edge.max
+          );
+        }
+      }
+      continue;
+    }
+    // Copy the edges in one allocation, then shift targets and rename rule references.
+    auto& added = complete_fsm->GetEdges(state + offset);
+    added.assign(edges.begin(), edges.end());
+    for (auto& edge : added) {
+      XGRAMMAR_DCHECK(!edge.IsAuxEdge());
+      edge.target += offset;
+      if (edge.IsRuleRef()) {
+        edge.max = renamed(edge.max);
+      }
+    }
+  }
+  std::vector<int32_t> new_ends;
+  new_ends.reserve(ends_.size());
+  for (auto end : ends_) {
+    new_ends.push_back(end + offset);
+  }
+  return FSMWithStartEndWithSize(
+      FSMWithStartEnd(*complete_fsm, start_ + offset, std::move(new_ends), is_dfa_),
+      num_edges,
+      num_nodes
+  );
+}
+
 FSMWithStartEndWithSize FSMWithStartEnd::AddToCompleteFSM(
     FSM* complete_fsm, std::vector<int>* state_mapping
 ) {

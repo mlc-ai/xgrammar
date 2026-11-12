@@ -18,6 +18,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <tuple>
@@ -706,7 +707,8 @@ class SchemaParser {
   );
 
   Config config_;
-  picojson::value root_schema_;
+  // The caller keeps the schema alive for the lifetime of the parser.
+  const picojson::value& root_schema_;
   std::unordered_map<std::string, SchemaSpecPtr> ref_cache_;
   std::unordered_map<std::string, SchemaSpecPtr> schema_cache_;
 };
@@ -734,17 +736,21 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
 
   if (schema.is<picojson::object>()) {
     std::string result = "{";
-    std::vector<std::pair<std::string, picojson::value>> sorted_kv;
+    // Sort references: copying the members would copy every nested schema.
+    using Member = std::remove_reference_t<decltype(*schema.get<picojson::object>().begin())>;
+    std::vector<const Member*> sorted_kv;
     for (const auto& kv : schema.get<picojson::object>()) {
       if (kSkippedKeys.count(kv.first) == 0) {
-        sorted_kv.push_back(kv);
+        sorted_kv.push_back(&kv);
       }
     }
-    std::sort(sorted_kv.begin(), sorted_kv.end(), [](const auto& lhs, const auto& rhs) {
-      return lhs.first < rhs.first;
+    std::sort(sorted_kv.begin(), sorted_kv.end(), [](const Member* lhs, const Member* rhs) {
+      return lhs->first < rhs->first;
     });
     int64_t idx = 0;
-    for (const auto& [key, value] : sorted_kv) {
+    for (const Member* member : sorted_kv) {
+      const auto& key = member->first;
+      const auto& value = member->second;
       if (idx != 0) {
         result += ",";
       }
@@ -2360,6 +2366,19 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
 int32_t JSONSchemaConverter::RegexExpression(
     const std::string& regex, bool json_string, bool force_cfg_expansion
 ) {
+  // A raw regex whose EBNF expansion is regular becomes one automaton that accepts exactly
+  // what the CFG expansion accepts, whether or not the CFG expansion was requested.
+  if (!json_string) {
+    if (auto regular = GrammarFSMBuilder::RegularRegexFSM(regex)) {
+      std::unordered_set<int> reachable_states;
+      regular->GetReachableStates(&reachable_states);
+      if (std::any_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
+            return regular->IsEndState(state);
+          })) {
+        return builder_.AddRegex(regex, false);
+      }
+    }
+  }
   bool can_use_fsm = !force_cfg_expansion;
   if (json_string) {
     can_use_fsm =
@@ -2368,18 +2387,34 @@ int32_t JSONSchemaConverter::RegexExpression(
         });
   }
   if (can_use_fsm) {
-    auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
-    if (fsm_result.IsOk()) {
-      auto fsm = std::move(fsm_result).Unwrap();
-      std::unordered_set<int> reachable_states;
-      fsm.GetReachableStates(&reachable_states);
-      bool language_is_empty =
-          std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
-            return fsm.IsEndState(state);
-          });
-      if (!language_is_empty) {
-        return builder_.AddRegex(regex, json_string);
+    // Whether the regex engine builds a non-empty automaton depends only on the regex; schemas
+    // repeat the same pattern many times, so the answer is remembered per process.
+    static std::mutex cache_mutex;
+    static std::map<std::pair<std::string, bool>, bool> cache;
+    constexpr size_t kMaxCachedRegexes = 4096;
+    std::optional<bool> usable;
+    {
+      std::lock_guard<std::mutex> lock(cache_mutex);
+      auto found = cache.find(std::make_pair(regex, json_string));
+      if (found != cache.end()) usable = found->second;
+    }
+    if (!usable.has_value()) {
+      usable = false;
+      auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
+      if (fsm_result.IsOk()) {
+        auto fsm = std::move(fsm_result).Unwrap();
+        std::unordered_set<int> reachable_states;
+        fsm.GetReachableStates(&reachable_states);
+        usable = std::any_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
+          return fsm.IsEndState(state);
+        });
       }
+      std::lock_guard<std::mutex> lock(cache_mutex);
+      if (cache.size() < kMaxCachedRegexes)
+        cache.emplace(std::make_pair(regex, json_string), *usable);
+    }
+    if (*usable) {
+      return builder_.AddRegex(regex, json_string);
     }
   }
 
@@ -2755,7 +2790,12 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
     if (regex.has_value()) {
       // The built-in format regexes use constructs that the FSM regex engine does not fully
       // support yet (e.g. quoted email local parts), so they keep the CFG expansion.
-      return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
+      // The URI regex is the exception: it goes to the regex FSM engine, which falls back to the
+      // CFG expansion by itself for a regex it cannot build.
+      const bool force_cfg_expansion = *spec.format != "uri";
+      return Sequence(
+          {ByteString("\""), RegexExpression(*regex, false, force_cfg_expansion), ByteString("\"")}
+      );
     }
   }
   // Check for pattern

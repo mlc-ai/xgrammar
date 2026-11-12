@@ -156,6 +156,13 @@ class CompiledGrammar::Impl {
   /*! \brief Protects on-demand token mask cache insertion and cache serialization. */
   mutable std::mutex adaptive_token_mask_cache_mutex;
 
+  /*!
+   * \brief With dynamic compilation, the rule automata are hashed (for the rule-level mask
+   * cache) when the first mask is generated rather than at compile time.
+   */
+  bool fsm_hashes_pending = false;
+  std::once_flag fsm_hashes_once;
+
   /*! \brief Whether missing token mask cache entries should be generated on demand. */
   bool enable_dynamic_compilation{false};
 
