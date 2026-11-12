@@ -561,6 +561,26 @@ def test_null_character(regex: str):
         xgr.Grammar.from_regex(regex)
 
 
+@pytest.mark.parametrize(
+    "regex, accepted, rejected",
+    [
+        (r"\x41", ["A"], ["x41", "AA"]),
+        (r"\x41B", ["AB"], ["\u041b", "A", "B"]),
+        (r"\x4142", ["A42"], ["\u4142", "A"]),
+        (r"[\x41B]", ["A", "B"], ["\u041b", "x"]),
+        (r"[\x30-\x39a-f]+", ["0", "9", "a", "f", "9f"], ["g", "A", "\u0100", "\u039a"]),
+        (r"\x7Ff", ["\x7ff"], ["\u07ff"]),
+    ],
+)
+def test_hex_escape_takes_exactly_two_digits(regex: str, accepted, rejected):
+    # ECMAScript \xHH reads two hex digits, so any hex digit after them is a separate character.
+    grammar = xgr.Grammar.from_regex(regex)
+    for text in accepted:
+        assert _is_grammar_accept_string(grammar, text), (regex, text)
+    for text in rejected:
+        assert not _is_grammar_accept_string(grammar, text), (regex, text)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
 
