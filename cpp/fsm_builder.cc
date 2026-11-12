@@ -1039,33 +1039,13 @@ Result<FSMWithStartEnd> RegexIR::visit(const RegexIR::Repeat& state) const {
     fsm->AddEndState(new_start);
   };
 
-  // Handling {n,}
+  // Handling {n,}: n copies followed by a star. Looping back to an end state of the n-th copy
+  // would keep the outgoing edges of that state reachable after a later copy, so "(bc*|a){1,}"
+  // would accept "aac".
   if (!has_upper_bound) {
-    for (int i = 2; i < state.lower_bound; i++) {
-      result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
-    }
-    int end_state_of_lower_bound_fsm = -1;
-    for (int end = 0; end < result.NumStates(); ++end) {
-      if (result.IsEndState(end)) {
-        end_state_of_lower_bound_fsm = end;
-        break;
-      }
-    }
-    XGRAMMAR_DCHECK(end_state_of_lower_bound_fsm != -1)
-        << "No end state found in the lower bound FSM.";
-    result = FSMWithStartEnd::Concat(std::vector<FSMWithStartEnd>{result, child});
-    for (int end = 0; end < result.NumStates(); ++end) {
-      if (result.IsEndState(end)) {
-        result.GetFsm().AddEpsilonEdge(end, end_state_of_lower_bound_fsm);
-      }
-    }
-    for (const auto& end : new_ends) {
-      result.AddEndState(end);
-    }
-    if (state.lower_bound == 0) {
-      allow_zero_repetitions(&result);
-    }
-    return ResultOk(std::move(result));
+    std::vector<FSMWithStartEnd> parts(state.lower_bound, child);
+    parts.push_back(child.Star());
+    return ResultOk(FSMWithStartEnd::Concat(parts));
   }
   // Handling {n, m} or {n}
   for (int i = 2; i <= state.upper_bound; i++) {

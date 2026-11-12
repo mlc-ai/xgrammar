@@ -472,6 +472,33 @@ def test_json_schema_pattern_fallback_to_cfg():
     assert not _is_grammar_accept_string(grammar, '"ab"')
 
 
+@pytest.mark.parametrize(
+    "regex, accepted, rejected",
+    [
+        (r"(bc*|a){0,}", ["", "a", "bcc", "ab", "bca"], ["c", "aac"]),
+        (r"(bc*|a){1,}", ["a", "bcc", "ab", "bca"], ["", "c", "aac"]),
+        (r"(bc*|a){2,}", ["aa", "ab", "bcca", "bcbc"], ["a", "bc", "aac", "aaca"]),
+        (r"(x[0-9]*|y){2,}", ["xy", "x1y", "yx1", "yyy"], ["y", "yy1", "yy1x"]),
+        (r"(a{2,}|){0,}", ["", "aa", "aaa"], ["a"]),
+        (r"(ab*|){2,}", ["", "a", "abab"], ["b"]),
+        (r"(a|b){3,}", ["aba", "abab"], ["", "a", "ab"]),
+        (r"(a?){2,}", ["", "a", "aaa"], ["b"]),
+    ],
+)
+def test_unbounded_counted_repetition_of_group(regex, accepted, rejected):
+    # {n,} used to loop from the end of the last copy back to an end state of the n-th copy, which
+    # is only a safe target if nothing leaves it. In "(bc*|a){1,}" the end state after "b" keeps
+    # its "c" loop, so "aa" could continue with "c".
+    macro_grammar = xgr.Grammar.from_ebnf(f"root ::= Regex({json.dumps(regex)})")
+    schema_grammar = xgr.Grammar.from_json_schema({"type": "string", "pattern": regex})
+    for text in accepted:
+        assert _is_grammar_accept_string(macro_grammar, text), (regex, text)
+        assert _is_grammar_accept_string(schema_grammar, json.dumps(text)), (regex, text)
+    for text in rejected:
+        assert not _is_grammar_accept_string(macro_grammar, text), (regex, text)
+        assert not _is_grammar_accept_string(schema_grammar, json.dumps(text)), (regex, text)
+
+
 def test_json_schema_pattern_properties():
     schema = json.dumps({"type": "object", "patternProperties": {"^[a-z]+$": {"type": "integer"}}})
     grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
