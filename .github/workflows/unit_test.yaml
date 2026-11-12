@@ -91,8 +91,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # setup-python provides Python 3.8 and 3.9 on Ubuntu 24.04 x64.
-        os: [ubuntu-24.04, ubuntu-24.04-arm, windows-latest, macos-15, macos-15-intel]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-15, macos-15-intel]
         python: ['3.8', '3.9', '3.10', '3.11', '3.12', '3.13', '3.14', '3.14t']
         include:
           # Native Windows ARM64 PyTorch wheels are available for Python 3.11-3.13.
@@ -100,6 +99,11 @@ jobs:
           - {os: windows-11-vs2026-arm, python: '3.12'}
           - {os: windows-11-vs2026-arm, python: '3.13'}
         exclude:
+          # setup-python has no Python 3.8 or 3.9 builds for Ubuntu 26.04 x86_64.
+          - os: ubuntu-latest
+            python: '3.8'
+          - os: ubuntu-latest
+            python: '3.9'
           - os: macos-15
             python: '3.14t'
           - os: macos-15-intel
