@@ -4281,7 +4281,37 @@ Result<FSMWithStartEnd> GrammarFSMBuilder::Regex(const std::string& regex, bool 
   return GrammarFSMBuilderImpl::Regex(regex, json_string);
 }
 
+namespace {
+
+/*!
+ * \brief Whether the regex may hold a repetition that the regex engine counts at runtime instead
+ * of unrolling (a bound above its large-repeat threshold). Any "{n" with a large n counts, so
+ * this can only err towards true.
+ */
+bool MayHaveLargeRepeat(const std::string& regex) {
+  // Same value as kLargeRepeatThreshold in fsm_builder.cc.
+  constexpr int kLargeRepeatThreshold = 128;
+  for (size_t i = 0; i < regex.size(); ++i) {
+    if (regex[i] != '{') continue;
+    for (size_t j = i + 1; j < regex.size() && regex[j] != '}'; ++j) {
+      int value = 0;
+      size_t digits = 0;
+      for (; j < regex.size() && regex[j] >= '0' && regex[j] <= '9'; ++j, ++digits) {
+        value = value > kLargeRepeatThreshold ? value : value * 10 + (regex[j] - '0');
+      }
+      if (value > kLargeRepeatThreshold) return true;
+      if (j >= regex.size() || regex[j] == '}') break;
+      if (digits == 0 && regex[j] != ',') break;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
 std::optional<FSMWithStartEnd> GrammarFSMBuilder::RegularRegexFSM(const std::string& regex) {
+  // Large repetitions stay counted repeat rules; unrolling them here would undo that.
+  if (MayHaveLargeRepeat(regex)) return std::nullopt;
   static std::mutex mutex;
   static std::map<std::string, std::optional<FSMWithStartEnd>> cache;
   constexpr size_t kMaxEntries = 512;
