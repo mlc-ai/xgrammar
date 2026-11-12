@@ -26,6 +26,7 @@
 namespace xgrammar {
 
 class RuleLevelCache;
+class CharacterClassTokenSummaryCache;
 
 /******************* CompiledGrammar Datastructures *******************/
 
@@ -109,6 +110,10 @@ struct AdaptiveTokenMask {
       const std::vector<int32_t>& uncertain_indices
   );
 
+  AdaptiveTokenMask(
+      const DynamicBitset& accepted_bitset, const std::vector<int32_t>& uncertain_indices
+  );
+
   std::string Print(const TokenizerInfo& tokenizer_info) const;
 
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
@@ -161,6 +166,9 @@ class CompiledGrammar::Impl {
 
   /*! \brief Reusable cache shared by grammars created from the same compiler. */
   std::shared_ptr<RuleLevelCache> rule_level_cache;
+
+  /*! \brief Character-class classifications shared by grammars of the same compiler */
+  std::shared_ptr<CharacterClassTokenSummaryCache> character_class_token_summary_cache;
 
   /*! \brief Tag dispatch data needed to generate token masks on demand. */
   std::unordered_map<int32_t, DynamicBitset> tag_dispatch_rule_id_to_second_slicing_bitset;
