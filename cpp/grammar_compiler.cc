@@ -38,6 +38,141 @@ namespace xgrammar {
 
 /************** AdaptiveTokenMaskCache Generator **************/
 
+/*!
+ * \brief Subset construction, built on demand, of the part of a rule automaton reachable from
+ * one state. It reproduces what the parser does on a rule made only of byte and epsilon edges:
+ * a byte is accepted when some state has a matching edge, and the rule can end when the
+ * epsilon closure holds an end state.
+ */
+class ByteFsmWalker {
+ public:
+  /*! \brief Returns nullptr when the reachable automaton has anything but byte/epsilon edges. */
+  static std::unique_ptr<ByteFsmWalker> TryCreate(
+      const CompactFSMWithStartEnd& rule_fsm, int32_t initial_state
+  ) {
+    constexpr size_t kMaxReachableStates = 1 << 16;
+    const auto& fsm = rule_fsm.GetFsm();
+    std::vector<int32_t> queue{initial_state};
+    std::unordered_set<int32_t> seen{initial_state};
+    for (size_t i = 0; i < queue.size(); ++i) {
+      for (const auto& edge : fsm.GetEdges(queue[i])) {
+        if (!edge.IsCharRange() && !edge.IsEpsilon()) {
+          return nullptr;
+        }
+        if (seen.insert(edge.target).second) {
+          if (queue.size() == kMaxReachableStates) {
+            return nullptr;
+          }
+          queue.push_back(edge.target);
+        }
+      }
+    }
+    auto walker = std::unique_ptr<ByteFsmWalker>(new ByteFsmWalker(rule_fsm));
+    walker->path_.push_back(walker->Intern({initial_state}));
+    return walker;
+  }
+
+  /*! \brief Consume one byte. False when no state accepts it (nothing is pushed). */
+  bool Advance(uint8_t byte) {
+    int32_t next = nodes_[path_.back()].next[byte];
+    if (next == kUnknown) {
+      next = Step(path_.back(), byte);
+    }
+    if (next < 0) {
+      return false;
+    }
+    path_.push_back(next);
+    return true;
+  }
+
+  bool IsCompleted() const { return nodes_[path_.back()].completed; }
+
+  void Pop(int32_t count) { path_.resize(path_.size() - count); }
+
+  /*! \brief True once the construction grew past its bound; results are then unusable. */
+  bool Overflowed() const { return overflowed_; }
+
+ private:
+  static constexpr int32_t kUnknown = -2;
+  static constexpr int32_t kDead = -1;
+  static constexpr size_t kMaxNodes = 4096;
+
+  struct Node {
+    std::vector<int32_t> states;
+    std::array<int32_t, 256> next;
+    bool completed;
+  };
+
+  struct StatesHash {
+    size_t operator()(const std::vector<int32_t>& states) const {
+      uint64_t hash = 0;
+      for (int32_t state : states) {
+        HashCombineBinary(hash, static_cast<uint64_t>(state));
+      }
+      return hash;
+    }
+  };
+
+  explicit ByteFsmWalker(const CompactFSMWithStartEnd& rule_fsm) : rule_fsm_(rule_fsm) {}
+
+  /*! \brief The node of the epsilon closure of the given states. */
+  int32_t Intern(std::vector<int32_t> states) {
+    const auto& fsm = rule_fsm_.GetFsm();
+    for (size_t i = 0; i < states.size(); ++i) {
+      for (const auto& edge : fsm.GetEdges(states[i])) {
+        if (edge.IsEpsilon() &&
+            std::find(states.begin(), states.end(), edge.target) == states.end()) {
+          states.push_back(edge.target);
+        }
+      }
+    }
+    std::sort(states.begin(), states.end());
+    auto found = ids_.find(states);
+    if (found != ids_.end()) {
+      return found->second;
+    }
+    if (nodes_.size() == kMaxNodes) {
+      overflowed_ = true;
+      return kDead;
+    }
+    Node node;
+    node.next.fill(kUnknown);
+    node.completed = false;
+    for (int32_t state : states) {
+      node.completed = node.completed || rule_fsm_.IsEndState(state);
+    }
+    node.states = states;
+    const int32_t id = static_cast<int32_t>(nodes_.size());
+    nodes_.push_back(std::move(node));
+    ids_.emplace(std::move(states), id);
+    return id;
+  }
+
+  int32_t Step(int32_t node_id, uint8_t byte) {
+    const auto& fsm = rule_fsm_.GetFsm();
+    std::vector<int32_t> targets;
+    for (int32_t state : nodes_[node_id].states) {
+      for (const auto& edge : fsm.GetEdges(state)) {
+        if (edge.IsCharRange() && byte >= edge.min && byte <= edge.max &&
+            std::find(targets.begin(), targets.end(), edge.target) == targets.end()) {
+          targets.push_back(edge.target);
+        }
+      }
+    }
+    const int32_t next = targets.empty() ? kDead : Intern(std::move(targets));
+    if (!overflowed_) {
+      nodes_[node_id].next[byte] = next;
+    }
+    return next;
+  }
+
+  const CompactFSMWithStartEnd& rule_fsm_;
+  std::vector<Node> nodes_;
+  std::unordered_map<std::vector<int32_t>, int32_t, StatesHash> ids_;
+  std::vector<int32_t> path_;
+  bool overflowed_ = false;
+};
+
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
  public:
@@ -47,7 +182,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::unordered_map<int32_t, DynamicBitset>&
           tag_dispatch_rule_id_to_second_slicing_bitset,
       const TokenizerInfo& tokenizer_info,
-      std::optional<RuleLevelCache>& rule_level_cache
+      std::optional<RuleLevelCache>& rule_level_cache,
+      bool enable_byte_fsm_walker = false
   )
       : EarleyParser(grammar, init_state),
         init_rule_id_(init_state.rule_id),
@@ -55,7 +191,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
         ),
         tokenizer_info_(tokenizer_info),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache),
+        enable_byte_fsm_walker_(enable_byte_fsm_walker) {}
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -76,6 +213,20 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       bool is_root_rule,
       const std::vector<int32_t>& token_edge_accepted
   );
+
+  /*!
+   * \brief The vocabulary scan behind GetTokenMaskWithFirstCharacterCheck. With a walker, the
+   * bytes of the initial rule are matched on it instead of on the parser.
+   */
+  bool ScanVocabularyWithFirstCharacterCheck(
+      const std::bitset<256>& first_char_mask,
+      bool is_root_rule,
+      const std::vector<int32_t>& token_edge_accepted,
+      ByteFsmWalker* walker
+  );
+
+  /*! \brief A walker for the initial state, or nullptr when the parser must be used. */
+  std::unique_ptr<ByteFsmWalker> TryCreateByteFsmWalker() const;
 
   /*!
    * \brief Adapt the cache with lookahead assertion.
@@ -132,6 +283,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   const TokenizerInfo& tokenizer_info_;
 
   std::optional<RuleLevelCache> rule_level_cache_;
+  // Only dynamic compilation uses the walker; eager compilation stays the reference.
+  bool enable_byte_fsm_walker_;
 
   // Temporary data for GetAdaptiveTokenMask.
   std::vector<int32_t> tmp_accepted_indices_;
@@ -504,10 +657,61 @@ std::pair<bool, std::bitset<256>> GrammarMatcherForTokenMaskCache::GetSpeculativ
   return {can_be_applied, speculative_mask};
 }
 
+std::unique_ptr<ByteFsmWalker> GrammarMatcherForTokenMaskCache::TryCreateByteFsmWalker() const {
+  if (!enable_byte_fsm_walker_ || has_char_budget_rules_ || init_rule_id_ < 0 ||
+      initial_state_.sub_element_id != 0 || initial_state_.partial_codepoint != 0 ||
+      initial_state_.repeat_count != 0) {
+    return nullptr;
+  }
+  const auto& rule = grammar_->GetRule(init_rule_id_);
+  if (rule.is_lazy || rule.max_tokens != -1 || rule.max_chars != -1 || !rule.capture_name.empty() ||
+      grammar_->GetGrammarExpr(rule.body_expr_id).type ==
+          Grammar::Impl::GrammarExprType::kTagDispatch) {
+    return nullptr;
+  }
+  return ByteFsmWalker::TryCreate(
+      grammar_->per_rule_fsms[init_rule_id_]->GetFsm(), initial_state_.element_id
+  );
+}
+
 bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     const std::bitset<256>& first_char_mask,
     bool is_root_rule,
     const std::vector<int32_t>& token_edge_accepted
+) {
+  if (auto walker = TryCreateByteFsmWalker()) {
+    // The scan appends to these lists, so keep them to start over if the walker gives up.
+    const auto accepted = tmp_accepted_indices_;
+    const auto rejected = tmp_rejected_indices_;
+    const auto uncertain = tmp_uncertain_indices_;
+    const auto rejected_by_lookahead = tmp_rejected_by_lookahead_indices_;
+    const auto accepted_by_lookahead = tmp_accepted_by_lookahead_indices_;
+    const auto can_reach_end = tmp_can_reach_end_stack_;
+    const auto can_reach_end_prefix_or = tmp_can_reach_end_prefix_or_stack_;
+    const bool rejected_filled = ScanVocabularyWithFirstCharacterCheck(
+        first_char_mask, is_root_rule, token_edge_accepted, walker.get()
+    );
+    if (!walker->Overflowed()) {
+      return rejected_filled;
+    }
+    tmp_accepted_indices_ = accepted;
+    tmp_rejected_indices_ = rejected;
+    tmp_uncertain_indices_ = uncertain;
+    tmp_rejected_by_lookahead_indices_ = rejected_by_lookahead;
+    tmp_accepted_by_lookahead_indices_ = accepted_by_lookahead;
+    tmp_can_reach_end_stack_ = can_reach_end;
+    tmp_can_reach_end_prefix_or_stack_ = can_reach_end_prefix_or;
+  }
+  return ScanVocabularyWithFirstCharacterCheck(
+      first_char_mask, is_root_rule, token_edge_accepted, nullptr
+  );
+}
+
+bool GrammarMatcherForTokenMaskCache::ScanVocabularyWithFirstCharacterCheck(
+    const std::bitset<256>& first_char_mask,
+    bool is_root_rule,
+    const std::vector<int32_t>& token_edge_accepted,
+    ByteFsmWalker* walker
 ) {
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_nodes_range = tokenizer_info_.GetTrieSubtreeNodesRange();
@@ -554,6 +758,9 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
   for (size_t interval_idx = 0; interval_idx < possible_intervals.size(); ++interval_idx) {
     const auto& interval = possible_intervals[interval_idx];
     for (int i = interval.first; i < interval.second; ++i) {
+      if (walker != nullptr && walker->Overflowed()) {
+        return false;
+      }
       // Skip tokens already accepted by token edges (avoid expensive Earley simulation).
       while (skip_ptr < skip_size && token_edge_accepted[skip_ptr] < i) ++skip_ptr;
       if (skip_ptr < skip_size && token_edge_accepted[skip_ptr] == i) continue;
@@ -621,7 +828,11 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         } else if (lcp_len < prev_matched_size) {
           // Case 2. The common prefix is shorter than the previous matched size. Rollback
           // the non-common part.
-          PopLastStates(prev_matched_size - lcp_len);
+          if (walker != nullptr) {
+            walker->Pop(prev_matched_size - lcp_len);
+          } else {
+            PopLastStates(prev_matched_size - lcp_len);
+          }
           tmp_can_reach_end_stack_.erase(
               tmp_can_reach_end_stack_.end() - (prev_matched_size - lcp_len),
               tmp_can_reach_end_stack_.end()
@@ -639,11 +850,14 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       if (accepted) {
         // Accept the rest chars one by one.
         for (int j = prev_matched_size; j < static_cast<int>(token.size()); ++j) {
-          if (!Advance(token[j])) {
+          if (walker != nullptr ? !walker->Advance(static_cast<uint8_t>(token[j]))
+                                : !Advance(token[j])) {
             accepted = false;
             break;
           }
-          tmp_can_reach_end_stack_.push_back(IsCompleted());
+          tmp_can_reach_end_stack_.push_back(
+              walker != nullptr ? walker->IsCompleted() : IsCompleted()
+          );
           tmp_can_reach_end_prefix_or_stack_.push_back(
               tmp_can_reach_end_stack_.back() || tmp_can_reach_end_prefix_or_stack_.back()
           );
@@ -657,7 +871,8 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       // the whole token from there. The longer tokens under this one may be taken even when this
       // one is excluded, so they are not skipped with it.
       int32_t rejected_range_end = subtree_nodes_range[i];
-      if (!accepted && !has_char_budget_rules_ &&
+      // A walker is only used for rules without token edges, so there is no such region.
+      if (!accepted && !has_char_budget_rules_ && walker == nullptr &&
           FindMidTokenExcludeEdgeRow(prev_matched_size, -1)) {
         accepted = FindMidTokenExcludeEdgeRow(prev_matched_size, sorted_decoded_vocab[i].first) > 0;
         rejected_range_end = i + 1;
@@ -709,7 +924,11 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
   }
 
   // Rollback the last matched part.
-  PopLastStates(prev_matched_size);
+  if (walker != nullptr) {
+    walker->Pop(prev_matched_size);
+  } else {
+    PopLastStates(prev_matched_size);
+  }
 
   if (possible_intervals.back().second != static_cast<int>(sorted_decoded_vocab.size()) &&
       fill_reject_indices) {
@@ -1060,7 +1279,8 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
                             cache_state,
                             tag_dispatch_rule_id_to_second_slicing_bitset,
                             tokenizer_info,
-                            retained_rule_level_cache
+                            retained_rule_level_cache,
+                            /*enable_byte_fsm_walker=*/true
   )
                             .GetAdaptiveTokenMask(state.rule_id == grammar->GetRootRuleId());
   // Apply the same repetition classification as eager compilation before publishing the mask.
