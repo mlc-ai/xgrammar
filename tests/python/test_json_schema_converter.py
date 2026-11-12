@@ -1,4 +1,5 @@
 import copy
+import itertools
 import json
 import re
 import sys
@@ -14,6 +15,7 @@ from xgrammar.testing import (
     GrammarFunctor,
     _generate_float_regex,
     _generate_range_regex,
+    _get_matcher_from_grammar,
     _is_grammar_accept_string,
     _json_schema_to_ebnf,
 )
@@ -779,6 +781,39 @@ def test_all_optional_non_strict():
         schema, '{"size": 1, "num": 1.5, "other": false}', any_whitespace=False, strict_mode=False
     )
     check_schema_with_instance(schema, '{"other": false}', any_whitespace=False, strict_mode=False)
+
+
+@pytest.mark.parametrize("strict_mode", [True, False])
+@pytest.mark.parametrize("min_properties", [0, 1])
+@pytest.mark.parametrize("required", [[], ["b"], ["a", "d"], ["e"], ["a", "b", "c", "d", "e"]])
+def test_optional_properties_every_subset(
+    required: List[str], min_properties: int, strict_mode: bool
+):
+    names = ["a", "b", "c", "d", "e"]
+    schema = {
+        "type": "object",
+        "properties": {name: {"type": "integer"} for name in names},
+        "required": required,
+        "minProperties": min_properties,
+    }
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps(schema), any_whitespace=False, strict_mode=strict_mode
+    )
+
+    matcher = _get_matcher_from_grammar(grammar)
+
+    def accepts(keys: Tuple[str, ...]) -> bool:
+        matcher.reset()
+        return matcher.accept_string(json.dumps(dict.fromkeys(keys, 1))) and matcher.is_terminated()
+
+    for count in range(len(names) + 1):
+        for keys in itertools.combinations(names, count):
+            is_accepted = set(required) <= set(keys) and len(keys) >= min_properties
+            assert accepts(keys) == is_accepted
+            if not strict_mode:
+                assert accepts(keys + ("z",)) == (set(required) <= set(keys))
+            if count >= 2:
+                assert not accepts((keys[1], keys[0]) + keys[2:])
 
 
 def test_empty():

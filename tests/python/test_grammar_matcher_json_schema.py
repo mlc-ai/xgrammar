@@ -609,6 +609,43 @@ def test_json_schema_number_without_constraint():
     assert not _is_grammar_accept_string(grammar, '{"value": "abc"}')
 
 
+@pytest.mark.parametrize(
+    "any_whitespace, accepted, rejected",
+    [
+        (
+            False,
+            ['"', '",', '"}', '", "', '", "p', '", "p3": 1}', "x", 'x",', 'x"}'],
+            ['":', '" ,', '"]', '",,', '", "a', '", "q', '", "p8', 'x":', "</s>"],
+        ),
+        (
+            True,
+            ['"', '",', '"}', '" ,', '","', '","p', '",\n  "p3": 1}', '" }', "x", 'x",'],
+            ['":', '"]', '",,', '","a', '",\n"q', '","p8', 'x":', "</s>"],
+        ),
+    ],
+)
+def test_fill_next_token_bitmask_in_string_before_optional_properties(
+    any_whitespace: bool, accepted: List[str], rejected: List[str]
+):
+    properties = {"a": {"type": "string"}}
+    properties.update({f"p{i}": {"type": "integer"} for i in range(8)})
+    schema = {
+        "type": "object",
+        "properties": properties,
+        "required": ["a"],
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_whitespace=any_whitespace)
+    vocab = accepted + rejected
+    tokenizer_info = xgr.TokenizerInfo(vocab, stop_token_ids=[vocab.index("</s>")])
+    matcher = _get_matcher_from_grammar_and_tokenizer_info(grammar, tokenizer_info)
+    assert matcher.accept_string('{"a": "x')
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    masked = _get_masked_tokens_from_bitmask(bitmask, tokenizer_info.vocab_size)
+    assert masked == list(range(len(accepted), len(accepted) + len(rejected)))
+
+
 @pytest.mark.hf_token_required
 def test_rule_level_cache_cross_grammar():
     """
