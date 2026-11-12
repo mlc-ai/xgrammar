@@ -111,7 +111,10 @@ struct JSONSchemaFormat {
 struct GrammarFormat {
   static constexpr const char* type = "grammar";
   std::string grammar;
-  GrammarFormat(std::string grammar) : grammar(std::move(grammar)) {}
+  // "ebnf", "lark"
+  std::string syntax = "ebnf";
+  GrammarFormat(std::string grammar, std::string syntax = "ebnf")
+      : grammar(std::move(grammar)), syntax(std::move(syntax)) {}
   picojson::value ToJSON() const;
 };
 
