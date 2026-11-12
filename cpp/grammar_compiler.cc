@@ -24,6 +24,7 @@
 #include "fsm.h"
 #include "grammar_functor.h"
 #include "grammar_impl.h"
+#include "local_completion_token_summary.h"
 #include "support/dynamic_bitset.h"
 #include "support/int_set.h"
 #include "support/logging.h"
@@ -47,7 +48,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::unordered_map<int32_t, DynamicBitset>&
           tag_dispatch_rule_id_to_second_slicing_bitset,
       const TokenizerInfo& tokenizer_info,
-      std::optional<RuleLevelCache>& rule_level_cache
+      std::optional<RuleLevelCache>& rule_level_cache,
+      LocalCompletionSummaryTable* local_completion_summaries = nullptr
   )
       : EarleyParser(grammar, init_state),
         init_rule_id_(init_state.rule_id),
@@ -55,7 +57,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
         ),
         tokenizer_info_(tokenizer_info),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache),
+        local_completion_summaries_(local_completion_summaries) {}
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -132,6 +135,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   const TokenizerInfo& tokenizer_info_;
 
   std::optional<RuleLevelCache> rule_level_cache_;
+  // Set by JIT only; eager compilation keeps the general builder.
+  LocalCompletionSummaryTable* local_completion_summaries_;
 
   // Temporary data for GetAdaptiveTokenMask.
   std::vector<int32_t> tmp_accepted_indices_;
@@ -825,6 +830,44 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   tmp_can_reach_end_stack_.push_back(false);
   tmp_can_reach_end_prefix_or_stack_.push_back(false);
 
+  // Reuse the local vocabulary classification only at a complete rule start. Main's
+  // lookahead adapter and runtime continuation parser still decide crossing tokens.
+  if (!is_root_rule && !has_char_budget_rules_ && local_completion_summaries_ != nullptr &&
+      initial_state_.sub_element_id == 0 && initial_state_.partial_codepoint == 0 &&
+      init_rule_id_ >= 0 &&
+      initial_state_.element_id == grammar_->per_rule_fsms[init_rule_id_]->GetFsm().GetStart()) {
+    const auto summary = local_completion_summaries_->Get(grammar_, tokenizer_info_, init_rule_id_);
+    if (summary) {
+      AdaptiveTokenMask mask = summary->mask;
+      AdaptCacheWithLookahead(&mask, is_root_rule);
+      // Lookahead can change which sparse representation is smaller. Match the fresh
+      // generic builder's choice (and its padding bits), rather than cache adaptation's
+      // usual policy of retaining the original representation.
+      const int32_t vocab_size = tokenizer_info_.GetSortedDecodedVocab().size();
+      if (mask.store_type == AdaptiveTokenMask::StoreType::kRejected &&
+          vocab_size - mask.uncertain_indices.size() - mask.rejected_indices.size() <
+              mask.rejected_indices.size()) {
+        auto excluded = mask.rejected_indices;
+        IntsetUnion(&excluded, mask.uncertain_indices);
+        IntsetComplement(&mask.accepted_indices, vocab_size, excluded);
+        mask.rejected_indices.clear();
+        mask.store_type = AdaptiveTokenMask::StoreType::kAccepted;
+      } else if (mask.store_type == AdaptiveTokenMask::StoreType::kAccepted) {
+        const int32_t rejected_count =
+            vocab_size - mask.uncertain_indices.size() - mask.accepted_indices.size();
+        if (rejected_count <= static_cast<int32_t>(mask.accepted_indices.size()) &&
+            rejected_count < AdaptiveTokenMask::USE_BITSET_THRESHOLD) {
+          auto excluded = mask.accepted_indices;
+          IntsetUnion(&excluded, mask.uncertain_indices);
+          IntsetComplement(&mask.rejected_indices, vocab_size, excluded);
+          mask.accepted_indices.clear();
+          mask.store_type = AdaptiveTokenMask::StoreType::kRejected;
+        }
+      }
+      return mask;
+    }
+  }
+
   // Try to get the crossing cache. A partial hash leaves out the rule referenced at the start
   // state, whose tokens the mask of the start state includes.
   bool rule_level_cache_is_available =
@@ -1060,7 +1103,8 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
                             cache_state,
                             tag_dispatch_rule_id_to_second_slicing_bitset,
                             tokenizer_info,
-                            retained_rule_level_cache
+                            retained_rule_level_cache,
+                            local_completion_summaries.get()
   )
                             .GetAdaptiveTokenMask(state.rule_id == grammar->GetRootRuleId());
   // Apply the same repetition classification as eager compilation before publishing the mask.
@@ -1206,6 +1250,8 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
   }
   if (enable_dynamic_compilation_) {
+    compiled_grammar_impl->local_completion_summaries =
+        std::make_shared<LocalCompletionSummaryTable>();
     compiled_grammar_impl->tag_dispatch_rule_id_to_second_slicing_bitset =
         std::move(tag_dispatch_rule_id_to_second_slicing_bitset);
     return CompiledGrammar(compiled_grammar_impl);
