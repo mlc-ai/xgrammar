@@ -2022,11 +2022,12 @@ _tool_choice_instance_cases = [
         (
             {"tools": _tools_harmony_pair, "tool_choice": "required"},
             [
+                "",
                 "plain text without channels",
                 '<|channel|>commentary to=functions.comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
             ],
             False,
-            [False, True],
+            [False, False, True],
         ),
         id="harmony-required",
     ),
@@ -2039,11 +2040,12 @@ _tool_choice_instance_cases = [
                 "forced_function_name": "comment_tool",
             },
             [
+                "",
                 '<|channel|>commentary to=functions.comment_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
                 '<|channel|>commentary to=functions.other_tool<|constrain|>json<|message|>{"q": "v"}<|call|>',
             ],
             False,
-            [True, False],
+            [False, True, False],
         ),
         id="harmony-forced",
     ),
@@ -3303,8 +3305,9 @@ def test_parallel_tool_calls_harmony_keeps_non_tool_messages(tool_choice: str):
     one_call = _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _harmony_call("t1")
     two_calls = one_call + _HARMONY_SEPARATOR + _harmony_call("t2")
 
-    # An analysis message keeps its place before the single tool call.
-    check_stag_with_instance(single, _HARMONY_ANALYSIS, True)
+    # An analysis message keeps its place before the single tool call. On its own it is an
+    # answer without a tool call, which "required" does not allow.
+    check_stag_with_instance(single, _HARMONY_ANALYSIS, tool_choice == "auto")
     check_stag_with_instance(single, _harmony_call("t1"), True)
     check_stag_with_instance(single, one_call, True)
     check_stag_with_instance(single, two_calls, False)
@@ -3316,6 +3319,93 @@ def test_parallel_tool_calls_harmony_auto_keeps_the_final_message():
         "harmony", tools=_PARALLEL_TOOLS, reasoning=True, parallel_tool_calls=False
     )
     check_stag_with_instance(single, _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _HARMONY_FINAL, True)
+
+
+_HARMONY_FORCE_T1 = {"type": "function", "function": {"name": "t1"}}
+
+
+@pytest.mark.parametrize("parallel_tool_calls", [True, False])
+@pytest.mark.parametrize("reasoning", ["enabled", "disabled", "auto"])
+@pytest.mark.parametrize("tool_choice", ["required", _HARMONY_FORCE_T1], ids=["required", "forced"])
+def test_harmony_required_and_forced_need_a_tool_call(
+    tool_choice: Any, reasoning: str, parallel_tool_calls: bool
+):
+    """Under "required" or a forced tool, a harmony response must contain a tool call."""
+    stag = get_model_structural_tag(
+        "harmony",
+        tools=_PARALLEL_TOOLS,
+        tool_choice=tool_choice,
+        reasoning=reasoning,
+        parallel_tool_calls=parallel_tool_calls,
+    )
+    analysis_on = reasoning != "disabled"
+    check_stag_with_instance(stag, "", False)
+    check_stag_with_instance(stag, _HARMONY_ANALYSIS, False)
+    check_stag_with_instance(
+        stag, _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _HARMONY_ANALYSIS, False
+    )
+    check_stag_with_instance(stag, _HARMONY_FINAL, False)
+    check_stag_with_instance(stag, _harmony_call("t1"), True)
+    check_stag_with_instance(
+        stag, _HARMONY_ANALYSIS + _HARMONY_SEPARATOR + _harmony_call("t1"), analysis_on
+    )
+
+
+@pytest.mark.parametrize("reasoning", ["enabled", "disabled"])
+def test_harmony_required_with_builtin_tool_needs_a_call(reasoning: str):
+    """Builtin tools follow the same rule as function tools under "required"."""
+    stag = get_model_structural_tag(
+        "harmony",
+        tools=[
+            {"type": "web_search_preview", "name": "browser.search", "parameters": SIMPLE_SCHEMA}
+        ],
+        tool_choice="required",
+        reasoning=reasoning,
+    )
+    call = '<|channel|>commentary to=browser.search code<|message|>{"q": "v"}<|call|>'
+    check_stag_with_instance(stag, "", False)
+    check_stag_with_instance(stag, _HARMONY_ANALYSIS, False)
+    check_stag_with_instance(stag, call, True)
+
+
+def test_harmony_forced_allows_exactly_one_call():
+    """A forced tool is called exactly once, also when parallel tool calls are allowed."""
+    stag = get_model_structural_tag(
+        "harmony", tools=_PARALLEL_TOOLS, tool_choice=_HARMONY_FORCE_T1, parallel_tool_calls=True
+    )
+    one_call = _harmony_call("t1")
+    check_stag_with_instance(stag, one_call, True)
+    check_stag_with_instance(stag, one_call + _HARMONY_SEPARATOR + one_call, False)
+
+
+def test_harmony_required_ends_with_the_tool_call():
+    """Under "required", no message may follow the last tool call."""
+    stag = get_model_structural_tag(
+        "harmony", tools=_PARALLEL_TOOLS, tool_choice="required", parallel_tool_calls=True
+    )
+    two_calls = _harmony_call("t1") + _HARMONY_SEPARATOR + _harmony_call("t2")
+    check_stag_with_instance(stag, two_calls, True)
+    check_stag_with_instance(
+        stag, _harmony_call("t1") + _HARMONY_SEPARATOR + _HARMONY_ANALYSIS, False
+    )
+
+
+@pytest.mark.parametrize("parallel_tool_calls", [True, False])
+@pytest.mark.parametrize("reasoning", ["enabled", "disabled"])
+def test_harmony_auto_still_allows_answers_without_a_call(
+    reasoning: str, parallel_tool_calls: bool
+):
+    """Under "auto", an answer without a tool call stays valid."""
+    stag = get_model_structural_tag(
+        "harmony",
+        tools=_PARALLEL_TOOLS,
+        tool_choice="auto",
+        reasoning=reasoning,
+        parallel_tool_calls=parallel_tool_calls,
+    )
+    check_stag_with_instance(stag, "", True)
+    check_stag_with_instance(stag, _HARMONY_FINAL, True)
+    check_stag_with_instance(stag, _HARMONY_ANALYSIS, reasoning != "disabled")
 
 
 def test_parallel_tool_calls_rejects_non_bool():
