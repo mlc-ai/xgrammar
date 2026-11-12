@@ -1420,6 +1420,57 @@ def test_qwen_reasoning_suffix_stays_inside_the_optional_prefix(model: str):
     assert not _is_grammar_accept_string(grammar, "<think>reasoning</think>answer")
 
 
+@pytest.mark.parametrize("model", ["qwen_3_5", "qwen_3_coder"])
+@pytest.mark.parametrize("strict", [False, True])
+@pytest.mark.parametrize(
+    "tool_choice", ["auto", "required", {"type": "function", "function": {"name": "get_schema"}}]
+)
+@pytest.mark.parametrize("max_whitespace_cnt", [None, 1])
+def test_qwen_xml_zero_argument_call(model, strict, tool_choice, max_whitespace_cnt):
+    tools = make_tools(
+        ["get_schema"], {"type": "object", "properties": {}, "additionalProperties": False}
+    )
+    tools[0]["function"]["strict"] = strict
+    tools += make_tools(
+        ["query_database"],
+        {
+            "type": "object",
+            "properties": {"sql": {"type": "string"}},
+            "required": ["sql"],
+            "additionalProperties": False,
+        },
+    )
+    tools[1]["function"]["strict"] = True
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            model,
+            tools=tools,
+            tool_choice=tool_choice,
+            reasoning=False,
+            max_whitespace_cnt=max_whitespace_cnt,
+        )
+    )
+    begin = "<tool_call>\n<function=get_schema>\n"
+    end = "</function>\n</tool_call>"
+
+    assert _is_grammar_accept_string(grammar, begin + "\n" + end)
+    assert _is_grammar_accept_string(grammar, begin + "\n\n" + end)
+    invented_argument = begin + "<parameter=sql>SELECT 1</parameter>\n" + end
+    assert _is_grammar_accept_string(grammar, invented_argument) == (not strict)
+    if tool_choice in ("auto", "required"):
+        query = "<tool_call>\n<function=query_database>\n"
+        assert _is_grammar_accept_string(
+            grammar, query + "<parameter=sql>\nSELECT 1\n</parameter>\n" + end
+        )
+        assert not _is_grammar_accept_string(grammar, query + "\n" + end)
+        assert not _is_grammar_accept_string(
+            grammar, query + "<parameter=other>SELECT 1</parameter>\n" + end
+        )
+
+    # The template adds no second newline when there are no parameter blocks.
+    assert _is_grammar_accept_string(grammar, begin + end)
+
+
 @pytest.mark.parametrize(
     "structural_tag_fn",
     [
@@ -3375,7 +3426,10 @@ def test_token_markers_required_dispatches_on_tool_call_token(model: str):
         # The tool name and any template text stay literal inside the tag.
         assert isinstance(tag.content, SequenceFormat)
         assert isinstance(tag.content.elements[0], ConstStringFormat)
-        assert any(isinstance(element, JSONSchemaFormat) for element in tag.content.elements)
+        assert any(
+            isinstance(element, JSONSchemaFormat)
+            for element in _walk_structural_format(tag.content)
+        )
 
 
 def test_token_markers_glm_forced_and_reasoning_prefix():
@@ -3409,8 +3463,13 @@ def test_token_markers_qwen_3_coder_keeps_function_wrapper_literal():
     assert tag.content == SequenceFormat(
         elements=[
             ConstStringFormat(value="\n<function=get_weather>\n"),
-            JSONSchemaFormat(json_schema=_TOKEN_MARKER_SCHEMA, style="qwen_xml"),
-            ConstStringFormat(value="\n</function>\n"),
+            SequenceFormat(
+                elements=[
+                    JSONSchemaFormat(json_schema=_TOKEN_MARKER_SCHEMA, style="qwen_xml"),
+                    OptionalFormat(content=ConstStringFormat(value="\n")),
+                ]
+            ),
+            ConstStringFormat(value="</function>\n"),
         ]
     )
 
