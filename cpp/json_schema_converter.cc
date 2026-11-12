@@ -2259,9 +2259,7 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
 
   int32_t key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_addl_key");
   std::string key_rule_name = builder_.GetRule(key_rule_id).name;
-  builder_.UpdateRuleBody(
-      key_rule_id, Sequence({ByteString("\""), BuildTrieBody(root, key_rule_name)})
-  );
+  builder_.UpdateRuleBody(key_rule_id, BuildTrieBody(root, key_rule_name));
   builder_.UpdateLookaheadAssertion(
       key_rule_id,
       Sequence(
@@ -2269,7 +2267,9 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
            builder_.AddCharacterClass({{',', ','}, {'}', '}'}, {']', ']'}, {':', ':'}})}
       )
   );
-  return RuleRef(key_rule_id);
+  // The opening quote stays outside the rule, so that SplitLeadingByte can take it off without
+  // copying the rule and its trie.
+  return Sequence({ByteString("\""), RuleRef(key_rule_id)});
 }
 
 std::string JSONSchemaConverter::GetBasicAnyRuleName() const { return kBasicAny; }
