@@ -2046,6 +2046,36 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
     }
   }
 
+  // Inside the body of a counted repetition, an uncertain token that stays within the body and
+  // further repetitions of it is legal when the repetition has enough passes left. Accept those
+  // here; the replay below then skips them.
+  if (!has_char_budget_rules_ && !skip_expired && !capture_recording_ &&
+      !grammar_->has_token_edges) {
+    for (const auto& [state, adaptive_token_mask_pointer] : latest_states_with_masks) {
+      const auto& needs = adaptive_token_mask_pointer->repeat_stay_needs;
+      if (needs.empty() || state.rule_start_pos == ParserState::kNoPrevInputPos) {
+        continue;
+      }
+      int32_t remaining = -1;
+      for (const auto& [ref_rule_id, parent_state] :
+           rule_id_to_completable_states_[state.rule_start_pos]) {
+        if (ref_rule_id != state.rule_id || parent_state.rule_id < 0 ||
+            grammar_->GetRule(parent_state.rule_id).is_lazy) {
+          continue;
+        }
+        const auto info = GetRepeatEdgeInfo(grammar_, parent_state, state.rule_id);
+        if (info.has_value()) {
+          remaining = std::max(remaining, info->Upper() - parent_state.repeat_count);
+        }
+      }
+      const auto it = std::upper_bound(needs.begin(), needs.end(), remaining);
+      if (it != needs.begin()) {
+        tmp_accepted_bitset_ |=
+            adaptive_token_mask_pointer->repeat_stay_bitsets[it - needs.begin() - 1];
+      }
+    }
+  }
+
   const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
   for (const auto& [state, adaptive_token_mask_pointer] : latest_states_with_masks) {
     const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
