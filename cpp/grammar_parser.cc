@@ -746,6 +746,7 @@ class EBNFParser {
   int32_t ParseExcludeToken();
   int32_t ParseTokenTagDispatch();
   int32_t ParseRegexMacro();
+  int32_t ParseUnorderedMacro();
   int32_t ParseSubstringMacro();
 
   // Helper functions
@@ -799,6 +800,7 @@ const std::unordered_map<std::string, std::function<int32_t(EBNFParser*)>>
         {"ExcludeToken", [](EBNFParser* parser) { return parser->ParseExcludeToken(); }},
         {"TokenTagDispatch", [](EBNFParser* parser) { return parser->ParseTokenTagDispatch(); }},
         {"Regex", [](EBNFParser* parser) { return parser->ParseRegexMacro(); }},
+        {"Unordered", [](EBNFParser* parser) { return parser->ParseUnorderedMacro(); }},
         {"Substring", [](EBNFParser* parser) { return parser->ParseSubstringMacro(); }},
 };
 
@@ -1329,6 +1331,43 @@ int32_t EBNFParser::ParseRegexMacro() {
     }
   }
   return builder_.AddRegex(pattern, json_string);
+}
+
+int32_t EBNFParser::ParseUnorderedMacro() {
+  Consume();
+  auto start = current_token_;
+  auto args = ParseMacroArguments();
+  auto delta = start - current_token_;
+  if (!args.named_arguments.empty() || args.arguments.size() < 4) {
+    ReportParseError(
+        "Unordered expects separator, min_count, max_count, and (rule, required) pairs", delta
+    );
+  }
+  auto rule_id = [&](const MacroIR::Node* node) {
+    auto name = std::get_if<MacroIR::IdentifierNode>(node);
+    if (name == nullptr || builder_.GetRuleId(name->name) < 0) {
+      ReportParseError("Unordered requires a defined rule identifier", delta);
+    }
+    return builder_.GetRuleId(name->name);
+  };
+  int separator = rule_id(args.arguments[0].get());
+  auto lower = std::get_if<MacroIR::IntegerNode>(args.arguments[1].get());
+  auto upper = std::get_if<MacroIR::IntegerNode>(args.arguments[2].get());
+  if (lower == nullptr || upper == nullptr || lower->value < 1 || lower->value > upper->value ||
+      upper->value > static_cast<int64_t>(args.arguments.size() - 3)) {
+    ReportParseError("Unordered requires 1 <= min_count <= max_count <= number of entries", delta);
+  }
+  std::vector<std::pair<int32_t, bool>> entries;
+  for (size_t i = 3; i < args.arguments.size(); ++i) {
+    auto pair = std::get_if<MacroIR::TupleNode>(args.arguments[i].get());
+    if (pair == nullptr || pair->elements.size() != 2) {
+      ReportParseError("Unordered entries must be (rule, required) pairs", delta);
+    }
+    auto required = std::get_if<MacroIR::BooleanNode>(pair->elements[1].get());
+    if (required == nullptr) ReportParseError("Unordered required flag must be boolean", delta);
+    entries.emplace_back(rule_id(pair->elements[0].get()), required->value);
+  }
+  return builder_.AddUnordered(separator, lower->value, upper->value, std::move(entries));
 }
 
 int32_t EBNFParser::ParseSubstringMacro() {

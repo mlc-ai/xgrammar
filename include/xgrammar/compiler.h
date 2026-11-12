@@ -73,7 +73,11 @@ class GrammarCompiler {
       bool enable_dynamic_compilation = false
   );
 
-  /*! \brief Get the compiled grammar for a JSON schema string. */
+  /*! \brief Get the compiled grammar for a JSON schema string.
+   * \param property_order Object-key policy. kUnordered enforces required and unique keys in
+   * arbitrary order on closed objects. nullopt preserves any_order's legacy behavior.
+   * Cannot be combined with any_order=true.
+   */
   CompiledGrammar CompileJSONSchema(
       const std::string& schema,
       bool any_whitespace = true,
@@ -81,7 +85,8 @@ class GrammarCompiler {
       std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
       bool strict_mode = true,
       std::optional<int> max_whitespace_cnt = std::nullopt,
-      bool any_order = false
+      bool any_order = false,
+      std::optional<PropertyOrder> property_order = std::nullopt
   );
 
   /*! \brief Get the compiled grammar for pure JSON. */
