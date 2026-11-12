@@ -4,6 +4,9 @@
 #include <picojson.h>
 
 #include <cstdint>
+#include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_set>
@@ -15,9 +18,41 @@
 
 namespace xgrammar {
 
+/*!
+ * \brief Vocabulary classifications that depend only on the vocabulary and a small canonical
+ * automaton, shared by every grammar and compiler using the same tokenizer. Entries are immutable
+ * once stored. Derived data: never serialized and not part of tokenizer equality.
+ */
+class VocabularySummaryCache {
+ public:
+  std::shared_ptr<const void> Get(const std::vector<int32_t>& key) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto found = entries_.find(key);
+    return found == entries_.end() ? nullptr : found->second;
+  }
+
+  /*! \brief Store a value unless the key is present or the cache is full; returns the kept one. */
+  std::shared_ptr<const void> Put(
+      const std::vector<int32_t>& key, std::shared_ptr<const void> value
+  ) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto found = entries_.find(key);
+    if (found != entries_.end()) return found->second;
+    if (entries_.size() >= kMaxEntries) return value;
+    return entries_.emplace(key, std::move(value)).first->second;
+  }
+
+ private:
+  static constexpr size_t kMaxEntries = 1024;
+  std::mutex mutex_;
+  std::map<std::vector<int32_t>, std::shared_ptr<const void>> entries_;
+};
+
 class TokenizerInfo::Impl {
  public:
   explicit Impl() = default;
+
+  VocabularySummaryCache& GetVocabularySummaryCache() const { return *vocabulary_summary_cache_; }
 
   Impl(
       const std::vector<std::string>& encoded_vocab,
@@ -67,6 +102,9 @@ class TokenizerInfo::Impl {
 
  private:
   static bool IsSpecialToken(const std::string& decoded_token);
+
+  std::shared_ptr<VocabularySummaryCache> vocabulary_summary_cache_ =
+      std::make_shared<VocabularySummaryCache>();
 
   /*! \brief The vocabulary type. */
   VocabType vocab_type_;

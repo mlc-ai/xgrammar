@@ -8,8 +8,11 @@
 #include <algorithm>
 #include <bitset>
 #include <cstdint>
+#include <limits>
 #include <map>
+#include <memory>
 #include <optional>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -73,7 +76,11 @@ bool IsPlainCharacterClassRule(const Grammar& grammar, int32_t rule_id, ByteSet*
   }
   const auto body = UnwrapSingleElement(grammar, grammar->GetGrammarExpr(rule.body_expr_id));
   const auto& rule_fsm = grammar->per_rule_fsms[rule_id];
-  if (body.type != Grammar::Impl::GrammarExprType::kCharacterClass || !rule_fsm.has_value()) {
+  // A regex body (the sub-pattern of a large bounded regex repetition) is admitted on the same
+  // structural proof as a character class: the checks below only rely on the byte FSM.
+  const bool is_regex_body = body.type == Grammar::Impl::GrammarExprType::kRegex;
+  if ((body.type != Grammar::Impl::GrammarExprType::kCharacterClass && !is_regex_body) ||
+      !rule_fsm.has_value()) {
     return false;
   }
   const auto& fsm = rule_fsm->GetFsm();
@@ -82,6 +89,32 @@ bool IsPlainCharacterClassRule(const Grammar& grammar, int32_t rule_id, ByteSet*
   }
   std::unordered_set<int> reachable_states;
   fsm.GetReachableStates(&reachable_states);
+  if (is_regex_body) {
+    // A token may end in the middle of one repetition; that is only legal when the repetition
+    // can still be completed. A character class guarantees it, a regex FSM has to be checked:
+    // every reachable state must reach an end state.
+    std::unordered_set<int> can_finish;
+    bool changed = true;
+    while (changed) {
+      changed = false;
+      for (int state : reachable_states) {
+        if (can_finish.count(state)) {
+          continue;
+        }
+        bool finishes = fsm.IsEndState(state);
+        for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+          finishes = finishes || (edge.IsCharRange() && can_finish.count(edge.target));
+        }
+        if (finishes) {
+          can_finish.insert(state);
+          changed = true;
+        }
+      }
+    }
+    if (can_finish.size() != reachable_states.size()) {
+      return false;
+    }
+  }
   for (int state : reachable_states) {
     ByteSet seen;
     for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
@@ -111,6 +144,81 @@ struct RepetitionFollowBytes {
   ByteSet under_any;
   int32_t max_upper = 0;
 };
+
+/*!
+ * \brief The bytes on the outgoing edges of `state`, or nullopt when the state is an end state or
+ * has an edge that is not a plain byte range.
+ */
+std::optional<ByteSet> CharacterEdgeBytes(const CompactFSMWithStartEnd& fsm, int state) {
+  if (fsm.IsEndState(state)) {
+    return std::nullopt;
+  }
+  ByteSet bytes;
+  for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+    if (!edge.IsCharRange() || edge.max > 0xFF) {
+      return std::nullopt;
+    }
+    for (int byte = edge.min; byte <= edge.max; ++byte) {
+      bytes.set(byte);
+    }
+  }
+  return bytes;
+}
+
+/*!
+ * \brief The bytes that can follow rule `rule_id` once it completes: one set per reference.
+ *
+ * Returns nullopt unless completing the rule is observably the same as stepping over a plain rule
+ * reference edge: the rule carries no budget, capture, laziness, temperature or suffix-stop
+ * semantics, every rule has an FSM (so every reference is visible here), the rule is referenced
+ * only through plain rule-reference edges, and each reference is followed by byte edges alone. A
+ * lookahead assertion on the rule is allowed: it only refines masks, never the language.
+ */
+std::optional<std::vector<ByteSet>> FollowBytesOfRuleReferences(
+    const Grammar& grammar, int32_t rule_id
+) {
+  const auto& rule = grammar->GetRule(rule_id);
+  if (rule_id == grammar->GetRootRuleId() || rule.max_tokens >= 0 || rule.max_chars >= 0 ||
+      !rule.capture_name.empty() || rule.is_lazy || rule.temperature.has_value() ||
+      grammar->GetSuffixStopInfo(rule_id) != nullptr) {
+    return std::nullopt;
+  }
+  std::vector<ByteSet> contexts;
+  for (int32_t other = 0; other < grammar->NumRules(); ++other) {
+    if (const auto* suffix_stop_info = grammar->GetSuffixStopInfo(other)) {
+      if (suffix_stop_info->body_rule_id == rule_id ||
+          suffix_stop_info->marker_rule_id == rule_id) {
+        return std::nullopt;
+      }
+    }
+    const auto& other_fsm = grammar->per_rule_fsms[other];
+    if (!other_fsm.has_value()) {
+      return std::nullopt;
+    }
+    std::unordered_set<int> reachable_states;
+    other_fsm->GetFsm().GetReachableStates(&reachable_states);
+    for (int state : reachable_states) {
+      for (const auto& edge : other_fsm->GetFsm().GetFsm().GetEdges(state)) {
+        if (edge.IsRepeatRef() &&
+            grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId() == rule_id) {
+          return std::nullopt;
+        }
+        if (!edge.IsRuleRef() || edge.GetRefRuleId() != rule_id) {
+          continue;
+        }
+        auto bytes = CharacterEdgeBytes(other_fsm->GetFsm(), edge.target);
+        if (!bytes.has_value()) {
+          return std::nullopt;
+        }
+        contexts.push_back(*bytes);
+      }
+    }
+  }
+  if (contexts.empty()) {
+    return std::nullopt;
+  }
+  return contexts;
+}
 
 /*!
  * \brief The rules whose start state gets the counted-repetition fast path.
@@ -172,25 +280,34 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
           continue;
         }
         referenced[body_rule_id] = true;
+        // One byte set per context the repetition can be left into.
+        std::vector<ByteSet> contexts;
         if (rule_fsm->GetFsm().IsEndState(edge.target)) {
-          disqualified[body_rule_id] = true;
-          continue;
-        }
-        ByteSet bytes;
-        for (const auto& follow_edge : rule_fsm->GetFsm().GetFsm().GetEdges(edge.target)) {
-          if (!follow_edge.IsCharRange() || follow_edge.max > 0xFF) {
+          // The repetition ends its rule (a bounded regex repetition at the end of a pattern):
+          // what follows is whatever follows each reference to that rule.
+          auto rule_contexts = rule_fsm->GetFsm().GetFsm().GetEdges(edge.target).size() == 0
+                                   ? FollowBytesOfRuleReferences(grammar, rule_id)
+                                   : std::nullopt;
+          if (!rule_contexts.has_value()) {
             disqualified[body_rule_id] = true;
-            break;
+            continue;
           }
-          for (int byte = follow_edge.min; byte <= follow_edge.max; ++byte) {
-            bytes.set(byte);
+          contexts = std::move(*rule_contexts);
+        } else {
+          auto bytes = CharacterEdgeBytes(rule_fsm->GetFsm(), edge.target);
+          if (!bytes.has_value()) {
+            disqualified[body_rule_id] = true;
+            continue;
           }
+          contexts.push_back(*bytes);
         }
-        if ((bytes & *first_bytes[body_rule_id]).any()) {
-          disqualified[body_rule_id] = true;
+        for (const auto& bytes : contexts) {
+          if ((bytes & *first_bytes[body_rule_id]).any()) {
+            disqualified[body_rule_id] = true;
+          }
+          follow_bytes[body_rule_id].under_all &= bytes;
+          follow_bytes[body_rule_id].under_any |= bytes;
         }
-        follow_bytes[body_rule_id].under_all &= bytes;
-        follow_bytes[body_rule_id].under_any |= bytes;
         // The expander writes INT32_MAX for an unbounded counted repetition.
         XGRAMMAR_DCHECK(info.Upper() >= 0);
         follow_bytes[body_rule_id].max_upper =
@@ -295,6 +412,59 @@ void PopulateRepeatInteriorBitsets(
     if (state.element_id != fsm.GetStart()) {
       continue;
     }
+    // The classification below depends only on the body automaton, the bytes and bound of its
+    // repetitions, and the mask it starts from. Lazy compilation, which handles one state at a
+    // time, keeps the result with the tokenizer so every grammar with such a repetition (for
+    // example a string with the same length bound) reuses it.
+    std::vector<int32_t> shared_key;
+    if (cache->size() == 1) {
+      const auto& follow = *counted_repetition_bodies[state.rule_id];
+      shared_key = {std::numeric_limits<int32_t>::min() + 3, follow.max_upper};
+      for (const auto* bytes : {&follow.under_all, &follow.under_any}) {
+        for (int word = 0; word < 8; ++word) {
+          uint32_t packed = 0;
+          for (int bit = 0; bit < 32; ++bit) {
+            packed |= static_cast<uint32_t>((*bytes)[word * 32 + bit]) << bit;
+          }
+          shared_key.push_back(static_cast<int32_t>(packed));
+        }
+      }
+      // The automaton, with states numbered in the order a traversal from the start meets them.
+      std::unordered_map<int, int32_t> numbering{{fsm.GetStart(), 0}};
+      std::vector<int> order{fsm.GetStart()};
+      for (size_t i = 0; i < order.size(); ++i) {
+        const auto& edges = fsm.GetFsm().GetEdges(order[i]);
+        shared_key.push_back(fsm.IsEndState(order[i]));
+        shared_key.push_back(static_cast<int32_t>(edges.size()));
+        for (const auto& edge : edges) {
+          auto [found, inserted] =
+              numbering.emplace(edge.target, static_cast<int32_t>(order.size()));
+          if (inserted) {
+            order.push_back(edge.target);
+          }
+          shared_key.insert(shared_key.end(), {edge.min, edge.max, found->second});
+        }
+      }
+      // The mask this state starts from is itself determined by the automaton: such a rule has
+      // no lookahead. Its shape is still part of the key, as a cheap guard.
+      uint64_t fingerprint = static_cast<uint64_t>(mask.store_type);
+      for (const auto* indices :
+           {&mask.accepted_indices, &mask.rejected_indices, &mask.uncertain_indices}) {
+        shared_key.push_back(static_cast<int32_t>(indices->size()));
+        for (size_t i = 0; i < indices->size(); i += 64) {
+          HashCombineBinary(fingerprint, static_cast<uint64_t>((*indices)[i]));
+        }
+      }
+      shared_key.push_back(
+          mask.store_type == StoreType::kAcceptedBitset ? mask.accepted_bitset.Count() : -1
+      );
+      shared_key.push_back(static_cast<int32_t>(fingerprint));
+      shared_key.push_back(static_cast<int32_t>(fingerprint >> 32));
+      if (auto shared = tokenizer_info.ImplPtr()->GetVocabularySummaryCache().Get(shared_key)) {
+        mask = *std::static_pointer_cast<const AdaptiveTokenMask>(shared);
+        continue;
+      }
+    }
     // Bucket the budget-decided tokens by the repetitions they consume, keeping the
     // sorted-vocabulary order.
     std::map<int32_t, std::vector<int32_t>> tokens_by_repetitions;
@@ -359,6 +529,11 @@ void PopulateRepeatInteriorBitsets(
       IntsetDifference(&mask.accepted_indices, decided_indices);
     }
     IntsetDifference(&mask.uncertain_indices, decided_indices);
+    if (!shared_key.empty()) {
+      tokenizer_info.ImplPtr()->GetVocabularySummaryCache().Put(
+          shared_key, std::make_shared<const AdaptiveTokenMask>(mask)
+      );
+    }
   }
 }
 
