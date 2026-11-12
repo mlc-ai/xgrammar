@@ -61,7 +61,7 @@ def test_repeated_pattern_is_stable():
     pattern = {"type": "string", "pattern": "^[A-Fa-f0-9]{6}$"}
     schema = {
         "type": "object",
-        "properties": {name: pattern for name in ["a", "b", "c"]},
+        "properties": dict.fromkeys(["a", "b", "c"], pattern),
         "required": ["a", "b", "c"],
     }
     for _ in range(3):
