@@ -3396,15 +3396,12 @@ int32_t JSONSchemaConverter::GenerateObject(
           );
           int32_t value_rule_id =
               CreateRule(pattern_property.schema, rule_name + "_" + pattern_suffix);
-          property_choices.push_back(Sequence(
-              {beginning_separator,
-               FormatOtherProperty(
-                   RuleRef(key_rule_id),
-                   value_rule_id,
-                   rule_name,
-                   pattern_suffix,
-                   pattern_property.schema
-               )}
+          property_choices.push_back(FormatOtherProperty(
+              RuleRef(key_rule_id),
+              value_rule_id,
+              rule_name,
+              pattern_suffix,
+              pattern_property.schema
           ));
         }
       } else {
@@ -3418,15 +3415,12 @@ int32_t JSONSchemaConverter::GenerateObject(
           value_rule_id = builder_.GetRuleId(GetBasicAnyRuleName());
           XGRAMMAR_DCHECK(value_rule_id != -1);
         }
-        property_choices.push_back(Sequence(
-            {beginning_separator,
-             FormatOtherProperty(
-                 RuleRef(key_rule_id),
-                 value_rule_id,
-                 rule_name,
-                 /*rule_name_suffix=*/"pn",
-                 additional_property
-             )}
+        property_choices.push_back(FormatOtherProperty(
+            RuleRef(key_rule_id),
+            value_rule_id,
+            rule_name,
+            /*rule_name_suffix=*/"pn",
+            additional_property
         ));
       }
 
@@ -3435,7 +3429,8 @@ int32_t JSONSchemaConverter::GenerateObject(
       int32_t subsequent_property =
           Sequence({NextSeparatorExpression(), RuleRef(property_rule_id)});
       content = Sequence(
-          {RuleRef(property_rule_id),
+          {beginning_separator,
+           RuleRef(property_rule_id),
            GetPropertyWithNumberConstraints(
                subsequent_property, spec.min_properties, spec.max_properties, 1, rule_name
            ),
