@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "support/dynamic_bitset.h"
 #include "support/reflection.h"
 #include "xgrammar/tokenizer_info.h"
 
@@ -40,6 +41,10 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
     return token_id_to_sorted_vocab_index_;
   }
+  const std::vector<int32_t>& GetSortedVocabLCPWithPrevious() const {
+    return sorted_vocab_lcp_with_previous_;
+  }
+  const DynamicBitset& GetAsciiStringSafeBitset() const { return ascii_string_safe_bitset_; }
   const std::vector<int32_t>& GetTokenCharCounts() const;
   int32_t GetMaxTokenChars() const;
   void BuildTokenIdToSortedVocabIndex();
@@ -83,6 +88,11 @@ class TokenizerInfo::Impl {
   /*! \brief A pesudo-trie. trie_subtree_nodes_range[i] stores how many nodes there are in the
    * subtree. */
   std::vector<int32_t> trie_subtree_nodes_range_;
+  /*! \brief Derived vocabulary classifications shared by character-class mask builders. */
+  std::vector<int32_t> sorted_vocab_lcp_with_previous_;
+  /*! \brief Bit i is set when sorted token i consists only of printable ASCII bytes other than
+   * '"' and '\\'. */
+  DynamicBitset ascii_string_safe_bitset_;
   /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> stop_token_ids_;
