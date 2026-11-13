@@ -41,7 +41,7 @@ def test_utf8():
 
 expected_grammar_test_structural_tag_after_optimization = r"""basic_escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub))
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
-basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
+basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*)) (=([ \n\r\t]* "}"))
 basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\r\t]* "}"))
 root_0 ::= (("{" [ \n\r\t]* "\"arg1\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
 root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg2\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer)) (=([ \n\r\t]* "}"))
@@ -51,14 +51,14 @@ basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\"
 basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1)) (=(root_part_0_1 [ \n\r\t]* "}"))
 basic_string_1 ::= (("\"" basic_string_sub_1))
 root_1 ::= (("{" [ \n\r\t]* "\"arg3\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}")) (=("</function>"))
-root_prop_1 ::= (("[" [ \n\r\t]* basic_string_1 root_prop_1_2 [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
+root_prop_1 ::= (("[" [ \n\r\t]* basic_string_1 root_prop_1_2 [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]")) (=([ \n\r\t]* "}"))
 root_prop_1_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string_1)) (=(root_prop_1_1))
 root_part_0_1 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg4\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1)) (=([ \n\r\t]* "}"))
 basic_number_1_1 ::= ("" | ("-")) (=(basic_number_2_1 basic_number_3_1 basic_number_5_1))
 basic_number_2_1 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_1 basic_number_5_1))
 basic_number_3_1 ::= ("" | ("." basic_number_3_3)) (=(basic_number_5_1))
 basic_number_4_1 ::= ("" | ([+\-])) (=(basic_number_3_3))
-basic_number_5_1 ::= ("" | ([eE] basic_number_4_1 basic_number_3_3))
+basic_number_5_1 ::= ("" | ([eE] basic_number_4_1 basic_number_3_3)) (=(root_part_0_1 [ \n\r\t]* "}"))
 triggered_tags_group ::= (("1>" root_0 "</function>") | ("2>" root_0 "</function>"))
 triggered_tags_group_1 ::= ((">" root_1 "</function>"))
 triggered_tags ::= TagDispatch(
@@ -70,7 +70,7 @@ triggered_tags ::= TagDispatch(
 root ::= ((triggered_tags))
 basic_number_3_2 ::= ("" | ([0-9] basic_number_3_2))
 basic_number_3_3 ::= (([0-9] basic_number_3_2))
-root_prop_1_1 ::= ("" | (root_prop_1_items root_prop_1_1))
+root_prop_1_1 ::= ("" | (root_prop_1_items root_prop_1_1)) (=([ \n\r\t]* "]"))
 root_prop_1_2 ::= ((root_prop_1_1)) (=([ \n\r\t]* "]"))
 """
 
