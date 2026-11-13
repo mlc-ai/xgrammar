@@ -3177,6 +3177,60 @@ def test_deeply_nested_groups_rejected():
     _assert_lark_error("start: " + "(" * 2000 + '"a"' + ")" * 2000, "nested deeper than")
 
 
+def _nested_lark(depth: int, body: str = 'start: "a"') -> str:
+    return "start: %lark {\n" * depth + body + "\n}" * depth
+
+
+def test_nested_lark_and_named_grammars_within_depth_limit_accepted():
+    # Nesting up to the limit still compiles, including mixed groups and named grammars.
+    mixed = xgr.Grammar.from_lark(_nested_lark(100, "start: " + "(" * 100 + '"a"' + ")" * 100))
+    assert mixed is not None
+    _assert_grammar_language(mixed, ["a"], ["b"])
+    _assert_language(_nested_lark(200), ["a"], ["", "b"])
+    grammar = xgr.Grammar.from_lark(
+        _nested_lark(49, "start: @inner"), named_grammars={"inner": _nested_lark(150)}
+    )
+    _assert_grammar_language(grammar, ["a"], ["b"])
+    chain = {f"g{i}": f"start: @g{i + 1}" for i in range(199)}
+    chain["g199"] = 'start: "a"'
+    _assert_grammar_language(
+        xgr.Grammar.from_lark("start: @g0", named_grammars=chain), ["a"], ["b"]
+    )
+
+
+def test_deeply_nested_lark_rejected():
+    # A nested %lark grammar recurses through the parser and the compiler once per level, so it
+    # shares the group depth limit instead of overflowing the stack.
+    _assert_lark_error(_nested_lark(201), "%lark grammars are nested deeper than 200 levels")
+    _assert_lark_error(_nested_lark(20000), "%lark grammars are nested deeper than 200 levels")
+    _assert_lark_error(
+        _nested_lark(100, "start: " + "(" * 101 + '"a"' + ")" * 101),
+        "groups are nested deeper than 200 levels",
+    )
+
+
+def test_deeply_nested_named_grammars_rejected():
+    # A named grammar is parsed and compiled while the grammar that references it is still on the
+    # stack, so it continues from the depth of the reference instead of starting a new budget.
+    with pytest.raises(RuntimeError) as exc_info:
+        xgr.Grammar.from_lark(
+            _nested_lark(50, "start: @inner"), named_grammars={"inner": _nested_lark(150)}
+        )
+    assert "%lark grammars are nested deeper than 200 levels" in str(exc_info.value)
+
+    groups = {f"g{i}": "start: " + "(" * 150 + f"@g{i + 1}" + ")" * 150 for i in range(30)}
+    groups["g30"] = 'start: "a"'
+    with pytest.raises(RuntimeError) as exc_info:
+        xgr.Grammar.from_lark("start: @g0", named_grammars=groups)
+    assert "groups are nested deeper than 200 levels" in str(exc_info.value)
+
+    chain = {f"g{i}": f"start: @g{i + 1}" for i in range(200)}
+    chain["g200"] = 'start: "a"'
+    with pytest.raises(RuntimeError) as exc_info:
+        xgr.Grammar.from_lark("start: @g0", named_grammars=chain)
+    assert "named grammars are nested deeper than 200 levels" in str(exc_info.value)
+
+
 @pytest.mark.thread_unsafe
 def test_json_directive_depth_is_bounded_per_value():
     # The %json value is parsed on its own: brackets in the rest of the grammar must not count

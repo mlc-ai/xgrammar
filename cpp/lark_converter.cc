@@ -508,6 +508,8 @@ struct Node {
 
   Kind kind = Kind::kSequence;
   Location location;
+  // For kGrammarRef: the group depth of the reference, which the named grammar continues from.
+  int depth = 0;
   std::string text;
   std::string text2;
   std::string flags;
@@ -553,10 +555,12 @@ struct Document {
 
 class LarkParser {
  public:
-  LarkParser(const std::string& source, std::vector<Token> tokens)
-      : source_(source), tokens_(std::move(tokens)) {}
+  LarkParser(const std::string& source, std::vector<Token> tokens, int group_depth = 0)
+      : source_(source), tokens_(std::move(tokens)), group_depth_(group_depth) {}
 
   Document Parse() { return ParseDocument(false); }
+
+  static constexpr int kMaxGroupDepth = 200;
 
  private:
   const Token& Peek(size_t offset = 0) const {
@@ -1126,14 +1130,26 @@ class LarkParser {
       result.kind = Node::Kind::kGrammarRef;
       result.location = token.location;
       result.text = token.text;
+      result.depth = group_depth_;
       return result;
     }
     if (Match(TokenType::kLark)) {
       Consume(TokenType::kLBrace, "expected '{' after %lark");
+      // A nested grammar recurses through ParseDocument back into ParseAtom, so it shares the
+      // group depth budget.
+      if (group_depth_ >= kMaxGroupDepth) {
+        RaiseLarkError(
+            source_,
+            token.location,
+            "%lark grammars are nested deeper than " + std::to_string(kMaxGroupDepth) + " levels"
+        );
+      }
       Node result;
       result.kind = Node::Kind::kNestedLark;
       result.location = token.location;
+      ++group_depth_;
       result.nested = std::make_shared<Document>(ParseDocument(true));
+      --group_depth_;
       Consume(TokenType::kRBrace, "expected '}' after nested Lark grammar");
       return result;
     }
@@ -1167,7 +1183,6 @@ class LarkParser {
   std::vector<Token> tokens_;
   size_t position_ = 0;
   int group_depth_ = 0;
-  static constexpr int kMaxGroupDepth = 200;
 };
 
 const std::unordered_map<std::string, std::string>& CommonRegexes() {
@@ -1944,7 +1959,7 @@ class LarkCompiler {
     return builder_.AddRuleRef(rule_id);
   }
 
-  const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location) {
+  const Grammar& ResolveNamedGrammar(const std::string& name, const Location& location, int depth) {
     auto input_it = named_grammars_.inputs.find(name);
     if (input_it == named_grammars_.inputs.end()) {
       RaiseLarkError(source_, location, "unknown named grammar '@" + name + "'");
@@ -1969,12 +1984,22 @@ class LarkCompiler {
       cycle << " -> @" << name;
       RaiseLarkError(source_, location, "circular named grammar reference: " + cycle.str());
     }
+    // The named grammar is parsed and compiled while the referencing grammar is still on the
+    // stack, so it continues from the depth of the reference instead of starting a new budget.
+    if (depth >= LarkParser::kMaxGroupDepth) {
+      RaiseLarkError(
+          source_,
+          location,
+          "named grammars are nested deeper than " + std::to_string(LarkParser::kMaxGroupDepth) +
+              " levels"
+      );
+    }
 
     named_grammars_.active.push_back(name);
     try {
       const std::string& named_source = std::get<std::string>(input_it->second);
       auto tokens = LarkLexer(named_source).Tokenize();
-      auto document = LarkParser(named_source, std::move(tokens)).Parse();
+      auto document = LarkParser(named_source, std::move(tokens), depth + 1).Parse();
       Grammar compiled =
           LarkCompiler(named_source, std::move(document), tokenizer_info_, named_grammars_)
               .Compile();
@@ -2142,8 +2167,9 @@ class LarkCompiler {
         std::string name = node.text.substr(1);
         auto root_it = named_grammar_roots_.find(name);
         if (root_it == named_grammar_roots_.end()) {
-          int32_t root =
-              SubGrammarAdder::Apply(&builder_, ResolveNamedGrammar(name, node.location));
+          int32_t root = SubGrammarAdder::Apply(
+              &builder_, ResolveNamedGrammar(name, node.location, node.depth)
+          );
           root_it = named_grammar_roots_.emplace(name, root).first;
         }
         int32_t result = builder_.AddRuleRef(root_it->second);
