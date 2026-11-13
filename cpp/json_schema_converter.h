@@ -443,6 +443,15 @@ class JSONSchemaConverter {
       const std::string& regex, bool json_string = false, bool force_cfg_expansion = false
   );
   /*!
+   * \brief RegexExpression for a string schema's "pattern", or std::nullopt when the regex
+   * engine that compiles it cannot parse the pattern's syntax (lookbehind, backreferences, \b,
+   * \p{...}, ...). In that case a warning is logged and the caller compiles the string without
+   * the pattern, so one unsupported pattern no longer fails the whole schema.
+   */
+  std::optional<int32_t> PatternExpression(
+      const std::string& pattern, bool json_string, bool force_cfg_expansion = false
+  );
+  /*!
    * \brief Rules matching the regex (one of the converter's own ASCII string bodies) minus
    * every string containing one of excludes_, and minus excluded_keys as whole strings. With
    * close_json_string the closing quote is appended after the filtering, so it is never part of

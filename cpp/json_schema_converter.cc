@@ -2388,6 +2388,36 @@ int32_t JSONSchemaConverter::RegexExpression(
   return AddSubGrammar(Grammar::FromEBNF(RegexToEBNF(regex)));
 }
 
+std::optional<int32_t> JSONSchemaConverter::PatternExpression(
+    const std::string& pattern, bool json_string, bool force_cfg_expansion
+) {
+  // Every syntax the regex parser cannot handle is reported through RegexConverter::RaiseError,
+  // whose message starts with this prefix. The FSM engine instead returns an error, and
+  // RegexExpression then falls back to that parser, so this is exactly the case where neither
+  // engine on this path can compile the pattern. Other errors (e.g. a null character) still
+  // propagate. Nothing is added to the grammar before the parser throws.
+  static const std::string kRegexParsingError = "Regex parsing error";
+  try {
+    return RegexExpression(pattern, json_string, force_cfg_expansion);
+  } catch (const LogFatalError& error) {
+    std::string message = error.what();
+    auto reason_begin = message.find(kRegexParsingError);
+    if (reason_begin == std::string::npos) {
+      throw;
+    }
+    // what() carries the time and source location; keep only the parser's own message.
+    std::string reason = message.substr(reason_begin);
+    while (!reason.empty() && (reason.back() == '\n' || reason.back() == ' ')) {
+      reason.pop_back();
+    }
+    // Ignoring the pattern only makes the grammar accept more strings, as for the lookahead
+    // assertions the FSM engine already skips and for an unsupported format or multipleOf.
+    XGRAMMAR_LOG(WARNING) << "pattern \"" << pattern << "\" is not supported (" << reason
+                          << "); ignoring pattern, minLength/maxLength still apply";
+    return std::nullopt;
+  }
+}
+
 // ==================== Generate Methods ====================
 
 void JSONSchemaConverter::WarnDroppedLengthConstraints(
@@ -2758,11 +2788,12 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
       return Sequence({ByteString("\""), RegexExpression(*regex, false, true), ByteString("\"")});
     }
   }
-  // Check for pattern
+  // Check for pattern. A pattern whose syntax is not supported is ignored with a warning, and the
+  // string falls through to the plain or length-bounded branches below.
   if (spec.pattern.has_value()) {
-    return Sequence(
-        {ByteString("\""), RegexExpression(*spec.pattern, /*json_string=*/true), ByteString("\"")}
-    );
+    if (auto pattern_expr = PatternExpression(*spec.pattern, /*json_string=*/true)) {
+      return Sequence({ByteString("\""), *pattern_expr, ByteString("\"")});
+    }
   }
   // Check for length constraints. They are dropped when there are exclusions: intersecting the
   // unrolled bound with the exclusion automaton emits one rule per position and automaton state
@@ -4001,7 +4032,10 @@ int32_t XMLToolCallingConverter::GenerateString(
       }
     }
     if (spec.pattern.has_value()) {
-      return RegexExpression(*spec.pattern, false, /*force_cfg_expansion=*/true);
+      if (auto pattern_expr =
+              PatternExpression(*spec.pattern, false, /*force_cfg_expansion=*/true)) {
+        return *pattern_expr;
+      }
     }
     const bool bounded = spec.min_length != 0 || spec.max_length != -1;
     // Without exclusions, a length bound or an unrecognized format keeps the plain repetition.
