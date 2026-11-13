@@ -20,6 +20,7 @@
 #include "grammar_functor.h"
 #include "grammar_impl.h"
 #include "json_schema_converter.h"
+#include "support/encoding.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
 #include "support/recursion_guard.h"
@@ -2234,10 +2235,40 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
   //     root ::= tags_rule tags_rule_sub
   //   tags_rule_sub ::= sep tags_rule tags_rule_sub | ""
 
-  // Step 1. Construct a rule representing any tag
+  // Step 1. Construct a rule representing any tag.
+  // Match the shared begin prefix of tags before expanding the alternatives,
+  // so text preceding the tags does not predict every tag rule.
+
+  std::string common_prefix;
+  if (format.tags.size() > 1 && std::holds_alternative<std::string>(format.tags[0].begin)) {
+    common_prefix = std::get<std::string>(format.tags[0].begin);
+    for (size_t i = 1; i < format.tags.size() && !common_prefix.empty(); ++i) {
+      if (!std::holds_alternative<std::string>(format.tags[i].begin)) {
+        common_prefix.clear();
+        break;
+      }
+      const auto& begin = std::get<std::string>(format.tags[i].begin);
+      size_t prefix_size = 0;
+      while (prefix_size < common_prefix.size() && prefix_size < begin.size() &&
+             common_prefix[prefix_size] == begin[prefix_size]) {
+        ++prefix_size;
+      }
+      common_prefix.resize(prefix_size);
+    }
+    // Keep each literal valid UTF-8: the EBNF printer/parser roundtrip interprets escapes
+    // as codepoints, so a literal containing only part of a codepoint would change its bytes.
+    common_prefix.resize(ValidUTF8PrefixLength(common_prefix));
+  }
+
   std::vector<int> choice_ids;
+  choice_ids.reserve(format.tags.size());
   for (int it_tag = 0; it_tag < static_cast<int>(format.tags.size()); ++it_tag) {
-    auto tag_rule_id = Visit(format.tags[it_tag]);
+    // Keep the analyzed format intact: its full begin may be used elsewhere in the grammar.
+    auto tag = format.tags[it_tag];
+    if (!common_prefix.empty()) {
+      std::get<std::string>(tag.begin).erase(0, common_prefix.size());
+    }
+    auto tag_rule_id = Visit(std::move(tag));
     if (tag_rule_id.IsErr()) {
       return tag_rule_id;
     }
@@ -2246,6 +2277,13 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSepa
     choice_ids.push_back(sequence_expr_id);
   }
   auto choice_expr_id = grammar_builder_.AddChoices(choice_ids);
+  if (!common_prefix.empty()) {
+    auto suffix_rule_id =
+        grammar_builder_.AddRuleWithHint("tags_with_separator_suffixes", choice_expr_id);
+    choice_expr_id = grammar_builder_.AddChoices({grammar_builder_.AddSequence(
+        {grammar_builder_.AddByteString(common_prefix), grammar_builder_.AddRuleRef(suffix_rule_id)}
+    )});
+  }
   auto all_tags_rule_id =
       grammar_builder_.AddRuleWithHint("tags_with_separator_tags", choice_expr_id);
 
