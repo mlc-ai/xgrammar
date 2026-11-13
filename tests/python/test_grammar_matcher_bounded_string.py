@@ -403,3 +403,106 @@ def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
     assert "{0, 3}" not in str(compiled.grammar)
     for consumed in range(4):
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
+
+
+# Tokens around JSON escapes: whole escapes, a lone backslash, a backslash with the start of the next
+# word, a \u escape split at every byte, surrogate halves, and tokens that leave the string.
+ESCAPE_VOCAB = [b"a", b"ab", b"\\", b"\\n", b'\\"', b"\\\\", b"\\na", b"n", b"nab", b"u", b"\\u"]
+ESCAPE_VOCAB += [
+    b"\\u00",
+    b"00",
+    b"e9",
+    b"\\u00e9",
+    b"\\ud83d",
+    b"\\ude00",
+    b"\\ud83d\\ude00",
+    b'"',
+]
+ESCAPE_VOCAB += [
+    b'a"',
+    b'\\n"',
+    b'\\""',
+    b'"}',
+    b"}",
+    b",",
+    b"\xe4\xb8\xad",
+    b"\xe4",
+    b"\\q",
+    b"\\u12",
+]
+
+ESCAPE_PREFIXES = ["", "a", "\\", "\\n", '\\"', "\\u", "\\u00", "\\u00e", "\\ud83d", "\\ud83d\\"]
+ESCAPE_PREFIXES += ["\\ud83d\\ude0", "a\\n", "\\n\\n", "中"]
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "minLength": 1},
+        {"type": "string", "maxLength": 2},
+        {"type": "string", "minLength": 2, "maxLength": 3},
+        {"type": "string", "minLength": 1, "maxLength": 1},
+        {"type": "array", "items": {"type": "string", "maxLength": 2}},
+    ],
+)
+@pytest.mark.parametrize("prefix", ESCAPE_PREFIXES)
+def test_escape_unit_repetition_mask_matches_the_replay(schema: dict[str, object], prefix: str):
+    """The body of a bounded string is one unit per codepoint, an escape included, so the counted
+    fast path decides tokens that stay inside the string from the bound and replays the rest: the
+    mask must agree with a fresh replay, in particular inside an escape and at the bound."""
+    tokenizer_info = xgr.TokenizerInfo(list(ESCAPE_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(schema)
+    start = '["' if schema.get("type") == "array" else '"'
+    if not xgr.GrammarMatcher(compiled, terminate_without_stop_token=True).accept_string(
+        start + prefix
+    ):
+        pytest.skip("prefix exceeds the bound")
+    _assert_mask_matches_replay(compiled, tokenizer_info, start + prefix)
+
+
+@pytest.mark.parametrize(
+    "schema, bound",
+    [
+        ({"type": "string", "minLength": 1}, "{1, 2147483647}"),
+        ({"type": "string", "maxLength": 8192}, "{0, 8192}"),
+        ({"type": "string", "minLength": 2, "maxLength": 5}, "{2, 5}"),
+    ],
+)
+def test_bounded_string_with_escapes_keeps_the_counted_repetition(
+    schema: dict[str, object], bound: str
+) -> None:
+    """Spelling out the escapes must not turn the counted repetition back into an expansion with
+    one mask per position, which made every token in the string a replayed uncertain token."""
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo(list(ESCAPE_VOCAB))).compile_json_schema(
+        schema
+    )
+    assert bound in str(compiled.grammar)
+
+
+def test_bounded_strings_share_one_escape_unit_rule() -> None:
+    """Every bounded string of a schema repeats the same unit, so its token data is built once."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "a": {"type": "string", "minLength": 1},
+            "b": {"type": "string", "maxLength": 9},
+            "c": {"type": "string", "minLength": 2, "maxLength": 4},
+        },
+        "required": ["a", "b", "c"],
+    }
+    compiled = xgr.GrammarCompiler(xgr.TokenizerInfo(list(ESCAPE_VOCAB))).compile_json_schema(
+        schema
+    )
+    unit_rules = [line for line in str(compiled.grammar).splitlines() if "_repeat ::=" in line]
+    assert len(unit_rules) == 1, unit_rules
+
+
+def test_byte_unit_that_can_start_with_the_follow_byte_is_not_counted() -> None:
+    """A unit that can start with the byte after the repetition could leave the repetition inside a
+    unit, so it keeps the expansion."""
+    tokenizer_info = xgr.TokenizerInfo(list(ESCAPE_VOCAB))
+    grammar = 'root ::= "<" u{0,3} "\\""\nu ::= [^"\\\\] | "\\"x"'
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    assert "{0, 3}" not in str(compiled.grammar)
+    for prefix in ["", "a", '"x', 'a"x']:
+        _assert_mask_matches_replay(compiled, tokenizer_info, "<" + prefix)
