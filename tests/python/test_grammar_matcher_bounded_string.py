@@ -403,3 +403,100 @@ def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
     assert "{0, 3}" not in str(compiled.grammar)
     for consumed in range(4):
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
+
+
+# Tokens that close a string and run into what follows it, which the matcher decides per
+# repetition parent, for strings followed by a fixed separator (any_whitespace=False).
+CAPPED_VOCAB = EXIT_VOCAB + [
+    token.encode()
+    for token in ["{", "}", ", ", ": ", '", ', '"}', '"]', '"}]', '""', '"x', '"b": "', "null"]
+    + ["é", 'é"', 'a"}', 'a"]', 'a""', ' ""', 'a", "b": "']
+]
+
+
+def _capped(max_length: int, min_length: int = 0) -> dict[str, object]:
+    return {"type": "string", "maxLength": max_length, "minLength": min_length}
+
+
+def _object(properties: dict[str, object]) -> dict[str, object]:
+    return {"type": "object", "properties": properties, "required": list(properties)}
+
+
+def _compile_capped(schema: dict[str, object]) -> tuple[xgr.CompiledGrammar, xgr.TokenizerInfo]:
+    tokenizer_info = xgr.TokenizerInfo(list(CAPPED_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
+        json.dumps(schema), any_whitespace=False
+    )
+    return compiled, tokenizer_info
+
+
+def _full_value(schema: dict[str, object]) -> object:
+    """A value whose capped strings are full, so that every count reaches its bound."""
+    if "anyOf" in schema:
+        return _full_value(schema["anyOf"][0])  # type: ignore[index]
+    if schema["type"] == "string":
+        return ("aé" * 8)[: schema["maxLength"]]  # type: ignore[index]
+    if schema["type"] == "array":
+        return [_full_value(schema["items"]) for _ in range(schema["maxItems"])]  # type: ignore[arg-type]
+    return {key: _full_value(sub) for key, sub in schema["properties"].items()}  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        _object({"a": _capped(3), "b": _capped(2)}),
+        _object({"a": _capped(3, min_length=2), "b": _capped(1, min_length=1)}),
+        _object({"a": {"anyOf": [_capped(2), {"type": "null"}]}, "b": _capped(4)}),
+        _object({"a": {"type": "array", "items": _capped(2), "minItems": 1, "maxItems": 2}}),
+        _object({"a": _object({"a": _capped(1), "b": _capped(3)}), "b": _capped(2)}),
+        _capped(3),
+    ],
+)
+def test_tokens_that_leave_a_capped_string_mid_token_match_the_replay(
+    schema: dict[str, object]
+) -> None:
+    """Each capped string keeps its own count, and a token that closes one and runs into what
+    follows it is allowed exactly when the matcher accepts it."""
+    compiled, tokenizer_info = _compile_capped(schema)
+    text = json.dumps(_full_value(schema), ensure_ascii=False, separators=(", ", ": "))
+    for end in range(1, len(text)):
+        if text[end - 1] in 'aé"':
+            _assert_mask_matches_replay(compiled, tokenizer_info, text[:end])
+
+
+def test_deserialized_capped_string_exit_tokens_match() -> None:
+    compiled, tokenizer_info = _compile_capped(_object({"a": _capped(3, 1), "b": _capped(2)}))
+    restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
+    for text in ['{"a": "', '{"a": "a', '{"a": "aaa', '{"a": "aa", "b": "a']:
+        assert _allowed_token_ids(_matcher_after(restored, text), tokenizer_info) == (
+            _allowed_token_ids(_matcher_after(compiled, text), tokenizer_info)
+        ), text
+
+
+@pytest.mark.parametrize(
+    ("grammar", "inherits"),
+    [
+        # Each rule only ends the one before it: all inherit the lookahead of `a`.
+        ('root ::= a "!"\na ::= "<" b\nb ::= "z" c\nc ::= "q" | "r"', {"b": True, "c": True}),
+        # `c` ends two rules, so what follows it is not known.
+        ('root ::= a "!" | b "?"\na ::= "<" c\nb ::= "(" c\nc ::= "q" | "r" c', {"c": False}),
+        # `c` also appears in the middle of a rule.
+        ('root ::= a "!" | c "?"\na ::= "<" c\nc ::= "q" | "r" c', {"c": False}),
+        # `c` is also repeated.
+        ('root ::= a "!" | c{2,3} "?"\na ::= "<" c\nc ::= "q" | "r" c', {"c": False}),
+        # The chain ends at the root rule, which has no lookahead.
+        ('root ::= "<" b\nb ::= "z" c\nc ::= "q" | "r" c', {"b": False, "c": False}),
+    ],
+)
+def test_lookahead_is_inherited_only_through_a_single_last_reference(
+    grammar: str, inherits: dict[str, bool]
+) -> None:
+    vocab = ["<", "(", "z", "q", "r", "!", "?", "q!", "q?", "zq", "zq!", "zq?", "<zq!", "qq", "qq?"]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+    rules = {line.split(" ::= ")[0]: line for line in str(compiled.grammar).splitlines()}
+    for name, expected in inherits.items():
+        assert rules[name].endswith('(=("!"))') is expected, rules[name]
+    for text in ["", "<", "<z", "("]:
+        if xgr.GrammarMatcher(compiled).accept_string(text):
+            _assert_mask_matches_replay(compiled, tokenizer_info, text)
