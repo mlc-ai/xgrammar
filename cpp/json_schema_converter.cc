@@ -1989,6 +1989,11 @@ void JSONSchemaConverter::AddBasicRules(const std::vector<std::string>& addition
 // The content of a JSON string, escapes included, as RegexExpression parses it.
 static constexpr const char kJSONStringBodyRegex[] =
     R"(([^"\\\x00-\x1f]|\\(["\\/bfnrt]|u[0-9a-fA-F]{4}))*)";
+// One character of a string body: an unescaped code point, an escape, or a surrogate pair (one
+// code point; a lone surrogate matches nothing). A counted repetition of it counts characters of
+// the decoded string, as minLength/maxLength do.
+static constexpr const char kJSONStringCharacterRegex[] =
+    R"([^"\\\x00-\x1f]|\\(["\\/bfnrt]|u([0-9a-cA-Ce-fE-F][0-9a-fA-F]{3}|[dD][0-7][0-9a-fA-F]{2}|[dD][89abAB][0-9a-fA-F]{2}\\u[dD][c-fC-F][0-9a-fA-F]{2})))";
 
 void JSONSchemaConverter::AddHelperRules() {
   if (max_whitespace_cnt_.has_value()) {
@@ -2773,9 +2778,16 @@ int32_t JSONSchemaConverter::GenerateString(const StringSpec& spec, const std::s
     if (!excludes_.empty()) {
       WarnDroppedLengthConstraints(spec, rule_name);
     } else {
-      int32_t character =
-          builder_.AddCharacterClass({{'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true);
-      int32_t body = Repeat(rule_name + "_characters", character, spec.min_length, spec.max_length);
+      // One rule per schema, shared by every bounded string: its fast-path data is built once.
+      int32_t character_rule_id = builder_.GetRuleId("basic_string_character");
+      if (character_rule_id == -1) {
+        character_rule_id = builder_.AddRule(
+            "basic_string_character", builder_.AddRegex(kJSONStringCharacterRegex)
+        );
+      }
+      int32_t body = Repeat(
+          rule_name + "_characters", RuleRef(character_rule_id), spec.min_length, spec.max_length
+      );
       return Sequence({ByteString("\""), body, ByteString("\"")});
     }
   }

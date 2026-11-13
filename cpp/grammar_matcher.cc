@@ -1994,7 +1994,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
     }
-    // In the body state of a counted repetition of a character class, most tokens are legal
+    // In a body state of a counted repetition of a single item, most tokens are legal
     // exactly when the budget left in the repetition state that predicted this body state covers
     // the repetitions they consume, and a token that leaves the repetition also needs them to
     // complete its lower bound (see PopulateRepeatInteriorBitsets). The compiled mask is shared by
