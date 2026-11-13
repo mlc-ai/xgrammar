@@ -114,12 +114,16 @@ struct ObjectSpec {
 // Composite Type Specs
 struct ConstSpec {
   std::string json_value;  // JSON serialized value
+  // A whole float such as 3.0, serialized as "3". The equal "3.0" spelling is also accepted.
+  bool is_whole_float = false;
 
   std::string ToString() const;
 };
 
 struct EnumSpec {
   std::vector<std::string> json_values;  // JSON serialized values
+  // Parallel to json_values; see ConstSpec::is_whole_float. May be shorter than json_values.
+  std::vector<bool> is_whole_float;
 
   std::string ToString() const;
 };
@@ -458,6 +462,8 @@ class JSONSchemaConverter {
   bool IsAllowedLiteral(const picojson::value& value, bool raw_string = false) const;
   /*! \brief Whether the JSON literal contains none of excludes_ (see IsAllowedLiteral). */
   bool IsAllowedJSONLiteral(const std::string& json_value, bool raw_string = false) const;
+  /*! \brief The const/enum literal; a whole float "3" also matches "3.0". */
+  int32_t JSONLiteral(const std::string& json_value, bool is_whole_float);
   /*! \brief Log that the string's minLength/maxLength are ignored because excludes_ is set. */
   void WarnDroppedLengthConstraints(const StringSpec& spec, const std::string& rule_name) const;
 
