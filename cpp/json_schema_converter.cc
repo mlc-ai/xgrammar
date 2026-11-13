@@ -1485,6 +1485,39 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
             std::to_string(spec.min_properties) + " > " + std::to_string(spec.properties.size())
     );
   }
+
+  // Reject closed objects whose required keys are not declared properties (issue #1029).
+  // Trigger only when the schema *explicitly* closes the object: additionalProperties: false, or
+  // unevaluatedProperties: false with no additionalProperties keyword. Do not use the strict_mode
+  // default (allow_additional_properties=false) — that would break sloppy tool schemas. Skip when
+  // patternProperties is present (a pattern might match the required key). allOf is not merged, so
+  // this check applies to each object schema independently, like the other unsatisfiability checks.
+  const bool additional_properties_explicitly_false =
+      schema.count("additionalProperties") && schema.at("additionalProperties").is<bool>() &&
+      !schema.at("additionalProperties").get<bool>();
+  const bool unevaluated_properties_closes_object = !schema.count("additionalProperties") &&
+                                                    schema.count("unevaluatedProperties") &&
+                                                    schema.at("unevaluatedProperties").is<bool>() &&
+                                                    !schema.at("unevaluatedProperties").get<bool>();
+  if ((additional_properties_explicitly_false || unevaluated_properties_closes_object) &&
+      !schema.count("patternProperties") && schema.count("required")) {
+    std::unordered_set<std::string> property_names;
+    property_names.reserve(spec.properties.size());
+    for (const auto& prop : spec.properties) {
+      property_names.insert(prop.name);
+    }
+    // spec.required is an unordered_set; iterate the original JSON array for a stable message.
+    for (const auto& req : schema.at("required").get<picojson::array>()) {
+      const std::string& key = req.get<std::string>();
+      if (!property_names.count(key)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kUnsatisfiableSchema,
+            "required property '" + key +
+                "' is not in properties, but additional properties aren't allowed"
+        );
+      }
+    }
+  }
   return ResultOk(std::move(spec));
 }
 
