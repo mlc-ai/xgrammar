@@ -13,7 +13,7 @@ different flat tool and tool_choice shapes; see the class docstrings below.
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StrictBool
 
 # ============================================================
 # tools: list[FunctionToolParam]
@@ -41,8 +41,8 @@ class FunctionDefinition(BaseModel):
     """A description of what the function does, used by the model to choose when and
     how to call the function.
     """
-    parameters: Optional[Dict[str, Any]] = None
-    """The parameters the functions accepts, described as a JSON Schema object.
+    parameters: Optional[Union[Dict[str, Any], StrictBool]] = None
+    """The function parameters, described by a JSON Schema object or boolean.
 
     If omitted or set to ``None``, the generated function arguments will be unconstrained.
     """

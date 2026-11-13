@@ -362,13 +362,14 @@ input_validation_error_cases: List[Tuple[str, Dict[str, Any], str]] = [
     ("llama", {"tools": [{"function": {"parameters": {}}}]}, "function.name"),
     # name must be string
     ("llama", {"tools": [{"function": {"name": 123, "parameters": {}}}]}, "function.name"),
-    # parameters must be dict
+    # Function parameters must be a schema object or boolean.
     (
         "llama",
         {"tools": [{"function": {"name": "t1", "parameters": "not_a_dict"}}]},
         "function.parameters",
     ),
     ("llama", {"tools": [{"function": {"name": "t1", "parameters": []}}]}, "function.parameters"),
+    ("llama", {"tools": [{"function": {"name": "t1", "parameters": 1}}]}, "function.parameters"),
     # Legacy builtin_tools test data is converted into public tools before calling the API.
     ("harmony", {"tools": [], "builtin_tools": "not_list"}, "must be a list"),
     (
@@ -636,6 +637,26 @@ def test_none_parameters_unconstrained():
     json_schema_values = _collect_json_schema_values(structural_tag)
     assert True in json_schema_values
     assert None not in json_schema_values
+
+
+def test_function_with_true_parameters_can_be_selected_by_name():
+    tag = get_model_structural_tag(
+        "llama",
+        tools=[{"type": "function", "function": {"name": "ping", "parameters": True}}],
+        tool_choice={"type": "function", "function": {"name": "ping"}},
+    )
+    check_stag_with_instance(tag, '{"name": "ping", "parameters": [1, "ok"]}')
+    check_stag_with_instance(tag, '{"name": "other", "parameters": {}}', False)
+
+
+def test_function_with_false_parameters_is_unsatisfiable():
+    tag = get_model_structural_tag(
+        "llama",
+        tools=[{"type": "function", "function": {"name": "ping", "parameters": False}}],
+        tool_choice={"type": "function", "function": {"name": "ping"}},
+    )
+    with pytest.raises(RuntimeError, match="Schema 'false' cannot accept any value"):
+        xgr.Grammar.from_structural_tag(tag)
 
 
 def test_harmony_builtin_tool_instance():
