@@ -1234,6 +1234,26 @@ def test_stag_exclude_token_with_string_excludes():
     _accept_and_stop(m, [4])  # <end>
 
 
+def test_stag_repeated_string_resolves_first_duplicate_token_id():
+    token = {"type": "token", "token": "marker"}
+    stag = {
+        "type": "structural_tag",
+        "format": {
+            "type": "sequence",
+            "elements": [token, {"type": "exclude_token", "exclude_tokens": ["marker", 2]}, token],
+        },
+    }
+    info = xgr.TokenizerInfo(["marker", "marker", "other", "</s>"], stop_token_ids=[3])
+    compiled = xgr.GrammarCompiler(info, max_threads=1).compile_structural_tag(stag)
+    matcher = xgr.GrammarMatcher(compiled)
+    mask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    for token_id in (0, 1, 0, 3):
+        matcher.fill_next_token_bitmask(mask)
+        assert int(mask[0, 0]) & 0b1111 == 1 << token_id
+        assert matcher.accept_token(token_id)
+    assert matcher.is_terminated()
+
+
 def test_stag_token_triggered_string_token_refs():
     """TokenTriggeredTags using string references for trigger_tokens and exclude_tokens."""
     stag = {

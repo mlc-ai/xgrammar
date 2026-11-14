@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #include "grammar_builder.h"
@@ -1299,11 +1300,13 @@ class StructuralTagTokenResolver {
   std::optional<ISTError> ResolveFormat(Format* format);
   std::optional<ISTError> ResolveTagFormat(TagFormat* tag);
   std::optional<ISTError> ResolveTokenFormat(TokenFormat* tf);
+  std::optional<ISTError> ResolveTokenString(const std::string& text, int32_t* id);
   std::optional<ISTError> ResolveIntOrStringVec(
       const std::vector<std::variant<int32_t, std::string>>& input, std::vector<int32_t>* output
   );
 
   const std::optional<TokenizerInfo>& tokenizer_info_;
+  std::unordered_map<std::string, int32_t> resolved_strings_;
 };
 
 std::optional<ISTError> StructuralTagTokenResolver::Resolve(
@@ -1315,18 +1318,28 @@ std::optional<ISTError> StructuralTagTokenResolver::Resolve(
 std::optional<ISTError> StructuralTagTokenResolver::ResolveTokenFormat(TokenFormat* tf) {
   if (tf->resolved_token_id_ >= 0) return std::nullopt;
   if (!std::holds_alternative<std::string>(tf->token)) return std::nullopt;
+  return ResolveTokenString(std::get<std::string>(tf->token), &tf->resolved_token_id_);
+}
+
+std::optional<ISTError> StructuralTagTokenResolver::ResolveTokenString(
+    const std::string& text, int32_t* id
+) {
   if (!tokenizer_info_) {
     return ISTError("Token string resolution requires tokenizer_info");
   }
-  const auto& token_str = std::get<std::string>(tf->token);
-  const auto& vocab = tokenizer_info_->GetDecodedVocab();
-  for (int32_t i = 0; i < static_cast<int32_t>(vocab.size()); ++i) {
-    if (vocab[i] == token_str) {
-      tf->resolved_token_id_ = i;
-      return std::nullopt;
-    }
+  if (auto it = resolved_strings_.find(text); it != resolved_strings_.end()) {
+    *id = it->second;
+    return std::nullopt;
   }
-  return ISTError("Token string \"" + token_str + "\" not found in vocabulary");
+  const auto& vocab = tokenizer_info_->GetDecodedVocab();
+  // Search in token ID order as before, including special tokens and duplicate decoded strings.
+  auto it = std::find(vocab.begin(), vocab.end(), text);
+  if (it == vocab.end()) {
+    return ISTError("Token string \"" + text + "\" not found in vocabulary");
+  }
+  *id = static_cast<int32_t>(it - vocab.begin());
+  resolved_strings_.emplace(text, *id);
+  return std::nullopt;
 }
 
 std::optional<ISTError> StructuralTagTokenResolver::ResolveIntOrStringVec(
@@ -1338,22 +1351,9 @@ std::optional<ISTError> StructuralTagTokenResolver::ResolveIntOrStringVec(
     if (std::holds_alternative<int32_t>(item)) {
       output->push_back(std::get<int32_t>(item));
     } else {
-      if (!tokenizer_info_) {
-        return ISTError("Token string resolution requires tokenizer_info");
-      }
-      const auto& s = std::get<std::string>(item);
-      const auto& vocab = tokenizer_info_->GetDecodedVocab();
-      bool found = false;
-      for (int32_t i = 0; i < static_cast<int32_t>(vocab.size()); ++i) {
-        if (vocab[i] == s) {
-          output->push_back(i);
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        return ISTError("Token string \"" + s + "\" not found in vocabulary");
-      }
+      int32_t id = -1;
+      if (auto error = ResolveTokenString(std::get<std::string>(item), &id)) return error;
+      output->push_back(id);
     }
   }
   return std::nullopt;

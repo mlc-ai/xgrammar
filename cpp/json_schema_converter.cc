@@ -261,7 +261,29 @@ bool IsIntegerValue(const picojson::value& value) {
   return std::isfinite(number) && std::floor(number) == number;
 }
 
-bool JSONValuesMayOverlap(const picojson::value& lhs, const picojson::value& rhs) {
+// Compare parsed JSON numbers without rounding int64 values through double.
+int CompareJSONNumbers(const picojson::value& lhs, const picojson::value& rhs) {
+  if (lhs.is<int64_t>() && rhs.is<int64_t>()) {
+    const auto a = lhs.get<int64_t>(), b = rhs.get<int64_t>();
+    return (a > b) - (a < b);
+  }
+  if (!lhs.is<int64_t>() && !rhs.is<int64_t>()) {
+    const auto a = lhs.get<double>(), b = rhs.get<double>();
+    return (a > b) - (a < b);
+  }
+  if (!lhs.is<int64_t>()) return -CompareJSONNumbers(rhs, lhs);
+  const auto integer = lhs.get<int64_t>();
+  const auto number = rhs.get<double>();
+  if (number < -9223372036854775808.0) return 1;
+  if (number >= 9223372036854775808.0) return -1;
+  const auto whole = static_cast<int64_t>(number);
+  if (integer != whole) return (integer > whole) - (integer < whole);
+  return (static_cast<double>(whole) > number) - (static_cast<double>(whole) < number);
+}
+
+bool JSONValuesMayOverlap(
+    const picojson::value& lhs, const picojson::value& rhs, bool conservative_numbers = true
+) {
   if (IsNumericValue(lhs) || IsNumericValue(rhs)) {
     if (!IsNumericValue(lhs) || !IsNumericValue(rhs)) {
       return false;
@@ -269,7 +291,7 @@ bool JSONValuesMayOverlap(const picojson::value& lhs, const picojson::value& rhs
     if (lhs.is<int64_t>() && rhs.is<int64_t>()) {
       return lhs.get<int64_t>() == rhs.get<int64_t>();
     }
-    return true;
+    return conservative_numbers || CompareJSONNumbers(lhs, rhs) == 0;
   }
   if (lhs.is<picojson::null>() || rhs.is<picojson::null>()) {
     return lhs.is<picojson::null>() && rhs.is<picojson::null>();
@@ -291,7 +313,7 @@ bool JSONValuesMayOverlap(const picojson::value& lhs, const picojson::value& rhs
       return false;
     }
     for (size_t i = 0; i < lhs_array.size(); ++i) {
-      if (!JSONValuesMayOverlap(lhs_array[i], rhs_array[i])) {
+      if (!JSONValuesMayOverlap(lhs_array[i], rhs_array[i], conservative_numbers)) {
         return false;
       }
     }
@@ -308,7 +330,8 @@ bool JSONValuesMayOverlap(const picojson::value& lhs, const picojson::value& rhs
     }
     for (const auto& [key, lhs_value] : lhs_object) {
       auto rhs_it = rhs_object.find(key);
-      if (rhs_it == rhs_object.end() || !JSONValuesMayOverlap(lhs_value, rhs_it->second)) {
+      if (rhs_it == rhs_object.end() ||
+          !JSONValuesMayOverlap(lhs_value, rhs_it->second, conservative_numbers)) {
         return false;
       }
     }
@@ -653,6 +676,413 @@ bool TryProvePairwiseDisjointOneOf(const picojson::array& options) {
   return TryProveStrictDiscriminatorOneOf(options) || TryProveTypeOrFiniteOneOf(options);
 }
 
+// A choice is conjoined with the keywords next to it, before strict-mode defaults are
+// applied. In particular, an arm containing only `required` is not an empty closed object.
+// Keep this operation conservative: an unrepresentable intersection must not silently
+// replace one operand's constraints with the other's.
+Result<picojson::value, SchemaError> ConjoinSchemas(
+    const picojson::value& lhs_value, const picojson::value& rhs_value
+) {
+  auto unsupported = [](const std::string& keyword) -> Result<picojson::value, SchemaError> {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsupportedSchema,
+        "Cannot conjoin schema composition constraints for " + keyword
+    );
+  };
+  if (lhs_value.is<bool>()) {
+    if (!lhs_value.get<bool>()) return ResultOk(lhs_value);
+    return ConjoinSchemas(picojson::value(picojson::object{}), rhs_value);
+  }
+  if (rhs_value.is<bool>()) {
+    if (!rhs_value.get<bool>()) return ResultOk(rhs_value);
+    return ConjoinSchemas(lhs_value, picojson::value(picojson::object{}));
+  }
+  if (!lhs_value.is<picojson::object>() || !rhs_value.is<picojson::object>()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kInvalidSchema, "Schema composition operands must be objects or booleans"
+    );
+  }
+  auto lhs = lhs_value.get<picojson::object>();
+  auto rhs = rhs_value.get<picojson::object>();
+  const bool lhs_neutral = HasOnlyKeys(lhs, {"$defs", "definitions", "$id"});
+  const bool rhs_neutral = HasOnlyKeys(rhs, {"$defs", "definitions", "$id"});
+  if (lhs_neutral && !rhs.count("const") && !rhs.count("enum")) {
+    return ResultOk(rhs_value);
+  }
+  if (rhs_neutral && !lhs.count("const") && !lhs.count("enum")) {
+    return ResultOk(lhs_value);
+  }
+  for (const auto& key :
+       {"$ref", "if", "then", "else", "dependentRequired", "dependentSchemas", "allOf"}) {
+    if (lhs.count(key) || rhs.count(key)) return unsupported(key);
+  }
+
+  // A property omitted from a subschema is governed by THAT subschema's explicit
+  // additionalProperties, not by declarations found in the other operand.
+  auto property_schema = [](const picojson::object& schema, const std::string& key) {
+    if (schema.count("properties") && schema.at("properties").is<picojson::object>()) {
+      const auto& properties = schema.at("properties").get<picojson::object>();
+      if (properties.count(key)) return properties.at(key);
+    }
+    return schema.count("additionalProperties") ? schema.at("additionalProperties")
+                                                : picojson::value(true);
+  };
+  const bool object_context = (lhs.count("type") && lhs.at("type") == picojson::value("object")) ||
+                              (rhs.count("type") && rhs.at("type") == picojson::value("object"));
+  for (auto* operand : {&lhs, &rhs}) {
+    if (!operand->count("not")) continue;
+    // In an object, not(required:[k]) forbids k. De Morgan's law handles the
+    // common not(anyOf:[required:[k], ...]) spelling without enumerating subsets.
+    if (!object_context) return unsupported("not outside an object");
+    const auto& negated = operand->at("not");
+    if (!negated.is<picojson::object>()) return unsupported("not");
+    picojson::array predicates{negated};
+    const auto& negated_object = negated.get<picojson::object>();
+    if (HasOnlyKeys(negated_object, {"anyOf"}) && negated_object.count("anyOf") &&
+        negated_object.at("anyOf").is<picojson::array>()) {
+      predicates = negated_object.at("anyOf").get<picojson::array>();
+    }
+    picojson::object properties;
+    if (operand->count("properties")) {
+      if (!operand->at("properties").is<picojson::object>()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "properties must be an object"
+        );
+      }
+      properties = operand->at("properties").get<picojson::object>();
+    }
+    for (const auto& predicate : predicates) {
+      if (!predicate.is<picojson::object>()) return unsupported("not");
+      const auto& p = predicate.get<picojson::object>();
+      if (!HasOnlyKeys(p, {"required"}) || !p.count("required") ||
+          !p.at("required").is<picojson::array>())
+        return unsupported("not");
+      const auto& required = p.at("required").get<picojson::array>();
+      if (required.size() != 1 || !required[0].is<std::string>()) return unsupported("not");
+      properties[required[0].get<std::string>()] = picojson::value(false);
+    }
+    (*operand)["properties"] = picojson::value(properties);
+    operand->erase("not");
+  }
+
+  picojson::object result = lhs;
+  static const std::unordered_set<std::string> kLowerBounds = {
+      "minimum", "exclusiveMinimum", "minLength", "minItems", "minProperties"
+  };
+  static const std::unordered_set<std::string> kUpperBounds = {
+      "maximum", "exclusiveMaximum", "maxLength", "maxItems", "maxProperties"
+  };
+  for (const auto& key : rhs.ordered_keys()) {
+    const auto& value = rhs.at(key);
+    if (IsSchemaAnnotationKey(key)) continue;
+    if (key == "properties" || key == "additionalProperties") continue;
+    if (!result.count(key)) {
+      result[key] = value;
+      continue;
+    }
+    if (result.at(key).serialize(false) == value.serialize(false)) continue;
+    if (key == "required") {
+      if (!value.is<picojson::array>() || !result.at(key).is<picojson::array>()) {
+        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "required must be an array");
+      }
+      auto values = result.at(key).get<picojson::array>();
+      for (const auto& item : value.get<picojson::array>()) {
+        if (std::find(values.begin(), values.end(), item) == values.end()) values.push_back(item);
+      }
+      result[key] = picojson::value(values);
+    } else if (key == "type") {
+      std::unordered_set<std::string> a, b;
+      if (!NormalizeTypeSet(result.at(key), &a) || !NormalizeTypeSet(value, &b)) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "Invalid type in composition"
+        );
+      }
+      picojson::array common;
+      for (const auto& type :
+           {"null", "boolean", "object", "array", "string", "number", "integer"}) {
+        if (a.count(type) && b.count(type)) common.emplace_back(type);
+      }
+      if ((a.count("integer") && b.count("number")) || (a.count("number") && b.count("integer"))) {
+        if (std::find(common.begin(), common.end(), picojson::value("integer")) == common.end()) {
+          common.emplace_back("integer");
+        }
+      }
+      if (common.empty()) return ResultOk(picojson::value(false));
+      result[key] = common.size() == 1 ? common[0] : picojson::value(common);
+    } else if (kLowerBounds.count(key) || kUpperBounds.count(key)) {
+      if (!IsNumericValue(value) || !IsNumericValue(result.at(key))) return unsupported(key);
+      const int comparison = CompareJSONNumbers(value, result.at(key));
+      if ((kLowerBounds.count(key) && comparison > 0) ||
+          (kUpperBounds.count(key) && comparison < 0)) {
+        result[key] = value;
+      }
+    } else if (key == "items") {
+      auto joined = ConjoinSchemas(result.at(key), value);
+      if (joined.IsErr()) return ResultErr(std::move(joined).UnwrapErr());
+      result[key] = std::move(joined).Unwrap();
+    } else if (key == "enum") {
+      if (!value.is<picojson::array>() || !result.at(key).is<picojson::array>()) {
+        return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "enum must be an array");
+      }
+      picojson::array common;
+      for (const auto& item : result.at(key).get<picojson::array>()) {
+        if (std::any_of(
+                value.get<picojson::array>().begin(),
+                value.get<picojson::array>().end(),
+                [&](const auto& other) { return JSONValuesMayOverlap(item, other, false); }
+            )) {
+          common.push_back(item);
+        }
+      }
+      if (common.empty()) return ResultOk(picojson::value(false));
+      result[key] = picojson::value(common);
+    } else if (key == "const") {
+      if (!JSONValuesMayOverlap(result.at(key), value, false))
+        return ResultOk(picojson::value(false));
+    } else if ((key == "$defs" || key == "definitions" || key == "$id") &&
+               (((lhs.count("const") || lhs.count("enum")) &&
+                 HasOnlyKeys(rhs, {"type", "$defs", "definitions", "$id"})) ||
+                ((rhs.count("const") || rhs.count("enum")) &&
+                 HasOnlyKeys(lhs, {"type", "$defs", "definitions", "$id"})))) {
+      // A neutral/type-only operand cannot use these declarations. Keep the
+      // finite operand's constraints in the normal type/bound validation below;
+      // metadata disagreement alone must not prevent the finite fallback.
+      continue;
+    } else {
+      return unsupported(key);
+    }
+  }
+
+  std::unordered_set<std::string> effective_types;
+  if (result.count("type") && !NormalizeTypeSet(result.at("type"), &effective_types)) {
+    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "Invalid type in composition");
+  }
+  const bool may_be_object = effective_types.empty() || effective_types.count("object");
+  if (!may_be_object) {
+    // JSON Schema object keywords do not constrain scalar/array instances.
+    for (const auto& key :
+         {"properties",
+          "required",
+          "additionalProperties",
+          "patternProperties",
+          "propertyNames",
+          "unevaluatedProperties",
+          "minProperties",
+          "maxProperties"}) {
+      result.erase(key);
+    }
+  }
+  auto without_objects = [&]() -> picojson::value {
+    if (effective_types.empty() || effective_types.size() == 1) return picojson::value(false);
+    picojson::array remaining;
+    for (const auto& type : result.at("type").get<picojson::array>()) {
+      if (type.get<std::string>() != "object") remaining.push_back(type);
+    }
+    auto nonobjects = result;
+    nonobjects["type"] = remaining.size() == 1 ? remaining[0] : picojson::value(remaining);
+    return picojson::value(nonobjects);
+  };
+
+  if (result.count("required")) {
+    if (!result.at("required").is<picojson::array>()) {
+      return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "required must be an array");
+    }
+    for (const auto& key : result.at("required").get<picojson::array>()) {
+      if (!key.is<std::string>()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "required entries must be strings"
+        );
+      }
+    }
+  }
+
+  // Finite-value constraints dominate the parser dispatch, so intersect their type and
+  // enum restrictions here instead of letting a const silently override them.
+  if (result.count("const") || result.count("enum")) {
+    if (!HasOnlyKeys(
+            result,
+            {"const",
+             "enum",
+             "type",
+             "$defs",
+             "definitions",
+             "$id",
+             "minimum",
+             "maximum",
+             "exclusiveMinimum",
+             "exclusiveMaximum",
+             "minLength",
+             "maxLength"}
+        )) {
+      // No new intersection was introduced. Preserve the existing parser's
+      // handling of this finite schema, including its unsupported keywords.
+      if (lhs_neutral) return ResultOk(rhs_value);
+      if (rhs_neutral) return ResultOk(lhs_value);
+      // Prove a type-only operand uniformly true or false for finite candidates.
+      // A partial intersection still needs unsupported constraint handling. Do not
+      // generalize to keyword subsets: object scopes are not interchangeable.
+      auto finite_type_result = [](const picojson::object& finite,
+                                   const picojson::object& type) -> std::optional<bool> {
+        if (!type.count("type") || !HasOnlyKeys(type, {"type", "$defs", "definitions", "$id"}))
+          return std::nullopt;
+        if (finite.count("type") && finite.at("type") == type.at("type")) return true;
+        std::vector<picojson::value> values;
+        std::unordered_set<std::string> types;
+        if (!TryGetFiniteValues(finite, &values) || !NormalizeTypeSet(type.at("type"), &types))
+          return std::nullopt;
+        size_t matches = std::count_if(values.begin(), values.end(), [&](const auto& value) {
+          return std::any_of(types.begin(), types.end(), [&](const auto& name) {
+            return ValueMatchesType(value, name);
+          });
+        });
+        if (matches == values.size()) return true;
+        if (matches == 0) return false;
+        return std::nullopt;
+      };
+      if (auto outcome = finite_type_result(lhs, rhs)) {
+        return ResultOk(*outcome ? lhs_value : picojson::value(false));
+      }
+      if (auto outcome = finite_type_result(rhs, lhs)) {
+        return ResultOk(*outcome ? rhs_value : picojson::value(false));
+      }
+      return unsupported("finite values");
+    }
+    std::vector<picojson::value> values;
+    if (!TryGetFiniteValues(result, &values)) return unsupported("enum");
+    std::unordered_set<std::string> types;
+    if (result.count("type") && !NormalizeTypeSet(result.at("type"), &types)) {
+      return unsupported("type");
+    }
+    picojson::array filtered;
+    for (const auto& value : values) {
+      if (!types.empty() && std::none_of(types.begin(), types.end(), [&](const auto& type) {
+            return ValueMatchesType(value, type);
+          }))
+        continue;
+      if (result.count("enum")) {
+        if (!result.at("enum").is<picojson::array>()) return unsupported("enum");
+        const auto& allowed = result.at("enum").get<picojson::array>();
+        if (std::none_of(allowed.begin(), allowed.end(), [&](const auto& item) {
+              return JSONValuesMayOverlap(value, item, false);
+            }))
+          continue;
+      }
+      bool satisfies_bounds = true;
+      for (const auto& key :
+           {"minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength"
+           }) {
+        if (!result.count(key)) continue;
+        if (!IsNumericValue(result.at(key))) return unsupported(key);
+        picojson::value measured = value;
+        if (std::string(key) == "minLength" || std::string(key) == "maxLength") {
+          if (!value.is<std::string>()) continue;
+          const auto& text = value.get<std::string>();
+          measured = picojson::value(static_cast<int64_t>(std::count_if(
+              text.begin(), text.end(), [](unsigned char c) { return (c & 0xc0) != 0x80; }
+          )));
+        } else {
+          if (!IsNumericValue(value)) continue;
+        }
+        const int comparison = CompareJSONNumbers(measured, result.at(key));
+        if (kLowerBounds.count(key) &&
+            (comparison < 0 || (std::string(key) == "exclusiveMinimum" && comparison == 0)))
+          satisfies_bounds = false;
+        if (kUpperBounds.count(key) &&
+            (comparison > 0 || (std::string(key) == "exclusiveMaximum" && comparison == 0)))
+          satisfies_bounds = false;
+      }
+      if (satisfies_bounds) filtered.push_back(value);
+    }
+    if (filtered.empty()) return ResultOk(picojson::value(false));
+    result.erase("enum");
+    if (filtered.size() == 1)
+      result["const"] = filtered[0];
+    else
+      result["enum"] = picojson::value(filtered);
+  }
+
+  if (may_be_object && (lhs.count("properties") || rhs.count("properties") ||
+                        lhs.count("additionalProperties") || rhs.count("additionalProperties"))) {
+    if (lhs.count("patternProperties") || rhs.count("patternProperties") ||
+        lhs.count("unevaluatedProperties") || rhs.count("unevaluatedProperties")) {
+      return unsupported("patternProperties/unevaluatedProperties");
+    }
+    picojson::object properties;
+    for (const auto* operand : {&lhs, &rhs}) {
+      if (!operand->count("properties")) continue;
+      if (!operand->at("properties").is<picojson::object>()) {
+        return ResultErr<SchemaError>(
+            SchemaErrorType::kInvalidSchema, "properties must be an object"
+        );
+      }
+      for (const auto& key : operand->at("properties").get<picojson::object>().ordered_keys()) {
+        if (properties.count(key)) continue;
+        auto joined = ConjoinSchemas(property_schema(lhs, key), property_schema(rhs, key));
+        if (joined.IsErr()) return ResultErr(std::move(joined).UnwrapErr());
+        properties[key] = std::move(joined).Unwrap();
+      }
+    }
+    auto additional = ConjoinSchemas(
+        lhs.count("additionalProperties") ? lhs.at("additionalProperties") : picojson::value(true),
+        rhs.count("additionalProperties") ? rhs.at("additionalProperties") : picojson::value(true)
+    );
+    if (additional.IsErr()) return ResultErr(std::move(additional).UnwrapErr());
+    auto additional_schema = std::move(additional).Unwrap();
+    const bool closed = additional_schema.is<bool>() && !additional_schema.get<bool>();
+    // A closed object can omit impossible optional properties entirely. Open-object
+    // exclusion needs a different key grammar and is deliberately not approximated.
+    for (const auto& key : properties.ordered_keys()) {
+      const auto& value = properties.at(key);
+      if (!value.is<bool>() || value.get<bool>()) continue;
+      if (!closed) return unsupported("false properties in an open object");
+      if (result.count("required")) {
+        const auto& required = result.at("required").get<picojson::array>();
+        if (std::find(required.begin(), required.end(), picojson::value(key)) != required.end()) {
+          return ResultOk(without_objects());
+        }
+      }
+    }
+    auto filtered = properties;
+    for (const auto& [key, value] : properties) {
+      if (value.is<bool>() && !value.get<bool>()) filtered.erase(key);
+    }
+    if (closed && result.count("required")) {
+      for (const auto& key : result.at("required").get<picojson::array>()) {
+        if (!filtered.count(key.get<std::string>())) return ResultOk(without_objects());
+      }
+    }
+    result["properties"] = picojson::value(filtered);
+    if (lhs.count("additionalProperties") || rhs.count("additionalProperties")) {
+      result["additionalProperties"] = additional_schema;
+    }
+  }
+  return ResultOk(picojson::value(result));
+}
+
+Result<picojson::array, SchemaError> CompositionOptions(
+    const picojson::object& schema, const std::string& keyword
+) {
+  if (!schema.at(keyword).is<picojson::array>()) {
+    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, keyword + " must be an array");
+  }
+  auto siblings = schema;
+  siblings.erase(keyword);
+  picojson::array options;
+  for (const auto& option : schema.at(keyword).get<picojson::array>()) {
+    auto joined = ConjoinSchemas(picojson::value(siblings), option);
+    if (joined.IsErr()) return ResultErr(std::move(joined).UnwrapErr());
+    auto effective = std::move(joined).Unwrap();
+    if (effective.is<bool>() && !effective.get<bool>()) continue;
+    options.push_back(std::move(effective));
+  }
+  if (options.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "Schema composition has no satisfiable branches"
+    );
+  }
+  return ResultOk(options);
+}
+
 /*!
  * \brief Parser for JSON Schema, converts JSON Schema to SchemaSpec intermediate representation.
  */
@@ -849,14 +1279,6 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (ref_result.IsErr()) return ResultErr(std::move(ref_result).UnwrapErr());
     auto ref_spec = std::move(ref_result).Unwrap();
     result = SchemaSpec::Make(std::move(ref_spec), cache_key, rule_name_hint);
-  } else if (schema_obj.count("const")) {
-    auto const_result = ParseConst(schema_obj);
-    if (const_result.IsErr()) return ResultErr(std::move(const_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(const_result).Unwrap(), cache_key, rule_name_hint);
-  } else if (schema_obj.count("enum")) {
-    auto enum_result = ParseEnum(schema_obj);
-    if (enum_result.IsErr()) return ResultErr(std::move(enum_result).UnwrapErr());
-    result = SchemaSpec::Make(std::move(enum_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("anyOf")) {
     auto anyof_result = ParseAnyOf(schema_obj, "anyOf");
     if (anyof_result.IsErr()) return ResultErr(std::move(anyof_result).UnwrapErr());
@@ -874,6 +1296,14 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     } else {
       result = SchemaSpec::Make(std::move(oneof_result).Unwrap(), cache_key, rule_name_hint);
     }
+  } else if (schema_obj.count("const")) {
+    auto const_result = ParseConst(schema_obj);
+    if (const_result.IsErr()) return ResultErr(std::move(const_result).UnwrapErr());
+    result = SchemaSpec::Make(std::move(const_result).Unwrap(), cache_key, rule_name_hint);
+  } else if (schema_obj.count("enum")) {
+    auto enum_result = ParseEnum(schema_obj);
+    if (enum_result.IsErr()) return ResultErr(std::move(enum_result).UnwrapErr());
+    result = SchemaSpec::Make(std::move(enum_result).Unwrap(), cache_key, rule_name_hint);
   } else if (schema_obj.count("allOf")) {
     auto allof_result = ParseAllOf(schema_obj);
     if (allof_result.IsErr()) return ResultErr(std::move(allof_result).UnwrapErr());
@@ -1624,39 +2054,51 @@ Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
     const picojson::object& schema, const std::string& keyword
 ) {
   AnyOfSpec spec;
-  if (!schema.at(keyword).is<picojson::array>()) {
-    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, keyword + " must be an array");
-  }
+  auto options_result = CompositionOptions(schema, keyword);
+  if (options_result.IsErr()) return ResultErr(std::move(options_result).UnwrapErr());
+  auto options = std::move(options_result).Unwrap();
   int idx = 0;
-  for (const auto& option : schema.at(keyword).get<picojson::array>()) {
+  for (const auto& option : options) {
     auto option_result = Parse(option, "case_" + std::to_string(idx));
-    if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
+    if (option_result.IsErr()) {
+      if (option_result.ErrRef().Type() == SchemaErrorType::kUnsatisfiableSchema) continue;
+      return ResultErr(std::move(option_result).UnwrapErr());
+    }
     spec.options.push_back(std::move(option_result).Unwrap());
     ++idx;
+  }
+  if (spec.options.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "Schema composition has no satisfiable branches"
+    );
   }
   return ResultOk(std::move(spec));
 }
 
 Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& schema) {
   OneOfSpec spec;
-  if (!schema.at("oneOf").is<picojson::array>()) {
-    return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "oneOf must be an array");
-  }
-
-  const auto& options = schema.at("oneOf").get<picojson::array>();
-  if (options.empty()) {
-    return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
-  }
-
+  auto options_result = CompositionOptions(schema, "oneOf");
+  if (options_result.IsErr()) return ResultErr(std::move(options_result).UnwrapErr());
+  auto options = std::move(options_result).Unwrap();
+  picojson::array satisfiable_options;
   int idx = 0;
   for (const auto& option : options) {
     auto option_result = Parse(option, "case_" + std::to_string(idx));
-    if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
+    if (option_result.IsErr()) {
+      if (option_result.ErrRef().Type() == SchemaErrorType::kUnsatisfiableSchema) continue;
+      return ResultErr(std::move(option_result).UnwrapErr());
+    }
     spec.options.push_back(std::move(option_result).Unwrap());
+    satisfiable_options.push_back(option);
     ++idx;
   }
 
-  if (!TryProvePairwiseDisjointOneOf(options)) {
+  if (spec.options.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "Schema composition has no satisfiable branches"
+    );
+  }
+  if (satisfiable_options.size() > 1 && !TryProvePairwiseDisjointOneOf(satisfiable_options)) {
     return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
   }
 
@@ -1700,8 +2142,16 @@ Result<TypeArraySpec, SchemaError> SchemaParser::ParseTypeArray(
     schema_copy["type"] = type;
     auto type_result =
         Parse(picojson::value(schema_copy), rule_name_hint + "_" + type.get<std::string>());
-    if (type_result.IsErr()) return ResultErr(std::move(type_result).UnwrapErr());
+    if (type_result.IsErr()) {
+      if (type_result.ErrRef().Type() == SchemaErrorType::kUnsatisfiableSchema) continue;
+      return ResultErr(std::move(type_result).UnwrapErr());
+    }
     spec.type_schemas.push_back(std::move(type_result).Unwrap());
+  }
+  if (spec.type_schemas.empty()) {
+    return ResultErr<SchemaError>(
+        SchemaErrorType::kUnsatisfiableSchema, "Schema type array has no satisfiable branches"
+    );
   }
   return ResultOk(std::move(spec));
 }
