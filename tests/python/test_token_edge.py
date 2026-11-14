@@ -624,15 +624,16 @@ def test_e2e_nested_exclude_loop():
                 assert _get_accepted(matcher, bitmask, ti.vocab_size) == expected
 
 
-def test_e2e_mixed_tag_and_token_dispatch():
+@pytest.mark.parametrize("require_inner_end", [False, True])
+def test_e2e_mixed_tag_and_token_dispatch(require_inner_end):
     """Three-layer nesting: TagDispatch -> TokenTagDispatch -> TagDispatch.
 
     Outer (TagDispatch): trigger "<call>", excludes string "<bad>"
     Mid   (TokenTagDispatch): trigger token 3, excludes token 4
     Inner (TagDispatch): trigger "<end>", excludes string "<bad>"
 
-    Key: token 6 ("<bad>") rejected by string-based excludes (outer+inner),
-    but temporarily accepted inside mid (token-based, doesn't exclude 6).
+    Token 6 ("<bad>") is rejected by outer/inner excludes but allowed in mid. Since inner is
+    nullable, mid_body may return to mid immediately after x unless a final "!" is required.
     """
     vocab = [
         "<s>",  # 0
@@ -647,16 +648,19 @@ def test_e2e_mixed_tag_and_token_dispatch():
         "x",  # 9
         "y",  # 10
         "done",  # 11
+        "!",  # 12
     ]
-    grammar_str = """
+    inner_end = '"!"' if require_inner_end else ""
+    grammar_str = f"""
     leaf ::= [a-z]+
     inner ::= TagDispatch(("<end>", leaf), excludes=("<bad>"))
-    mid_body ::= Token(9, 10) inner
+    mid_body ::= Token(9, 10) inner {inner_end}
     mid ::= TokenTagDispatch((3, mid_body), excludes=(4,))
     root ::= TagDispatch(("<call>", mid), excludes=("<bad>"))
     """
     ALL = set(range(len(vocab)))
     OUTER = ALL - {6}
+    AFTER_X = OUTER if require_inner_end else ALL
 
     ti = xgr.TokenizerInfo(vocab)
     grammar = xgr.Grammar.from_ebnf(grammar_str)
@@ -670,8 +674,8 @@ def test_e2e_mixed_tag_and_token_dispatch():
     # fmt: off
     paths = [
         [   # Path A: full traversal through all 3 layers
-            (None, OUTER), (7, OUTER), (2, ALL), (3, OUTER), (9, OUTER),
-            (8, OUTER), (5, OUTER), (11, OUTER), (1, None),
+            (None, OUTER), (7, OUTER), (2, ALL), (3, OUTER), (9, AFTER_X),
+            (8, AFTER_X), (5, AFTER_X), (11, AFTER_X), (1, None),
         ],
         [   # Path B: outer loop only, <bad>(6) rejected
             (None, OUTER), (7, OUTER), (8, OUTER), (6, False), (1, None),
@@ -682,14 +686,16 @@ def test_e2e_mixed_tag_and_token_dispatch():
         [   # Path C2: <bad>(6) accepted inside mid
             (2, ALL), (6, ALL),
         ],
-        [   # Path C3: <bad>(6) rejected by inner excludes
-            (2, ALL), (3, OUTER), (9, OUTER), (6, False),
+        [   # Path C3: no return to mid while the required inner end is missing
+            (2, ALL), (3, OUTER), (6, False), (9, AFTER_X),
+            (6, False if require_inner_end else ALL),
+            (12, ALL), (6, ALL), (1, None),
         ],
         [   # Path D1: <skip>(4) accepted at outer
             (4, OUTER),
         ],
         [   # Path D2: <skip>(4) accepted at inner
-            (2, ALL), (3, OUTER), (9, OUTER), (4, OUTER),
+            (2, ALL), (3, OUTER), (9, AFTER_X), (4, AFTER_X),
         ],
     ]
     # fmt: on
@@ -1734,6 +1740,104 @@ def test_token_edge_id_out_of_vocab_raises():
     grammar = xgr.Grammar.from_ebnf('root ::= Token(2147483647) "c"\n')
     with pytest.raises(RuntimeError):
         xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
+
+
+@pytest.mark.parametrize("token", ["a", "abc", "你"])
+@pytest.mark.parametrize("prefix", ["", "!"])
+def test_atomic_byte_merge_preserves_new_rule_origins(token, prefix):
+    """New children and their pending parents survive the atomic/byte row merge."""
+    vocab = [token, "pA", "pqB", "pqC", "p", "qB", "</s>", "!"]
+    ti = xgr.TokenizerInfo(vocab, stop_token_ids=[6])
+    grammar = f"""
+        root ::= "{prefix}" (byte_branch | atomic_branch)
+        byte_branch ::= "{token}pA"
+        atomic_branch ::= Token(0) wrapper "B"
+        wrapper ::= inner "q"
+        inner ::= "p"
+    """
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_grammar(grammar))
+    bitmask = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    if prefix:
+        assert matcher.accept_token(7)
+    assert matcher.accept_token(0)
+    assert _get_accepted(matcher, bitmask, ti.vocab_size) == {1, 2, 4}
+    assert not matcher.accept_token(3)
+    assert _get_accepted(matcher, bitmask, ti.vocab_size) == {1, 2, 4}
+
+    # Both paths remain available; the atomic child's return can occur inside a token.
+    for suffix in ([1], [2], [4, 5]):
+        trial = matcher.fork()
+        for token_id in suffix:
+            assert token_id in _get_accepted(trial, bitmask, ti.vocab_size)
+            assert trial.accept_token(token_id)
+        assert _get_accepted(trial, bitmask, ti.vocab_size) == {6}
+        assert trial.accept_token(6)
+        assert trial.is_terminated()
+
+    matcher.rollback()
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(2)
+    matcher.rollback(2)
+    assert matcher.accept_token(0)
+    assert matcher.accept_token(1)
+    assert matcher.accept_token(6)
+
+
+def test_atomic_byte_merge_preserves_capture_origins():
+    ti = xgr.TokenizerInfo(["abc", "pA", "pqB", "</s>"], stop_token_ids=[3])
+    grammar = """
+        root ::= byte_branch | atomic_branch
+        byte_branch[capture="byte"] ::= "abcpA"
+        atomic_branch[capture="all"] ::= Token(0) wrapper "B"
+        wrapper[capture="wrapper"] ::= inner "q"
+        inner[capture="inner"] ::= "p"
+    """
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_grammar(grammar))
+    assert matcher.accept_token(0)
+    byte_matcher = matcher.fork()
+    assert byte_matcher.accept_token(1)
+    assert byte_matcher.is_completed()
+    captures = byte_matcher.get_captures()
+    assert ("byte", b"abcpA") in captures
+    # The parallel atomic child can complete before its enclosing branch fails.
+    assert all(span == b"p" for name, span in captures if name == "inner")
+
+    assert matcher.accept_token(2)
+    assert matcher.get_captures() == [("inner", b"p"), ("wrapper", b"pq"), ("all", b"abcpqB")]
+    matcher.rollback()
+    assert matcher.get_captures() == []
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(3)
+
+
+def test_atomic_empty_stop_token_terminal():
+    # Empty ordinary tokens are special and rejected; an explicit stop terminal is supported.
+    ti = xgr.TokenizerInfo([""], stop_token_ids=[0])
+    grammar = 'root ::= Token(0) empty\nempty ::= ""'
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_grammar(grammar))
+    bitmask = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    assert _get_accepted(matcher, bitmask, ti.vocab_size) == {0}
+    assert matcher.accept_token(0)
+    assert matcher.is_terminated()
+    matcher.rollback()
+    assert matcher.accept_token(0)
+
+
+def test_atomic_byte_merge_with_character_and_token_budgets():
+    ti = xgr.TokenizerInfo(["abc", "pA", "pqB", "pqC", "</s>"], stop_token_ids=[4])
+    grammar = """
+        root ::= "abcpA" | atomic_branch
+        atomic_branch[max_tokens=2, max_chars=6] ::= Token(0) wrapper "B"
+        wrapper[max_tokens=1, max_chars=2] ::= inner "q"
+        inner ::= "p"
+    """
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(ti).compile_grammar(grammar))
+    bitmask = xgr.allocate_token_bitmask(1, ti.vocab_size)
+    assert matcher.accept_token(0)
+    assert _get_accepted(matcher, bitmask, ti.vocab_size) == {1, 2}
+    assert not matcher.accept_token(3)
+    assert matcher.accept_token(2)
+    assert matcher.accept_token(4)
 
 
 if __name__ == "__main__":
