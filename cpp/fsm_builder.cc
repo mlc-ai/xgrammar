@@ -1188,12 +1188,15 @@ Result<FSMWithStartEnd> RegexIR::BuildLeafFSMFromRegex(const std::string& regex)
 
 namespace {
 
+constexpr int kMaxRegexDepth = 256;
+
 /*! \brief One entry of the regex parsing stack: an IR node or a marker character ('(' or '|'),
  * together with the source span [span_begin, span_end) of the atom in the regex string. */
 struct RegexStackEntry {
   std::variant<RegexIR::State, char> item;
   int span_begin = 0;
   int span_end = 0;
+  int depth = 1;
 };
 
 /*! \brief Skip a character class starting at regex[pos] == '['. Returns the position right after
@@ -1245,6 +1248,8 @@ Result<RegexIR> ParseRegexToIR(
     return "Regex parsing error at position " + std::to_string(pos + flag_prefix_length + 1) +
            ": " + message;
   };
+  const std::string depth_error =
+      "Regex nesting exceeds the maximum depth of " + std::to_string(kMaxRegexDepth);
 
   std::vector<RegexStackEntry> stack;
   int size = static_cast<int>(regex.size());
@@ -1289,6 +1294,10 @@ Result<RegexIR> ParseRegexToIR(
       }
       RegexStackEntry atom = std::move(stack.back());
       stack.pop_back();
+      int depth = atom.depth + 1;
+      if (depth > kMaxRegexDepth) {
+        return ResultErr(error_at(i, depth_error));
+      }
       RegexIR::Symbol symbol;
       symbol.state.push_back(std::move(std::get<RegexIR::State>(atom.item)));
       switch (current_char) {
@@ -1310,7 +1319,7 @@ Result<RegexIR> ParseRegexToIR(
       if (i + 1 < size && regex[i + 1] == '?') {
         i++;
       }
-      stack.push_back({std::move(symbol), atom.span_begin, i + 1});
+      stack.push_back({std::move(symbol), atom.span_begin, i + 1, depth});
       continue;
     }
     // Handle groups and alternation.
@@ -1321,7 +1330,7 @@ Result<RegexIR> ParseRegexToIR(
         }
         char modifier = regex[i + 2];
         if (modifier == ':') {
-          stack.push_back({'(', i, i + 1});
+          stack.push_back({'(', i, i + 1, 0});
           i += 2;
           continue;
         }
@@ -1372,7 +1381,7 @@ Result<RegexIR> ParseRegexToIR(
             return ResultErr(error_at(i, "Invalid named capturing group"));
           }
           // Ignore the group name and compile the content as a normal group.
-          stack.push_back({'(', i, i + 1});
+          stack.push_back({'(', i, i + 1, 0});
           i = static_cast<int>(j);
           continue;
         }
@@ -1380,11 +1389,11 @@ Result<RegexIR> ParseRegexToIR(
             error_at(i, "Unsupported group modifier '(?" + std::string(1, modifier) + "'")
         );
       }
-      stack.push_back({'(', i, i + 1});
+      stack.push_back({'(', i, i + 1, 0});
       continue;
     }
     if (current_char == '|') {
-      stack.push_back({'|', i, i + 1});
+      stack.push_back({'|', i, i + 1, 0});
       continue;
     }
     if (current_char == ')') {
@@ -1392,6 +1401,7 @@ Result<RegexIR> ParseRegexToIR(
       bool paired = false;
       bool unioned = false;
       int group_begin = 0;
+      int depth = 0;
       while (!stack.empty()) {
         RegexStackEntry entry = std::move(stack.back());
         stack.pop_back();
@@ -1405,10 +1415,15 @@ Result<RegexIR> ParseRegexToIR(
           XGRAMMAR_DCHECK(marker == '|');
           unioned = true;
         }
+        depth = std::max(depth, entry.depth);
         popped.push_back(std::move(entry));
       }
       if (!paired) {
         return ResultErr(error_at(i, "Unmatched ')'"));
+      }
+      depth += unioned ? 2 : 1;
+      if (depth > kMaxRegexDepth) {
+        return ResultErr(error_at(i, depth_error));
       }
       // `popped` stores the group content from right to left.
       if (!unioned) {
@@ -1417,7 +1432,7 @@ Result<RegexIR> ParseRegexToIR(
           bracket.states.push_back(std::move(std::get<RegexIR::State>(it->item)));
         }
         // An empty bracket (e.g. "()") matches the empty string.
-        stack.push_back({std::move(bracket), group_begin, i + 1});
+        stack.push_back({std::move(bracket), group_begin, i + 1, depth});
       } else {
         RegexIR::Union union_state;
         RegexIR::Bracket bracket;
@@ -1432,7 +1447,7 @@ Result<RegexIR> ParseRegexToIR(
           bracket.states.push_back(std::move(std::get<RegexIR::State>(it->item)));
         }
         union_state.states.push_back(std::move(bracket));
-        stack.push_back({std::move(union_state), group_begin, i + 1});
+        stack.push_back({std::move(union_state), group_begin, i + 1, depth});
       }
       continue;
     }
@@ -1456,6 +1471,14 @@ Result<RegexIR> ParseRegexToIR(
       bool is_large_repeat = upper_bound == RegexIR::kRepeatNoUpperBound
                                  ? lower_bound > kLargeRepeatThreshold
                                  : upper_bound > kLargeRepeatThreshold;
+      // Keep the depth across repeat lowering, including the generated bracket and star.
+      int depth = atom.depth + 1;
+      if (is_large_repeat && builder != nullptr) {
+        depth = std::max(depth, 3);
+      }
+      if (depth > kMaxRegexDepth) {
+        return ResultErr(error_at(repeat_begin, depth_error));
+      }
       if (is_large_repeat && builder != nullptr) {
         // Compile the repeated sub-pattern into a new rule (with a kRegex body), and represent
         // the repetition as a kRepeatRef FSM edge. The Earley parser executes it with a counter
@@ -1485,15 +1508,16 @@ Result<RegexIR> ParseRegexToIR(
             bracket.states.push_back(RegexIR::RepeatSubrule{inner_rule_id, lower_bound, lower_bound}
             );
             bracket.states.push_back(std::move(star_symbol));
-            stack.push_back({std::move(bracket), atom.span_begin, i + 1});
+            stack.push_back({std::move(bracket), atom.span_begin, i + 1, depth});
           } else {
-            stack.push_back({std::move(star_symbol), atom.span_begin, i + 1});
+            stack.push_back({std::move(star_symbol), atom.span_begin, i + 1, depth});
           }
         } else {
           stack.push_back(
               {RegexIR::RepeatSubrule{inner_rule_id, lower_bound, upper_bound},
                atom.span_begin,
-               i + 1}
+               i + 1,
+               depth}
           );
         }
       } else {
@@ -1501,7 +1525,7 @@ Result<RegexIR> ParseRegexToIR(
         repeat.lower_bound = lower_bound;
         repeat.upper_bound = upper_bound;
         repeat.states.push_back(std::move(std::get<RegexIR::State>(atom.item)));
-        stack.push_back({std::move(repeat), atom.span_begin, i + 1});
+        stack.push_back({std::move(repeat), atom.span_begin, i + 1, depth});
       }
       continue;
     }
@@ -1533,6 +1557,7 @@ Result<RegexIR> ParseRegexToIR(
   std::vector<RegexIR::State> segment;
   std::vector<std::vector<RegexIR::State>> union_segments;
   bool unioned = false;
+  int depth = 0;
   for (auto& entry : stack) {
     if (std::holds_alternative<char>(entry.item)) {
       char marker = std::get<char>(entry.item);
@@ -1544,11 +1569,15 @@ Result<RegexIR> ParseRegexToIR(
       }
       return ResultErr(error_at(entry.span_begin, "The parenthesis is not closed"));
     }
+    depth = std::max(depth, entry.depth);
     segment.push_back(std::move(std::get<RegexIR::State>(entry.item)));
   }
   if (!unioned) {
     ir.states = std::move(segment);
   } else {
+    if (depth + 2 > kMaxRegexDepth) {
+      return ResultErr(error_at(size - 1, depth_error));
+    }
     union_segments.push_back(std::move(segment));
     RegexIR::Union union_state;
     for (auto& branch : union_segments) {
