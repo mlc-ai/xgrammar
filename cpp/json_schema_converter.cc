@@ -3789,6 +3789,7 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
         {JSONFormat::kGlmXML, converter_ext::GetGLMXMLWrapper()},
         {JSONFormat::kCohereXML, converter_ext::GetCohereXMLWrapper()},
         {JSONFormat::kKimiK3XML, converter_ext::GetKimiK3XMLWrapper()},
+        {JSONFormat::kMuseXML, converter_ext::GetMuseXMLWrapper()},
 };
 
 XMLToolCallingConverter::XMLToolCallingConverter(
@@ -4213,7 +4214,7 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
     return std::nullopt;
   }
   if ((json_format_ == JSONFormat::kQwenXML || json_format_ == JSONFormat::kDeepSeekXML ||
-       json_format_ == JSONFormat::kDeepSeekV41XML) &&
+       json_format_ == JSONFormat::kDeepSeekV41XML || json_format_ == JSONFormat::kMuseXML) &&
       nested_object_level_ == 0 && key == "{}") {
     // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
     return rule_cache_manager_.GetCache(kObjectCacheKey, 0);
@@ -5053,6 +5054,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"cohere_xml", JSONFormat::kCohereXML},
       {"kimi_k3_xml", JSONFormat::kKimiK3XML},
       {"gemma", JSONFormat::kGemma},
+      {"muse_xml", JSONFormat::kMuseXML},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -5108,7 +5110,8 @@ Grammar JSONSchemaToGrammar(
     case JSONFormat::kDeepSeekXML:
     case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
-    case JSONFormat::kKimiK3XML: {
+    case JSONFormat::kKimiK3XML:
+    case JSONFormat::kMuseXML: {
       XMLToolCallingConverter converter(
           indent,
           std::move(separators),
@@ -5230,7 +5233,8 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kDeepSeekXML:
     case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
-    case JSONFormat::kKimiK3XML: {
+    case JSONFormat::kKimiK3XML:
+    case JSONFormat::kMuseXML: {
       XMLToolCallingConverter converter(
           indent,
           separators,

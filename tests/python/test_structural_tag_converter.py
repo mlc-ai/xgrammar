@@ -3325,7 +3325,7 @@ json_format_error_test_data = [
     ),
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
-        'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml", "deepseek_v4_1_xml", or "gemma"',
+        'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml", "deepseek_v4_1_xml", "gemma", or "muse_xml"',
     ),
     (
         '{"type": "structural_tag", "format": {"type": "grammar", "grammar": "start: \\"a\\"", "syntax": "regex"}}',

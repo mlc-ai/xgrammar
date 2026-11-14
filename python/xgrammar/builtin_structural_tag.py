@@ -3265,6 +3265,169 @@ def get_exaone_structural_tag(
     return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
+_MUSE_MARKER_TOKENS = ["<|start|>", "<|message|>", "<|eom|>", "<|eot|>"]
+
+
+@register_model_structural_tag("muse", marker_tokens=_MUSE_MARKER_TOKENS)
+def get_muse_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get Muse (ATEM) style structural tag format.
+
+    Corresponding model key: ``"muse"``.
+
+    Reference: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B/blob/main/chat_template.jinja
+
+    A Muse turn is a sequence of messages, each addressed to a recipient. The
+    generation prompt ends at ``<|start|>assistant``, so the first message
+    starts at its recipient::
+
+         to=self<|message|>REASONING<|eom|>
+        <|start|>assistant to=NAME<|message|><atem:function_calls>
+        <atem:invoke name="NAME">
+        <atem:parameter name="KEY">VALUE</atem:parameter>
+        </atem:invoke>
+        </atem:function_calls><|eom|>
+        <|start|>assistant to=user<|message|>FINAL ANSWER
+
+    (shown one message per line; there is no newline between messages). A
+    message addressed to ``self`` is reasoning, one addressed to ``commentary``
+    is a user-visible update, one addressed to ``user`` is the final answer, and
+    one addressed to a tool name calls that tool. Each tool call is its own
+    message; reasoning and commentary messages may come before and between
+    tool calls. ``<|eom|>`` closes a message that is followed by another one. The
+    last message of the turn is closed by ``<|eot|>``, which is a stop token and
+    therefore not part of the structural tag.
+
+    String arguments are raw text; other values are JSON. Arguments are
+    constrained by :class:`JSONSchemaFormat` with ``style="muse_xml"``.
+
+    ``reasoning="enabled"`` requires the turn to start with a ``to=self``
+    message, ``"auto"`` makes reasoning messages optional, and ``"disabled"``
+    forbids them.
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive
+      ``"auto"`` reasoning.
+
+    Supported models:
+
+    - Muse Spark Open
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for Muse function calling format.
+    """
+    if builtin_tools:
+        raise ValueError("Muse does not support builtin tools.")
+
+    MESSAGE = "<|message|>"
+    END_OF_MESSAGE = "<|eom|>"
+    NEXT_MESSAGE = "<|start|>assistant"
+    text_excludes = _text_excludes(exclude_special_tokens, _MUSE_MARKER_TOKENS)
+
+    def _text_message(recipient: str) -> Format:
+        """A free-text message that is followed by another message."""
+        return SequenceFormat(
+            elements=[
+                ConstStringFormat(value=f" to={recipient}"),
+                TagFormat(
+                    begin=MESSAGE, content=AnyTextFormat(excludes=text_excludes), end=END_OF_MESSAGE
+                ),
+                ConstStringFormat(value=NEXT_MESSAGE),
+            ]
+        )
+
+    def _call_message(tool: FunctionToolParam) -> Format:
+        name = tool.function.name
+        return SequenceFormat(
+            elements=[
+                ConstStringFormat(
+                    value=(
+                        f" to={name}{MESSAGE}<atem:function_calls>\n"
+                        f'<atem:invoke name="{name}">\n'
+                    )
+                ),
+                JSONSchemaFormat(
+                    json_schema=_get_function_parameters(tool.function),
+                    style="muse_xml",
+                    any_order=any_order,
+                    max_whitespace_cnt=max_whitespace_cnt,
+                ),
+                ConstStringFormat(value="</atem:invoke>\n</atem:function_calls>"),
+            ]
+        )
+
+    def _one_of(formats: List[Format]) -> Format:
+        return formats[0] if len(formats) == 1 else OrFormat(elements=formats)
+
+    # Messages that may come before the tool calls or the final answer.
+    leading: List[Format] = [_text_message("commentary")]
+    if reasoning != "disabled":
+        leading.insert(0, _text_message("self"))
+    interleaved = StarFormat(content=_one_of(leading))
+
+    tools = tools or []
+    if tool_choice == "forced":
+        if not tools:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        calls: Optional[Format] = _call_message(tools[0])
+    elif tool_choice in ("auto", "required"):
+        if tool_choice == "required" and not tools:
+            raise ValueError("Required tool choice needs at least one function tool.")
+        calls = None
+        if tools:
+            calls = _one_of([_call_message(tool) for tool in tools])
+            if parallel_tool_calls:
+                # Reasoning and commentary messages may also come between two calls.
+                calls = SequenceFormat(
+                    elements=[
+                        calls,
+                        StarFormat(
+                            content=SequenceFormat(
+                                elements=[
+                                    ConstStringFormat(value=END_OF_MESSAGE + NEXT_MESSAGE),
+                                    interleaved,
+                                    calls,
+                                ]
+                            )
+                        ),
+                    ]
+                )
+    else:
+        raise ValueError(f"Unsupported tool choice: {tool_choice}")
+
+    final_answer = SequenceFormat(
+        elements=[
+            ConstStringFormat(value=f" to=user{MESSAGE}"),
+            AnyTextFormat(excludes=text_excludes),
+        ]
+    )
+    if tool_choice == "auto":
+        last_messages = final_answer if calls is None else OrFormat(elements=[calls, final_answer])
+    else:
+        assert calls is not None
+        last_messages = calls
+
+    elements: List[Format] = [interleaved, last_messages]
+    if reasoning == "enabled":
+        elements.insert(0, _text_message("self"))
+    return StructuralTag(format=SequenceFormat(elements=elements))
+
+
 # Backward-compatible alias
 get_builtin_structural_tag = get_model_structural_tag
 """Alias for :func:`get_model_structural_tag`. Deprecated."""

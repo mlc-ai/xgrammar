@@ -372,6 +372,7 @@ XMLWrapper GetDeepSeekV41XMLWrapper();
 XMLWrapper GetGLMXMLWrapper();
 XMLWrapper GetCohereXMLWrapper();
 XMLWrapper GetKimiK3XMLWrapper();
+XMLWrapper GetMuseXMLWrapper();
 
 struct XMLKeySuffix {
   const char* prefix;
