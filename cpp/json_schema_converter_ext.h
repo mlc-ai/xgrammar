@@ -171,6 +171,16 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
    */
   int32_t XMLKeySuffix(const std::optional<std::string>& pinned_type = std::nullopt);
 
+  bool HasConstrainedXMLString(const SchemaSpecPtr& schema, const std::string& rule_name);
+  int32_t XMLParameterBody(
+      const SchemaSpecPtr& schema, int32_t value_rule_id, bool padding, const std::string& rule_name
+  );
+  std::unordered_map<std::string, int32_t> parameter_body_ref_rules_;
+
+  int32_t CommitXMLStringBoundary(
+      int32_t expression, const SchemaSpecPtr& schema, const std::string& rule_name
+  );
+
   /*!
    * \brief Build a DeepSeek XML parameter's string attribute, value and closing tag.
    * string="true" wraps raw strings, string="false" wraps JSON values. Unions and mixed enums

@@ -910,7 +910,8 @@ def test_json_schema_style_kimi_k3_xml_all_value_types_and_nested_json():
             ),
         )
 
-    assert not _is_grammar_accept_string(
+    # A complete raw-value delimiter commits the value before minLength is reached.
+    assert _is_grammar_accept_string(
         grammar, instance.replace("<|sep|>ok<|close|>", "<|sep|>x<|close|>")
     )
     assert not _is_grammar_accept_string(

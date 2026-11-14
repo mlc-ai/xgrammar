@@ -4113,6 +4113,99 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
   return JSONSchemaConverter::FormatPropertyKey(key, schema);
 }
 
+bool XMLToolCallingConverter::HasConstrainedXMLString(
+    const SchemaSpecPtr& schema, const std::string& rule_name
+) {
+  std::vector<SchemaSpecPtr> pending{schema};
+  std::unordered_set<std::string> references;
+  while (!pending.empty()) {
+    const auto current = pending.back();
+    pending.pop_back();
+    if (current == nullptr) continue;
+    if (const auto* string = std::get_if<StringSpec>(&current->spec)) {
+      if (string->pattern.has_value() || string->format.has_value() || string->min_length != 0 ||
+          string->max_length != -1)
+        return true;
+    } else if (const auto* ref = std::get_if<RefSpec>(&current->spec)) {
+      if (references.insert(ref->uri).second) pending.push_back(ResolveRefSchema(*ref, rule_name));
+    } else if (const auto* any = std::get_if<AnyOfSpec>(&current->spec)) {
+      pending.insert(pending.end(), any->options.begin(), any->options.end());
+    } else if (const auto* one = std::get_if<OneOfSpec>(&current->spec)) {
+      pending.insert(pending.end(), one->options.begin(), one->options.end());
+    } else if (const auto* types = std::get_if<TypeArraySpec>(&current->spec)) {
+      pending.insert(pending.end(), types->type_schemas.begin(), types->type_schemas.end());
+    } else if (const auto* all = std::get_if<AllOfSpec>(&current->spec);
+               all && all->schemas.size() == 1) {
+      pending.push_back(all->schemas[0]);
+    }
+  }
+  return false;
+}
+
+int32_t XMLToolCallingConverter::XMLParameterBody(
+    const SchemaSpecPtr& schema, int32_t value_rule_id, bool padding, const std::string& rule_name
+) {
+  if (HasConstrainedXMLString(schema, rule_name)) {
+    if (const auto* ref = std::get_if<RefSpec>(&schema->spec)) {
+      const std::string key = ref->uri + (padding ? ":padded" : ":raw");
+      auto found = parameter_body_ref_rules_.find(key);
+      if (found != parameter_body_ref_rules_.end()) return RuleRef(found->second);
+      const int32_t rule = builder_.AddEmptyRuleWithHint(rule_name + "_parameter");
+      parameter_body_ref_rules_.emplace(key, rule);
+      builder_.UpdateRuleBody(
+          rule,
+          XMLParameterBody(ResolveRefSchema(*ref, rule_name), value_rule_id, padding, rule_name)
+      );
+      return RuleRef(rule);
+    }
+    const std::vector<SchemaSpecPtr>* options = nullptr;
+    if (const auto* any = std::get_if<AnyOfSpec>(&schema->spec)) options = &any->options;
+    if (const auto* one = std::get_if<OneOfSpec>(&schema->spec)) options = &one->options;
+    if (const auto* types = std::get_if<TypeArraySpec>(&schema->spec))
+      options = &types->type_schemas;
+    if (const auto* all = std::get_if<AllOfSpec>(&schema->spec); all && all->schemas.size() == 1) {
+      options = &all->schemas;
+    }
+    if (options != nullptr) {
+      std::vector<int32_t> choices;
+      for (const auto& option : *options) {
+        choices.push_back(
+            XMLParameterBody(option, CreateRule(option, rule_name + "_case"), padding, rule_name)
+        );
+      }
+      return Choice(choices);
+    }
+  }
+  std::vector<int32_t> value;
+  if (padding) value.push_back(WhitespaceExpression());
+  value.push_back(RuleRef(value_rule_id));
+  if (padding) value.push_back(WhitespaceExpression());
+  value.push_back(ByteString(xml_wrapper_.parameter_suffix));
+  return CommitXMLStringBoundary(Sequence(value), schema, rule_name);
+}
+
+int32_t XMLToolCallingConverter::CommitXMLStringBoundary(
+    int32_t expression, const SchemaSpecPtr& schema, const std::string& rule_name
+) {
+  if (schema == nullptr) return expression;
+  const auto* string = std::get_if<StringSpec>(&schema->spec);
+  // The existing exclusion path drops lengths and uses an exclusive TagDispatch already.
+  if (string != nullptr && !excludes_.empty() && !string->pattern.has_value() &&
+      (!string->format.has_value() || !JSONFormatToRegexPattern(*string->format, true).has_value()
+      )) {
+    return expression;
+  }
+  if (string == nullptr || (!string->pattern.has_value() && !string->format.has_value() &&
+                            string->min_length == 0 && string->max_length == -1)) {
+    return expression;
+  }
+  const int32_t rule = builder_.AddRuleWithHint(rule_name + "_boundary", expression);
+  Grammar::Impl::SuffixStopInfo info;
+  info.end_on = xml_wrapper_.parameter_suffix;
+  builder_.UpdateSuffixStopInfo(rule, info);
+  return RuleRef(rule);
+}
+
 int32_t XMLToolCallingConverter::FormatProperty(
     const std::string& key,
     int32_t value_rule_id,
@@ -4135,16 +4228,9 @@ int32_t XMLToolCallingConverter::FormatProperty(
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    // xml_string already accepts whitespace. Adding whitespace repetitions around it preserves the
-    // language but creates one Earley state for every possible split with the string body.
-    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
-      elements.push_back(RuleRef(value_rule_id));
-    } else {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule_id));
-      elements.push_back(WhitespaceExpression());
-    }
-    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+    elements.push_back(XMLParameterBody(
+        schema, value_rule_id, value_rule_id != builder_.GetRuleId(kXMLString), rule_name
+    ));
     return Sequence(elements);
   }
   return JSONSchemaConverter::FormatProperty(key, value_rule_id, rule_name, idx, schema);
@@ -4176,14 +4262,9 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
-      elements.push_back(RuleRef(value_rule_id));
-    } else {
-      elements.push_back(WhitespaceExpression());
-      elements.push_back(RuleRef(value_rule_id));
-      elements.push_back(WhitespaceExpression());
-    }
-    elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
+    elements.push_back(XMLParameterBody(
+        schema, value_rule_id, value_rule_id != builder_.GetRuleId(kXMLString), rule_name
+    ));
     return Sequence(elements);
   }
   return JSONSchemaConverter::FormatOtherProperty(

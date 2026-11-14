@@ -183,6 +183,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     bool has_capture_hidden_body_rule_id = false;
     bool has_capture_hidden_marker_rule_id = false;
     bool has_stop_capture = false;
+    bool has_end_on = false;
     bool has_lazy = false;
     bool has_temperature = false;
     double temperature_value = 0;
@@ -194,6 +195,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
     int64_t capture_hidden_marker_rule_id_value = -1;
     std::string capture_value;
     std::string stop_capture_value;
+    std::string end_on_value;
     auto parse_integer_value = [&](int64_t* value) {
       skip_space();
       if (Peek(delta) != '=') {
@@ -286,6 +288,9 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       } else if (!has_stop_capture && match_keyword("stop_capture")) {
         has_stop_capture = true;
         matched = parse_string_value(&stop_capture_value);
+      } else if (!has_end_on && match_keyword("end_on")) {
+        has_end_on = true;
+        matched = parse_string_value(&end_on_value) && !end_on_value.empty();
       } else if (!has_capture && match_keyword("capture")) {
         has_capture = true;
         skip_space();
@@ -380,6 +385,7 @@ EBNFLexer::Token EBNFLexer::Impl::ParseIdentifierOrBooleanToken() {
       token.capture_hidden_marker_rule_id =
           static_cast<int32_t>(capture_hidden_marker_rule_id_value);
       token.stop_capture_name = stop_capture_value;
+      token.end_on = end_on_value;
       token.is_lazy = has_lazy;
       if (has_temperature) {
         token.temperature = static_cast<float>(temperature_value);
@@ -1507,6 +1513,7 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   int32_t capture_hidden_body_rule_id = Peek().capture_hidden_body_rule_id;
   int32_t capture_hidden_marker_rule_id = Peek().capture_hidden_marker_rule_id;
   std::string stop_capture_name = Peek().stop_capture_name;
+  std::string end_on = Peek().end_on;
   bool is_lazy = Peek().is_lazy;
   std::optional<float> temperature = Peek().temperature;
   Consume();
@@ -1532,6 +1539,7 @@ EBNFParser::ParsedRule EBNFParser::ParseRule() {
   result.suffix_stop_info.body_rule_id = capture_hidden_body_rule_id;
   result.suffix_stop_info.marker_rule_id = capture_hidden_marker_rule_id;
   result.suffix_stop_info.stop_capture_name = std::move(stop_capture_name);
+  result.suffix_stop_info.end_on = std::move(end_on);
   return result;
 }
 

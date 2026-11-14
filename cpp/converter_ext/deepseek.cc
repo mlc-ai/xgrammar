@@ -54,7 +54,7 @@ int32_t XMLToolCallingConverter::FormatDeepSeekParamSuffix(
     elements.push_back(value_expr);
     if (!is_string) elements.push_back(WhitespaceExpression());
     elements.push_back(ByteString(xml_wrapper_.parameter_suffix));
-    return Sequence(elements);
+    return CommitXMLStringBoundary(Sequence(elements), schema, value_rule_name);
   };
 
   // A schema rendered with a single type keeps the value rule built by the caller.
