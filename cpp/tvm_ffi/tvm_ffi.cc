@@ -22,6 +22,7 @@
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
 #include "../regex_converter.h"
+#include "../support/encoding.h"
 #include "../support/utils.h"
 #include "../testing.h"
 #include "python_methods.h"
@@ -220,13 +221,15 @@ class GrammarCompilerObj : public ffi::Object {
       ffi::ObjectRef tokenizer_ref,
       int64_t max_threads,
       bool cache_enabled,
-      int64_t max_memory_bytes
+      int64_t max_memory_bytes,
+      bool enable_dynamic_compilation = false
   )
       : value(
             tokenizer_ref.as<TokenizerInfoObj>()->value,
             static_cast<int>(max_threads),
             cache_enabled,
-            max_memory_bytes
+            max_memory_bytes,
+            enable_dynamic_compilation
         ) {}
 
   static constexpr bool _type_mutable = true;
@@ -510,9 +513,9 @@ TVM_FFI_STATIC_INIT_BLOCK() {
         XGRAMMAR_FFI_TRY_END();
       });
 
-  // GrammarCompiler: init(tokenizer_info, max_threads, cache_enabled, max_memory_bytes)
+  // Python supplies False when enable_dynamic_compilation is omitted.
   refl::ObjectDef<GrammarCompilerObj>()
-      .def(refl::init<O, int64_t, bool, int64_t>())
+      .def(refl::init<O, int64_t, bool, int64_t, bool>())
       .def(
           "compile_json_schema",
           [](GrammarCompilerObj* o,
@@ -746,7 +749,15 @@ TVM_FFI_STATIC_INIT_BLOCK() {
       )
       .def(
           "find_jump_forward_string",
-          [](GrammarMatcherObj* o) { return ffi::String(o->value.FindJumpForwardString()); }
+          [](GrammarMatcherObj* o) {
+            // The forced bytes can stop inside a multi-byte character (e.g. "é" | "è" share only
+            // their first byte) or start inside one (after a token that split a character). A
+            // Python str cannot hold a partial character, so return the longest prefix of whole
+            // characters; any prefix of the jump-forward string is itself a valid jump-forward.
+            std::string jump_forward = o->value.FindJumpForwardString();
+            jump_forward.resize(ValidUTF8PrefixLength(jump_forward));
+            return ffi::String(jump_forward);
+          }
       )
       .def(
           "find_jump_forward_tokens",

@@ -242,11 +242,12 @@ The same flag is the `any_order` argument of
 
 #### `grammar`
 
-Matches text with an EBNF grammar.
+Matches text with an EBNF or Lark grammar.
 
 | Field | Type | Default |
 | --- | --- | --- |
 | `grammar` | `string` | (required) |
+| `syntax` | `"ebnf"` \| `"lark"` | `"ebnf"` |
 
 - **Use it when**: JSON Schema is too restrictive or the structure is better described directly as a grammar
 
@@ -254,6 +255,19 @@ Matches text with an EBNF grammar.
 {
     "type": "grammar",
     "grammar": "root ::= (\"yes\" | \"no\")"
+}
+```
+
+With `"syntax": "lark"`, the grammar is written in the [Lark dialect](../defining_structures/lark_grammar)
+of [`Grammar.from_lark`](xgrammar.Grammar.from_lark) and must define a `start` rule. Named special
+tokens are resolved with the tokenizer info the structural tag is compiled with; `@name` references
+to named grammars are not available.
+
+```json
+{
+    "type": "grammar",
+    "grammar": "start: \"yes\" | \"no\"",
+    "syntax": "lark"
 }
 ```
 

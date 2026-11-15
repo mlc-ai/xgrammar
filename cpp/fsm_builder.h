@@ -57,10 +57,14 @@ class RegexFSMBuilder {
    * body holding the repeated sub-pattern) added through this builder, instead of being
    * physically unrolled.
    * \param rule_hint Name hint for rules created through `builder`.
+   * \param json_string Whether generated repeat children inherit JSON string filtering.
    * \return The FSM with start and end states.
    */
   static Result<FSMWithStartEnd> Build(
-      const std::string& regex, GrammarBuilder* builder = nullptr, const std::string& rule_hint = ""
+      const std::string& regex,
+      GrammarBuilder* builder = nullptr,
+      const std::string& rule_hint = "",
+      bool json_string = false
   );
 
   /*!

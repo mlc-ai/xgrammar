@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from tokenizer_utils import load_tokenizer
 
 import xgrammar as xgr
+from xgrammar.base import _core
 from xgrammar.testing import _get_allow_empty_rule_ids
 
 
@@ -466,6 +467,18 @@ def _mask_trace(
     return trace
 
 
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_grammar_compiler_binding_constructor(dynamic):
+    """The single native constructor receives the Python wrapper's explicit flag."""
+    tokenizer_info = xgr.TokenizerInfo(["a", "b", "ab"], stop_token_ids=[])
+    compiler_handle = _core.GrammarCompiler(tokenizer_info._handle, 1, True, -1, dynamic)
+    compiled = xgr.CompiledGrammar._create_from_handle(compiler_handle.compile_regex("ab"))
+    matcher = xgr.GrammarMatcher(compiled)
+    initial_size = compiled.memory_size_bytes
+    matcher.fill_next_token_bitmask(xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size))
+    assert (compiled.memory_size_bytes > initial_size) == dynamic
+
+
 @pytest.mark.parametrize(
     "grammar_str,accepted_inputs,rejected_inputs",
     HASHER_GRAPH_CASES,
@@ -486,6 +499,12 @@ def test_grammar_fsm_hasher_worklist_graphs(
         xgr.GrammarCompiler(tokenizer_info, max_threads=8, cache_enabled=True).compile_grammar(
             grammar_str
         ),
+        xgr.GrammarCompiler(
+            tokenizer_info, max_threads=1, cache_enabled=False, enable_dynamic_compilation=True
+        ).compile_grammar(grammar_str),
+        xgr.GrammarCompiler(
+            tokenizer_info, max_threads=8, cache_enabled=True, enable_dynamic_compilation=True
+        ).compile_grammar(grammar_str),
     ]
 
     for compiled in compiled_variants:

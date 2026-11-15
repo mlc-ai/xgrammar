@@ -16,6 +16,12 @@ if(NOT DEFINED tvm_ffi_ROOT)
 endif()
 find_package(tvm_ffi CONFIG REQUIRED)
 
+# Match the C++ standard for the core and bindings, which share C++ types.
+get_target_property(TVM_FFI_CXX_FEATURES tvm_ffi::header INTERFACE_COMPILE_FEATURES)
+if(TVM_FFI_CXX_FEATURES)
+  target_compile_features(xgrammar PUBLIC ${TVM_FFI_CXX_FEATURES})
+endif()
+
 # Core logic used by bindings (no tvm_ffi dependency)
 add_library(python_methods STATIC python_methods.cc)
 target_include_directories(python_methods PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
