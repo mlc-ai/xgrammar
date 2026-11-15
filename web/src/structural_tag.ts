@@ -23,6 +23,8 @@ export interface JSONSchemaFormat {
     | "cohere_xml"
     | "kimi_k3_xml"
     | "gemma";
+  any_order?: boolean;
+  property_order?: "schema" | "unordered" | "unordered_relaxed";
   excludes?: string[];
 }
 

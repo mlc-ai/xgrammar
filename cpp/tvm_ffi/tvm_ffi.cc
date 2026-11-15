@@ -388,7 +388,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
              bool print_converted_ebnf,
-             bool any_order) {
+             bool any_order,
+             ffi::AnyView property_order) {
             XGRAMMAR_FFI_TRY_BEGIN();
             auto g = Grammar::FromJSONSchema(
                 schema,
@@ -398,7 +399,11 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
                 print_converted_ebnf,
-                any_order
+                any_order,
+                property_order == nullptr ? std::nullopt
+                                          : std::optional<PropertyOrder>(static_cast<PropertyOrder>(
+                                                property_order.cast<int>()
+                                            ))
             );
             return ffi::ObjectRef(ffi::make_object<GrammarObj>(std::move(g)));
             XGRAMMAR_FFI_TRY_END();
@@ -525,7 +530,8 @@ TVM_FFI_STATIC_INIT_BLOCK() {
              ffi::AnyView separators,
              bool strict_mode,
              ffi::AnyView max_whitespace_cnt,
-             bool any_order) {
+             bool any_order,
+             ffi::AnyView property_order) {
             XGRAMMAR_FFI_TRY_BEGIN();
             CompiledGrammar cg = o->value.CompileJSONSchema(
                 schema,
@@ -534,7 +540,11 @@ TVM_FFI_STATIC_INIT_BLOCK() {
                 OptionalSeparatorsFromView(separators),
                 strict_mode,
                 OptionalIntFromView(max_whitespace_cnt),
-                any_order
+                any_order,
+                property_order == nullptr ? std::nullopt
+                                          : std::optional<PropertyOrder>(static_cast<PropertyOrder>(
+                                                property_order.cast<int>()
+                                            ))
             );
             return ffi::ObjectRef(ffi::make_object<CompiledGrammarObj>(std::move(cg)));
             XGRAMMAR_FFI_TRY_END();

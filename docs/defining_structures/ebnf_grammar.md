@@ -455,6 +455,30 @@ The chunk list is compiled into a suffix automaton, so the number of automaton s
 linearly with the number of chunks. This is also the compiled form of the Lark
 `%regex {"substring_chunks": ...}` and `%regex {"substring_chars": ...}` extensions.
 
+### `Unordered`
+
+`Unordered` matches a bounded set of entry rules in any order, with a separator between entries.
+Each entry may appear at most once; its boolean flag specifies whether it is required.
+
+```text
+root ::= Unordered(separator, 1, 2, (first, true), (second, false))
+separator ::= ","
+first ::= "x"
+second ::= "y"
+```
+
+This accepts `x`, `x,y`, and `y,x`, and rejects `y`, `x,x`, and `x,y,x`. The first three
+arguments are the separator rule, minimum entry count, and maximum entry count. Counts must
+satisfy `1 <= minimum <= maximum <= number of entries`. Entry rule identifiers must be distinct
+from each other and the separator, and entry rules must not match the empty string. The
+separator may be empty. Entry rules must have nonempty, pairwise nonoverlapping literal
+prefixes, so the matcher can distinguish their identities before parsing variable-length values.
+Ambiguous prefixes are rejected during compilation. This primitive supports schema-generated
+property entries; it is not a general permutation operator for arbitrary overlapping languages.
+
+The matcher tracks the selected entries at runtime instead of compiling every subset. Nested
+occurrences have independent state, which is restored by rollback.
+
 ### `TagDispatch`
 
 `TagDispatch` implements the common tool-calling pattern: the model produces free text until a

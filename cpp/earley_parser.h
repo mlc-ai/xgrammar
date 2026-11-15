@@ -12,6 +12,7 @@
 #include <optional>
 #include <ostream>
 #include <queue>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -19,6 +20,7 @@
 #include "grammar_impl.h"
 #include "support/compact_2d_array.h"
 #include "support/utils.h"
+#include "unordered_state.h"
 #include "xgrammar/grammar.h"
 
 namespace xgrammar {
@@ -96,7 +98,8 @@ struct ParserState {
   /*! \brief The id of the sub element in the current element of the sequence. */
   int32_t sub_element_id = 0;
 
-  /*! \brief The number of times the element is repeated. It will be used in kRepeat.*/
+  /*! \brief Repetition count for kRepeat, or the one-based entry index awaiting completion
+   * for kUnordered (zero denotes its separator). */
   int32_t repeat_count = 0;
 
   /*! \brief Partial codepoint accumulated during UTF-8 decoding for positive character classes. */
@@ -108,6 +111,13 @@ struct ParserState {
   /*! \brief The number of Unicode codepoints this derivation may consume before its active
    * character budget expires; -1 means unlimited. Stored as an absolute input position. */
   int32_t char_budget_deadline = -1;
+
+  // Unordered rules have only rule-reference edges, so UTF-8 and repetition state are idle.
+  // Keep their state in these slots to avoid growing every ordinary parser state.
+  int32_t UnorderedSeenId() const { return partial_codepoint - 1; }
+  void SetUnorderedSeenId(int32_t id) { partial_codepoint = id + 1; }
+  int32_t PendingUnorderedEntry() const { return repeat_count - 1; }
+  void SetPendingUnorderedEntry(int32_t index) { repeat_count = index + 1; }
 
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
@@ -322,6 +332,12 @@ class EarleyParser {
    */
  protected:
   using GrammarExpr = Grammar::Impl::GrammarExpr;
+
+  UnorderedStateArena unordered_states_;
+
+  bool UnorderedCanComplete(const ParserState& state, const GrammarExpr& expr) const;
+  bool UnorderedCanEnter(const ParserState& state, const GrammarExpr& expr, int index) const;
+  int32_t UnorderedMarkSeen(const ParserState& state, const GrammarExpr& expr, int index);
 
   /*! \brief The grammar to be parsed. */
   Grammar grammar_;

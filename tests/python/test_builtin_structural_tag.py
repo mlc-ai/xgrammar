@@ -3702,3 +3702,47 @@ def test_token_markers_without_special_token_excludes_terminates(tool_choice: st
     tokens = [*tokenizer.encode("plan", add_special_tokens=False), think_end, *atomic]
     assert all(matcher.accept_token(token_id) for token_id in tokens)
     assert matcher.is_completed()
+
+
+@pytest.mark.parametrize(
+    "tool_choice", ["auto", "required", {"type": "function", "function": {"name": "grep"}}]
+)
+@pytest.mark.parametrize("model", ["qwen_3_5", "qwen_3_coder"])
+def test_qwen_unordered_arguments_keep_schema_validation(tool_choice, model):
+    schema = {
+        "type": "object",
+        "properties": {"path": {"type": "string"}, "pattern": {"type": "string"}},
+        "required": ["path", "pattern"],
+        "additionalProperties": False,
+    }
+    tools = [{"type": "function", "function": {"name": "grep", "parameters": schema}}]
+    tag = get_model_structural_tag(
+        model,
+        tools=tools,
+        tool_choice=tool_choice,
+        reasoning="disabled",
+        property_order="unordered",
+        parallel_tool_calls=False,
+    )
+    grammar = xgr.Grammar.from_structural_tag(tag)
+
+    def call(keys):
+        body = "\n".join(f"<parameter={key}>value</parameter>" for key in keys)
+        return f"<tool_call>\n<function=grep>\n{body}\n</function>\n</tool_call>"
+
+    for keys, valid in [
+        (["path", "pattern"], True),
+        (["pattern", "path"], True),
+        (["path", "path"], False),
+        (["path"], False),
+        (["path", "pattern", "pattern"], False),
+        (["path", "unknown"], False),
+    ]:
+        assert _is_grammar_accept_string(grammar, call(keys)) == valid
+
+
+def test_qwen_property_order_rejects_ambiguous_or_unsupported_options():
+    with pytest.raises(ValueError, match="any_order"):
+        get_model_structural_tag("qwen_3_coder", any_order=True, property_order="unordered")
+    with pytest.raises(ValueError, match="only for Qwen"):
+        get_model_structural_tag("llama", property_order="unordered")

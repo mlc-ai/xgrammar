@@ -54,10 +54,20 @@ Grammar Grammar::FromJSONSchema(
     bool strict_mode,
     std::optional<int> max_whitespace_cnt,
     bool print_converted_ebnf,
-    bool any_order
+    bool any_order,
+    std::optional<PropertyOrder> property_order
 ) {
   auto grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
-      schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      JSONFormat::kJSON,
+      {},
+      property_order
   ));
   if (print_converted_ebnf) {
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
@@ -205,7 +215,7 @@ std::optional<std::string> Grammar::Impl::Validate() const {
     if (len < 0 || start + 2 + len > data_size) {
       return "The length of grammar expr " + std::to_string(expr_id) + " is out of range";
     }
-    if (type < 0 || type > static_cast<int64_t>(GrammarExprType::kSubstring)) {
+    if (type < 0 || type > static_cast<int64_t>(GrammarExprType::kUnordered)) {
       return "Unknown type of grammar expr " + std::to_string(expr_id);
     }
   }
@@ -243,6 +253,18 @@ std::optional<std::string> Grammar::Impl::Validate() const {
         // The excluded strings are read as a kChoices expr of byte string exprs.
         ok = ok && expr_ok(expr[size - 1]) &&
              GetGrammarExpr(expr[size - 1]).type == GrammarExprType::kChoices;
+        break;
+      }
+      case GrammarExprType::kUnordered: {
+        ok = size >= 6 && size % 2 == 0 && rule_ok(expr[0]) && expr[1] >= 1 && expr[1] <= expr[2] &&
+             expr[2] <= (size - 4) / 2;
+        int required = 0;
+        for (int i = 4; ok && i < size; i += 2) {
+          ok = rule_ok(expr[i]) && expr[i] != expr[0] && (i == 4 || expr[i] > expr[i - 2]) &&
+               (expr[i + 1] == 0 || expr[i + 1] == 1);
+          required += expr[i + 1];
+        }
+        ok = ok && expr[3] == required && required <= expr[2];
         break;
       }
       case GrammarExprType::kRepeat:
