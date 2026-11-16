@@ -2243,6 +2243,71 @@ def test_additional_properties_type_enforcement():
     )
 
 
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+@pytest.mark.parametrize(
+    "name, instance, accepted",
+    [
+        # \uXXXX escapes, in either case of the hex digits
+        ("a", '{"a": 1}', True),
+        ("a", '{"a": "wrong"}', False),
+        ("a", '{"\\u0061": "wrong"}', False),
+        ("a", '{"\\u0041": "x"}', True),
+        ("a", '{"\\u0061x": "x"}', True),
+        ("a", '{"a": 1, "\\u0061": 2}', False),
+        ("ab", '{"a\\u0062": "wrong"}', False),
+        ("ab", '{"\\u0061b": "wrong"}', False),
+        ("ab", '{"\\u0061\\u0062": "wrong"}', False),
+        ("ab", '{"\\u0061c": "x"}', True),
+        ("j", '{"\\u006a": "wrong"}', False),
+        ("j", '{"\\u006A": "wrong"}', False),
+        ("j", '{"\\u006b": "x"}', True),
+        # Short escapes
+        ("a/b", '{"a/b": "wrong"}', False),
+        ("a/b", '{"a\\/b": "wrong"}', False),
+        ("a/b", '{"a\\u002Fb": "wrong"}', False),
+        ("a\tb", '{"a\\tb": "wrong"}', False),
+        ("a\tb", '{"a\\u0009b": "wrong"}', False),
+        ("a\tb", '{"a\\nb": "x"}', True),
+        # Non-ASCII names; U+540D and U+5417 share their first two UTF-8 bytes
+        ("名字", '{"名字": "wrong"}', False),
+        ("名字", '{"\\u540d\\u5b57": "wrong"}', False),
+        ("名字", '{"\\u540d字": "wrong"}', False),
+        ("名字", '{"吗": "x"}', True),
+        ("名字", '{"名": "x"}', True),
+        # U+00C3 has the value of the first UTF-8 byte of "é"
+        ("é", '{"é": "wrong"}', False),
+        ("é", '{"\\u00e9": "wrong"}', False),
+        ("é", '{"Ã": "x"}', True),
+        # Beyond the BMP, \u spells a surrogate pair
+        ("😀", '{"😀": "wrong"}', False),
+        ("😀", '{"\\ud83d\\ude00": "wrong"}', False),
+        ("😀", '{"\\uD83D\\uDE00": "wrong"}', False),
+        ("😀", '{"\\ud83d\\ude01": "x"}', True),
+        ("😀", '{"\\ud83dx": "x"}', True),
+    ],
+)
+def test_additional_property_key_excludes_every_spelling(
+    keyword: str, name: str, instance: str, accepted: bool
+):
+    """Regression test for #1074: a declared property name spelled with JSON escapes, or with
+    non-ASCII characters, must not reach the additional-properties branch, where its declared
+    value schema would not apply."""
+    schema = {"type": "object", "properties": {name: {"type": "integer"}}, keyword: True}
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
+def test_additional_property_key_excludes_every_spelling_implicitly():
+    """Same as above for the additional properties that strict_mode=False admits implicitly, and
+    for a typed additionalProperties schema."""
+    schema = {"type": "object", "properties": {"a": {"type": "integer"}}}
+    check_schema_with_instance(schema, '{"\\u0061": "wrong"}', is_accepted=False, strict_mode=False)
+    check_schema_with_instance(schema, '{"\\u0041": "x"}', is_accepted=True, strict_mode=False)
+
+    schema["additionalProperties"] = {"type": "boolean"}
+    check_schema_with_instance(schema, '{"\\u0061": true}', is_accepted=False)
+    check_schema_with_instance(schema, '{"\\u0041": true}', is_accepted=True)
+
+
 def test_generate_range_regex():
     # Basic range tests
     assert _generate_range_regex(12, 16) == r"^((1[2-6]))$"

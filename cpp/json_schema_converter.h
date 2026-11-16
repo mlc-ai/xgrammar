@@ -538,12 +538,26 @@ class JSONSchemaConverter {
   std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
 
-  // Trie over property names, for key patterns that exclude specific properties
+  // Trie over the code points of the property names, for key patterns that exclude specific
+  // properties. Each character is matched unescaped and through every JSON escape that spells it.
   struct TrieNode {
     bool is_terminal = false;
-    std::map<uint8_t, TrieNode> children;
+    std::map<int32_t, TrieNode> children;  // Keyed by code point.
   };
+  // Trie over the four hex digits of a \uXXXX escape, lowercase; the grammar accepts either case.
+  struct HexTrieNode {
+    std::map<char, HexTrieNode> children;
+    // After four digits: the rest of the key that follows this code unit, or -1 if none.
+    int32_t target = -1;
+    // After the four digits of a high surrogate: the rest of the key after each low surrogate.
+    std::map<int32_t, int32_t> low_surrogates;
+  };
+  static HexTrieNode& InsertHexTrie(HexTrieNode* root, int32_t code_unit);
   int32_t BuildTrieBody(const TrieNode& node, const std::string& rule_name);
+  int32_t BuildTrieEscapeBody(const std::map<int32_t, int32_t>& child_bodies);
+  int32_t BuildHexTrieBody(const HexTrieNode& node, int depth);
+  int32_t BuildSurrogateTailBody(const std::map<int32_t, int32_t>& low_surrogates);
+  int32_t HexDigitExpression();
 
   // Reused grammar expression ids
   std::optional<int32_t> empty_expr_id_;
@@ -551,6 +565,7 @@ class JSONSchemaConverter {
   std::unordered_map<std::string, int32_t> byte_string_expr_ids_;
   std::unordered_map<int32_t, int32_t> rule_ref_expr_ids_;
   std::optional<int32_t> whitespace_expr_id_;
+  std::optional<int32_t> hex_digit_expr_id_;
 
   // Helper for integer/number range regex generation
   static std::string GenerateRangeRegex(std::optional<int64_t> start, std::optional<int64_t> end);

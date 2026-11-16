@@ -33,6 +33,7 @@
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
+#include "support/encoding.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
 
@@ -2204,28 +2205,186 @@ std::string JSONSchemaConverter::GetKeyPattern() const { return kBasicString; }
 
 int32_t JSONSchemaConverter::KeyPatternExpression() { return RuleRef(GetKeyPattern()); }
 
+// The short escapes of a JSON string and the characters they stand for.
+static constexpr std::pair<char, TCodepoint> kJSONShortEscapes[] = {
+    {'"', '"'},
+    {'\\', '\\'},
+    {'/', '/'},
+    {'b', '\b'},
+    {'f', '\f'},
+    {'n', '\n'},
+    {'r', '\r'},
+    {'t', '\t'},
+};
+
+static constexpr char kHexDigits[] = "0123456789abcdef";
+
+// Whether a character may be written unescaped in a JSON string.
+static bool IsUnescapedJSONChar(TCodepoint codepoint) {
+  return codepoint >= 0x20 && codepoint != '"' && codepoint != '\\';
+}
+
+// Adds both cases of a lowercase hex digit to a character class.
+static void AddHexDigitCases(
+    std::vector<GrammarBuilder::CharacterClassElement>* elements, char digit
+) {
+  elements->push_back({digit, digit});
+  if (digit >= 'a' && digit <= 'f') {
+    char upper = static_cast<char>(digit - 'a' + 'A');
+    elements->push_back({upper, upper});
+  }
+}
+
+JSONSchemaConverter::HexTrieNode& JSONSchemaConverter::InsertHexTrie(
+    HexTrieNode* root, int32_t code_unit
+) {
+  HexTrieNode* cur = root;
+  for (int shift = 12; shift >= 0; shift -= 4) {
+    cur = &cur->children[kHexDigits[(code_unit >> shift) & 0xF]];
+  }
+  return *cur;
+}
+
+int32_t JSONSchemaConverter::HexDigitExpression() {
+  if (!hex_digit_expr_id_.has_value()) {
+    hex_digit_expr_id_ = builder_.AddCharacterClass({{'0', '9'}, {'a', 'f'}, {'A', 'F'}});
+  }
+  return *hex_digit_expr_id_;
+}
+
 int32_t JSONSchemaConverter::BuildTrieBody(const TrieNode& node, const std::string& rule_name) {
+  // The rest of the key after each child character, as a rule shared by its unescaped spelling and
+  // every escape that spells it. Sharing the rule keeps the grammar linear in the names' length.
+  std::map<int32_t, int32_t> child_bodies;
+  for (const auto& [codepoint, child] : node.children) {
+    int32_t child_rule_id = builder_.AddEmptyRuleWithHint(rule_name);
+    builder_.UpdateRuleBody(child_rule_id, BuildTrieBody(child, rule_name));
+    child_bodies[codepoint] = RuleRef(child_rule_id);
+  }
+
   std::vector<int32_t> choices;
   if (!node.is_terminal) {
     choices.push_back(ByteString("\""));
   }
 
+  // Any other unescaped character leaves the declared names behind.
   std::vector<CharacterClassElement> excluded = {
       {0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}
   };
-  for (const auto& [character, child] : node.children) {
-    static_cast<void>(child);
-    excluded.push_back({character, character});
+  for (const auto& [codepoint, body] : child_bodies) {
+    static_cast<void>(body);
+    if (IsUnescapedJSONChar(codepoint)) {
+      excluded.push_back({codepoint, codepoint});
+    }
   }
   choices.push_back(Sequence({builder_.AddCharacterClass(excluded, true), RuleRef(kBasicStringSub)})
   );
-  choices.push_back(Sequence({ByteString("\\"), RuleRef(kBasicEscape), RuleRef(kBasicStringSub)}));
-  for (const auto& [character, child] : node.children) {
-    choices.push_back(Sequence(
-        {ByteString(std::string(1, static_cast<char>(character))), BuildTrieBody(child, rule_name)}
-    ));
+  // An escape stays in the trie when it spells a child character.
+  choices.push_back(Sequence({ByteString("\\"), BuildTrieEscapeBody(child_bodies)}));
+  for (const auto& [codepoint, body] : child_bodies) {
+    if (IsUnescapedJSONChar(codepoint)) {
+      choices.push_back(Sequence({ByteString(CharToUTF8(codepoint)), body}));
+    }
   }
   return Choice(choices);
+}
+
+int32_t JSONSchemaConverter::BuildTrieEscapeBody(const std::map<int32_t, int32_t>& child_bodies) {
+  std::vector<int32_t> choices;
+  std::vector<CharacterClassElement> other_short_escapes;
+  for (const auto& [letter, codepoint] : kJSONShortEscapes) {
+    auto it = child_bodies.find(codepoint);
+    if (it == child_bodies.end()) {
+      other_short_escapes.push_back({letter, letter});
+    } else {
+      choices.push_back(Sequence({ByteString(std::string(1, letter)), it->second}));
+    }
+  }
+  if (!other_short_escapes.empty()) {
+    choices.push_back(
+        Sequence({builder_.AddCharacterClass(other_short_escapes), RuleRef(kBasicStringSub)})
+    );
+  }
+
+  // \uXXXX spells the UTF-16 code units of a character: one in the BMP, a surrogate pair above it.
+  HexTrieNode root;
+  for (const auto& [codepoint, body] : child_bodies) {
+    if (codepoint < 0x10000) {
+      InsertHexTrie(&root, codepoint).target = body;
+    } else {
+      int32_t high = 0xD800 + ((codepoint - 0x10000) >> 10);
+      int32_t low = 0xDC00 + ((codepoint - 0x10000) & 0x3FF);
+      InsertHexTrie(&root, high).low_surrogates[low] = body;
+    }
+  }
+  choices.push_back(Sequence({ByteString("u"), BuildHexTrieBody(root, 0)}));
+  return Choice(choices);
+}
+
+int32_t JSONSchemaConverter::BuildHexTrieBody(const HexTrieNode& node, int depth) {
+  std::vector<int32_t> choices;
+  if (depth == 4) {
+    if (node.target != -1) {
+      choices.push_back(node.target);
+    }
+    if (!node.low_surrogates.empty()) {
+      choices.push_back(BuildSurrogateTailBody(node.low_surrogates));
+    }
+    return Choice(choices);
+  }
+
+  // A digit that spells none of the children frees the remaining digits and the rest of the key.
+  std::vector<CharacterClassElement> other_digits;
+  for (int i = 0; i < 16; ++i) {
+    if (!node.children.count(kHexDigits[i])) {
+      AddHexDigitCases(&other_digits, kHexDigits[i]);
+    }
+  }
+  if (!other_digits.empty()) {
+    std::vector<int32_t> sequence = {builder_.AddCharacterClass(other_digits)};
+    for (int i = depth + 1; i < 4; ++i) {
+      sequence.push_back(HexDigitExpression());
+    }
+    sequence.push_back(RuleRef(kBasicStringSub));
+    choices.push_back(Sequence(sequence));
+  }
+  for (const auto& [digit, child] : node.children) {
+    std::vector<CharacterClassElement> digit_class;
+    AddHexDigitCases(&digit_class, digit);
+    choices.push_back(
+        Sequence({builder_.AddCharacterClass(digit_class), BuildHexTrieBody(child, depth + 1)})
+    );
+  }
+  return Choice(choices);
+}
+
+int32_t JSONSchemaConverter::BuildSurrogateTailBody(const std::map<int32_t, int32_t>& low_surrogates
+) {
+  // The key ends in a lone high surrogate, which no declared name contains, but the escape of the
+  // matching low surrogate would complete a declared character.
+  HexTrieNode root;
+  for (const auto& [low, body] : low_surrogates) {
+    InsertHexTrie(&root, low).target = body;
+  }
+  std::vector<CharacterClassElement> short_escapes;
+  for (const auto& [letter, codepoint] : kJSONShortEscapes) {
+    static_cast<void>(codepoint);
+    short_escapes.push_back({letter, letter});
+  }
+  int32_t unescaped = builder_.AddCharacterClass(
+      {{0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}}, true
+  );
+  return Choice(
+      {ByteString("\""),
+       Sequence({unescaped, RuleRef(kBasicStringSub)}),
+       Sequence(
+           {ByteString("\\"),
+            Choice(
+                {Sequence({builder_.AddCharacterClass(short_escapes), RuleRef(kBasicStringSub)}),
+                 Sequence({ByteString("u"), BuildHexTrieBody(root, 0)})}
+            )}
+       )}
+  );
 }
 
 int32_t JSONSchemaConverter::GetKeyPatternExcluding(
@@ -2246,13 +2405,13 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
     );
   }
 
-  // Build trie from property names
-  // TODO(linzhang): The trie only excludes the literal unescaped spelling of each property name.
+  // Build the trie over the code points of the property names. Code points rather than bytes, since
+  // BuildTrieBody removes the children from a character class, whose members are code points.
   TrieNode root;
   for (const auto& prop : properties) {
     TrieNode* cur = &root;
-    for (unsigned char c : prop.name) {
-      cur = &cur->children[c];
+    for (TCodepoint codepoint : ParseUTF8(prop.name.c_str(), true)) {
+      cur = &cur->children[codepoint];
     }
     cur->is_terminal = true;
   }
