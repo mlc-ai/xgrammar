@@ -639,19 +639,36 @@ def test_none_parameters_unconstrained():
     assert None not in json_schema_values
 
 
-def test_function_with_true_parameters_can_be_selected_by_name():
+@pytest.mark.parametrize(
+    "model,call",
+    [
+        ("llama", '{"name": "ping", "parameters": [1, "ok"]}'),
+        (
+            "harmony",
+            '<|channel|>commentary to=functions.ping<|constrain|>json<|message|>[1, "ok"]<|call|>',
+        ),
+        (
+            "harmony",
+            ' to=functions.ping<|channel|>commentary <|constrain|>json<|message|>[1, "ok"]<|call|>',
+        ),
+        ("harmony", ' to=functions.ping<|channel|>commentary json<|message|>[1, "ok"]<|call|>'),
+    ],
+    ids=["llama", "harmony-channel-first", "harmony-recipient-first", "harmony-plain-json"],
+)
+def test_function_with_true_parameters_can_be_selected_by_name(model, call):
     tag = get_model_structural_tag(
-        "llama",
+        model,
         tools=[{"type": "function", "function": {"name": "ping", "parameters": True}}],
         tool_choice={"type": "function", "function": {"name": "ping"}},
     )
-    check_stag_with_instance(tag, '{"name": "ping", "parameters": [1, "ok"]}')
-    check_stag_with_instance(tag, '{"name": "other", "parameters": {}}', False)
+    check_stag_with_instance(tag, call)
+    check_stag_with_instance(tag, call.replace("ping", "other"), False)
 
 
-def test_function_with_false_parameters_is_unsatisfiable():
+@pytest.mark.parametrize("model", ["llama", "harmony"])
+def test_function_with_false_parameters_is_unsatisfiable(model):
     tag = get_model_structural_tag(
-        "llama",
+        model,
         tools=[{"type": "function", "function": {"name": "ping", "parameters": False}}],
         tool_choice={"type": "function", "function": {"name": "ping"}},
     )
