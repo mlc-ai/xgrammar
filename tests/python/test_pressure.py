@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any, List
 
 import pytest
-from tokenizer_utils import load_tokenizer
+from transformers import AutoTokenizer
 
 import xgrammar as xgr
 
@@ -157,7 +157,7 @@ def _measure_mask_calls(
 
 @pytest.fixture(scope="module")
 def glm_tokenizer():
-    return load_tokenizer("zai-org/GLM-5.2", trust_remote_code=True)
+    return AutoTokenizer.from_pretrained("zai-org/GLM-5.2", trust_remote_code=True)
 
 
 @pytest.fixture(scope="module")
