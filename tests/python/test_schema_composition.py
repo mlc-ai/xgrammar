@@ -655,3 +655,109 @@ def test_metadata_collision_does_not_merge_general_definition_scopes(keyword):
     for schema in schemas:
         with pytest.raises(Exception, match="Cannot conjoin"):
             accepts(schema, "a")
+
+
+@pytest.mark.parametrize("style", ["json", "qwen_xml"])
+@pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+def test_unsupported_not_preserves_positive_composition(style, keyword):
+    schema = {
+        "type": "object",
+        "properties": {
+            "mode": {"type": "string"},
+            "a": {"type": "boolean"},
+            "b": {"type": "boolean"},
+            "count": {"type": "integer"},
+        },
+        "required": ["mode", "count"],
+        "additionalProperties": False,
+        keyword: [
+            {"properties": {"mode": {"const": "run"}}, "required": ["a"]},
+            {"properties": {"mode": {"const": "stop"}}, "required": ["b"]},
+        ],
+    }
+    valid = {"mode": "run", "a": True, "b": False, "count": 1}
+    assert accepts(schema, valid, style)
+    for invalid in [
+        {"mode": "run", "a": True},
+        {"mode": "run", "count": 1},
+        {**valid, "count": True},
+        {**valid, "mode": "other"},
+        {**valid, "extra": 1},
+    ]:
+        assert not accepts(schema, invalid, style)
+
+    condition = {
+        "required": ["a", "b"],
+        "properties": {"a": {"const": True}, "b": {"const": False}},
+    }
+    mixed = [{"required": ["a"]}, condition]
+    expected = _json_schema_to_ebnf(schema, json_format=style)
+    for negated in [
+        condition,
+        {"required": ["a", "b"]},
+        {"anyOf": mixed},
+        {"anyOf": list(reversed(mixed))},
+    ]:
+        for on_sibling in [True, False]:
+            candidate = copy.deepcopy(schema)
+            operand = candidate if on_sibling else candidate[keyword][0]
+            operand["not"] = copy.deepcopy(negated)
+            before = copy.deepcopy(candidate)
+            assert _json_schema_to_ebnf(candidate, json_format=style) == expected
+            assert candidate == before
+
+
+@pytest.mark.parametrize("style", ["json", "qwen_xml"])
+@pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+def test_supported_and_unsupported_not_on_both_operands(style, keyword):
+    schema = {
+        "type": "object",
+        "properties": {
+            "a": {"type": "boolean"},
+            "b": {"type": "boolean"},
+            "count": {"type": "integer"},
+            "blocked": {"type": "boolean"},
+            "other": {"type": "boolean"},
+        },
+        "required": ["count"],
+        "additionalProperties": False,
+        keyword: [{"required": ["a"]}],
+    }
+    condition = {
+        "required": ["a", "b"],
+        "properties": {"a": {"const": True}, "b": {"const": False}},
+    }
+    cases = [(condition, {"required": ["a", "b"]}, None, None)]
+    for supported in [
+        {"required": ["blocked"]},
+        {"anyOf": [{"required": ["blocked"]}, {"required": ["other"]}]},
+    ]:
+        cases.extend(
+            [(condition, supported, None, supported), (supported, condition, supported, None)]
+        )
+    for left, right, expected_left, expected_right in cases:
+        candidate = copy.deepcopy(schema)
+        candidate["not"] = left
+        candidate[keyword][0]["not"] = right
+        before = copy.deepcopy(candidate)
+        expected = copy.deepcopy(schema)
+        if expected_left is not None:
+            expected["not"] = expected_left
+        if expected_right is not None:
+            expected[keyword][0]["not"] = expected_right
+        assert _json_schema_to_ebnf(candidate, json_format=style) == _json_schema_to_ebnf(
+            expected, json_format=style
+        )
+        assert candidate == before
+        valid = {"a": True, "b": False, "count": 1}
+        assert accepts(expected, valid, style)
+        if expected_left is not None or expected_right is not None:
+            assert not accepts(expected, {**valid, "blocked": True}, style)
+
+
+@pytest.mark.parametrize("style", ["json", "qwen_xml"])
+def test_not_composition_keeps_existing_context_boundaries(style):
+    with pytest.raises(Exception, match="not outside an object"):
+        accepts({"type": "string", "anyOf": [{"not": {"required": ["a"]}}]}, "x", style)
+    with pytest.raises(Exception, match="false properties in an open object"):
+        accepts({"type": "object", "anyOf": [{"not": {"required": ["a"]}}]}, {}, style)

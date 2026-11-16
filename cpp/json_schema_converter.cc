@@ -735,12 +735,29 @@ Result<picojson::value, SchemaError> ConjoinSchemas(
     // common not(anyOf:[required:[k], ...]) spelling without enumerating subsets.
     if (!object_context) return unsupported("not outside an object");
     const auto& negated = operand->at("not");
-    if (!negated.is<picojson::object>()) return unsupported("not");
     picojson::array predicates{negated};
-    const auto& negated_object = negated.get<picojson::object>();
-    if (HasOnlyKeys(negated_object, {"anyOf"}) && negated_object.count("anyOf") &&
-        negated_object.at("anyOf").is<picojson::array>()) {
-      predicates = negated_object.at("anyOf").get<picojson::array>();
+    if (negated.is<picojson::object>()) {
+      const auto& negated_object = negated.get<picojson::object>();
+      if (HasOnlyKeys(negated_object, {"anyOf"}) && negated_object.count("anyOf") &&
+          negated_object.at("anyOf").is<picojson::array>()) {
+        predicates = negated_object.at("anyOf").get<picojson::array>();
+      }
+    }
+    const bool can_lower =
+        std::all_of(predicates.begin(), predicates.end(), [](const picojson::value& predicate) {
+          if (!predicate.is<picojson::object>()) return false;
+          const auto& p = predicate.get<picojson::object>();
+          if (!HasOnlyKeys(p, {"required"}) || !p.count("required") ||
+              !p.at("required").is<picojson::array>())
+            return false;
+          const auto& required = p.at("required").get<picojson::array>();
+          return required.size() == 1 && required[0].is<std::string>();
+        });
+    if (!can_lower) {
+      // Match the parser's existing handling of unsupported not constraints.
+      // Ignore the whole constraint, including any otherwise supported predicates.
+      operand->erase("not");
+      continue;
     }
     picojson::object properties;
     if (operand->count("properties")) {
@@ -752,13 +769,8 @@ Result<picojson::value, SchemaError> ConjoinSchemas(
       properties = operand->at("properties").get<picojson::object>();
     }
     for (const auto& predicate : predicates) {
-      if (!predicate.is<picojson::object>()) return unsupported("not");
-      const auto& p = predicate.get<picojson::object>();
-      if (!HasOnlyKeys(p, {"required"}) || !p.count("required") ||
-          !p.at("required").is<picojson::array>())
-        return unsupported("not");
-      const auto& required = p.at("required").get<picojson::array>();
-      if (required.size() != 1 || !required[0].is<std::string>()) return unsupported("not");
+      const auto& required =
+          predicate.get<picojson::object>().at("required").get<picojson::array>();
       properties[required[0].get<std::string>()] = picojson::value(false);
     }
     (*operand)["properties"] = picojson::value(properties);
