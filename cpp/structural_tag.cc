@@ -2221,8 +2221,13 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TriggeredTag
 Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const TagsWithSeparatorFormat& format
 ) {
   // The grammar:
-  // Step 1. tags_rule: call tags
-  //   tags_rule ::= tag1 | tag2 | ... | tagN
+  // Step 1. tags_rule: call tags. When all begins are strings sharing a
+  //   common prefix P (truncated to a UTF-8 boundary), factor it out:
+  //     tags_rule ::= P tags_suffixes
+  //     tags_suffixes ::= tag1_suffix | tag2_suffix | ... | tagN_suffix
+  //   so preceding free text predicts one literal instead of N alternatives.
+  //   Otherwise:
+  //     tags_rule ::= tag1 | tag2 | ... | tagN
   // Step 2. Special handling (stop_after_first is true):
   //   if at_least_one is false:
   //     root ::= tags_rule | ""
