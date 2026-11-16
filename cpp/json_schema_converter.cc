@@ -711,6 +711,28 @@ class SchemaParser {
   std::unordered_map<std::string, SchemaSpecPtr> schema_cache_;
 };
 
+// picojson serializes a whole double such as 3.0 as "3", dropping the fraction the schema wrote.
+// Integers written without a fraction parse as int64 and stay exact.
+bool IsWholeFloatLiteral(const picojson::value& value, const std::string& serialized) {
+  if (!value.is<double>() || value.is<int64_t>() || serialized.empty()) return false;
+  auto digits_begin = serialized.begin() + (serialized[0] == '-' ? 1 : 0);
+  return digits_begin != serialized.end() &&
+         std::all_of(digits_begin, serialized.end(), [](char c) {
+           return std::isdigit(static_cast<unsigned char>(c));
+         });
+}
+
+// A const/enum literal for cache keying. Whole floats keep the ".0" spelling that
+// serialize() drops, so {"const": 3.0} and {"const": 3} do not share a cache entry:
+// their specs differ (is_whole_float), so their keys must differ too.
+std::string SerializeLiteralKey(const picojson::value& value) {
+  std::string serialized = value.serialize(false);
+  if (IsWholeFloatLiteral(value, serialized)) {
+    serialized += ".0";
+  }
+  return serialized;
+}
+
 std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
   static const std::unordered_set<std::string> kSkippedKeys = {
       "title",
@@ -762,8 +784,18 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
           separator = ",";
         }
         result += "}";
-      } else if (key == "const" || key == "enum") {
+      } else if (key == "const") {
         // Literal data must retain annotation-like names and member order.
+        result += SerializeLiteralKey(value);
+      } else if (key == "enum" && value.is<picojson::array>()) {
+        result += "[";
+        std::string separator;
+        for (const auto& item : value.get<picojson::array>()) {
+          result += separator + SerializeLiteralKey(item);
+          separator = ",";
+        }
+        result += "]";
+      } else if (key == "enum") {
         result += value.serialize(false);
       } else {
         result += ComputeCacheKey(value);
@@ -1486,17 +1518,6 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
     );
   }
   return ResultOk(std::move(spec));
-}
-
-// picojson serializes a whole double such as 3.0 as "3", dropping the fraction the schema wrote.
-// Integers written without a fraction parse as int64 and stay exact.
-bool IsWholeFloatLiteral(const picojson::value& value, const std::string& serialized) {
-  if (!value.is<double>() || value.is<int64_t>() || serialized.empty()) return false;
-  auto digits_begin = serialized.begin() + (serialized[0] == '-' ? 1 : 0);
-  return digits_begin != serialized.end() &&
-         std::all_of(digits_begin, serialized.end(), [](char c) {
-           return std::isdigit(static_cast<unsigned char>(c));
-         });
 }
 
 Result<ConstSpec, SchemaError> SchemaParser::ParseConst(const picojson::object& schema) {
