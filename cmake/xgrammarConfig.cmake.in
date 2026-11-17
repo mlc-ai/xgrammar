@@ -1,0 +1,9 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+if(@XGRAMMAR_ENABLE_CPPTRACE@)
+  find_dependency(cpptrace)
+endif()
+
+include(${CMAKE_CURRENT_LIST_DIR}/xgrammarTargets.cmake)
+check_required_components(xgrammar)
