@@ -173,6 +173,9 @@ class GrammarCompiler(XGRObject):
         schema : Union[str, Type[BaseModel], Dict[str, Any]]
             The schema string or Pydantic model or JSON schema dict.
 
+            propertyNames is applied to every object key; see
+            :meth:`xgrammar.Grammar.from_json_schema` for details.
+
         any_whitespace : bool, default: True
             Whether to use any whitespace. If True, the generated grammar will ignore the
             indent parameter, and allow any whitespace. See
