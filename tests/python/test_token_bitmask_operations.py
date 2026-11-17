@@ -507,5 +507,30 @@ def test_apply_token_bitmask_inplace_no_warn_when_vocab_size_given():
     assert torch.isfinite(logits[0, 40:]).all()
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("vocab_size", [1, 31, 32, 33, 65, 257])
+def test_apply_token_bitmask_inplace_cpu_changes_only_rejected_logits(
+    dtype: torch.dtype, vocab_size: int
+):
+    """Allowed logits keep their bit patterns, including NaN and -0.0, and the logits beyond
+    vocab_size and the rows that are not in indices are not touched."""
+    generator = torch.Generator().manual_seed(0)
+    logits = torch.randn((4, vocab_size + 9), generator=generator, dtype=dtype)
+    logits[:, 0] = float("nan")
+    if vocab_size > 1:
+        logits[:, 1] = -0.0
+    bool_mask = torch.randint(0, 2, (4, vocab_size), generator=generator, dtype=torch.bool)
+    bool_mask[:, 0] = True
+    bitmask = bool_mask_to_bitmask(bool_mask)
+    indices = [3, 1]
+    expected = logits.clone()
+    for row in indices:
+        expected[row, :vocab_size][~bool_mask[row]] = float("-inf")
+
+    xgr.apply_token_bitmask_inplace(logits, bitmask, vocab_size=vocab_size, indices=indices)
+    int_dtype = torch.int32 if dtype == torch.float32 else torch.int16
+    assert torch.equal(logits.view(int_dtype), expected.view(int_dtype))
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
