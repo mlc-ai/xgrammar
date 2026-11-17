@@ -1000,10 +1000,11 @@ void EarleyParser::AdvanceCharacterClass(
     return;
   }
 
-  // ASCII handling (unchanged)
+  // ASCII handling. The bounds are codepoints: compare them whole. Truncating them to a byte
+  // made a range such as \u2030-\u205e match the ASCII bytes 0x30-0x5E.
   for (int i = 1; i < sub_sequence.size(); i += 2) {
-    if (static_cast<uint8_t>(sub_sequence[i]) <= ch &&
-        ch <= static_cast<uint8_t>(sub_sequence[i + 1])) {
+    if (sub_sequence[i] <= static_cast<int32_t>(ch) &&
+        static_cast<int32_t>(ch) <= sub_sequence[i + 1]) {
       if (!is_negative) {
         auto new_state = state;
         new_state.element_id++;
@@ -1133,10 +1134,11 @@ void EarleyParser::AdvanceCharacterClassStar(
     return;
   }
 
-  // ASCII handling (unchanged)
+  // ASCII handling. The bounds are codepoints: compare them whole. Truncating them to a byte
+  // made a range such as \u2030-\u205e match the ASCII bytes 0x30-0x5E.
   for (int i = 1; i < sub_sequence.size(); i += 2) {
-    if (static_cast<uint8_t>(sub_sequence[i]) <= ch &&
-        ch <= static_cast<uint8_t>(sub_sequence[i + 1])) {
+    if (sub_sequence[i] <= static_cast<int32_t>(ch) &&
+        static_cast<int32_t>(ch) <= sub_sequence[i + 1]) {
       if (!is_negative) {
         Enqueue(state);
       }
