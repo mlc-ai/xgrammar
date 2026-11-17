@@ -3352,20 +3352,26 @@ def test_harmony_required_and_forced_need_a_tool_call(
 
 
 @pytest.mark.parametrize("reasoning", ["enabled", "disabled"])
-def test_harmony_required_with_builtin_tool_needs_a_call(reasoning: str):
-    """Builtin tools follow the same rule as function tools under "required"."""
+@pytest.mark.parametrize(
+    "tool_choice", ["required", {"type": "web_search_preview"}], ids=["required", "forced"]
+)
+def test_harmony_required_and_forced_builtin_tool_needs_a_call(tool_choice: Any, reasoning: str):
+    """Builtin tools follow the same rules as function tools under "required" and forced."""
     stag = get_model_structural_tag(
         "harmony",
         tools=[
             {"type": "web_search_preview", "name": "browser.search", "parameters": SIMPLE_SCHEMA}
         ],
-        tool_choice="required",
+        tool_choice=tool_choice,
         reasoning=reasoning,
     )
     call = '<|channel|>commentary to=browser.search code<|message|>{"q": "v"}<|call|>'
+    forced = tool_choice != "required"
     check_stag_with_instance(stag, "", False)
     check_stag_with_instance(stag, _HARMONY_ANALYSIS, False)
     check_stag_with_instance(stag, call, True)
+    # parallel_tool_calls defaults to True: "required" allows more calls, forced exactly one.
+    check_stag_with_instance(stag, call + _HARMONY_SEPARATOR + call, not forced)
 
 
 def test_harmony_forced_allows_exactly_one_call():
