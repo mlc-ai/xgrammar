@@ -43,7 +43,7 @@ expected_grammar_test_structural_tag_after_optimization = r"""basic_escape ::= (
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\r\t]* "}"))
-root_0 ::= (("{" [ \n\r\t]* "\"arg1\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
+root_0 ::= (("{" [ \n\r\t]* "\"arg1\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}")) (=("</function>"))
 root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg2\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer)) (=([ \n\r\t]* "}"))
 basic_integer_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_1))

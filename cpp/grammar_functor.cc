@@ -7,6 +7,7 @@
 
 #include <xgrammar/xgrammar.h>
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <cstdint>
@@ -1015,7 +1016,8 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
 
   bool IsExactLookaheadAssertion(int32_t rule_id) {
     XGRAMMAR_DCHECK(base_grammar_->GetRule(rule_id).lookahead_assertion_id != -1);
-    return CanUseDerivedLookahead(rule_id);
+    return CanUseDerivedLookahead(rule_id) &&
+           rule_lookahead_infos_[rule_id].non_last_occurrence_count == 1;
   }
 
   int32_t DetectLookaheadAssertion(int32_t rule_id) {
@@ -1031,12 +1033,32 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
     bool appears_as_last_in_other_rule = false;
     int non_last_occurrence_count = 0;
     std::vector<int32_t> suffix_after_first_occurrence;
+    bool has_different_suffix = false;
   };
+
+  bool IsSameExpr(int32_t lhs_id, int32_t rhs_id) const {
+    if (lhs_id == rhs_id) {
+      return true;
+    }
+    auto lhs = base_grammar_->GetGrammarExpr(lhs_id);
+    auto rhs = base_grammar_->GetGrammarExpr(rhs_id);
+    if (lhs.type != rhs.type || lhs.size() != rhs.size()) {
+      return false;
+    }
+    const bool has_child_exprs =
+        lhs.type == GrammarExprType::kSequence || lhs.type == GrammarExprType::kChoices;
+    for (int i = 0; i < lhs.size(); ++i) {
+      if (has_child_exprs ? !IsSameExpr(lhs[i], rhs[i]) : lhs[i] != rhs[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
 
   bool CanUseDerivedLookahead(int32_t rule_id) const {
     const auto& info = rule_lookahead_infos_[rule_id];
     return !info.is_triggered_by_dispatch && !info.appears_as_last_in_other_rule &&
-           info.non_last_occurrence_count == 1;
+           info.non_last_occurrence_count >= 1 && !info.has_different_suffix;
   }
 
   void BuildRuleLookaheadInfo() {
@@ -1083,6 +1105,17 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
             info.suffix_after_first_occurrence.assign(
                 sequence_expr.begin() + j + 1, sequence_expr.end()
             );
+          } else if (!info.has_different_suffix) {
+            // Every occurrence followed by the same elements gives the same lookahead.
+            const auto& suffix = info.suffix_after_first_occurrence;
+            info.has_different_suffix =
+                static_cast<int>(suffix.size()) != sequence_expr.size() - j - 1 ||
+                !std::equal(
+                    suffix.begin(),
+                    suffix.end(),
+                    sequence_expr.begin() + j + 1,
+                    [&](int32_t lhs, int32_t rhs) { return IsSameExpr(lhs, rhs); }
+                );
           }
           ++info.non_last_occurrence_count;
         }

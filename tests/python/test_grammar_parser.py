@@ -505,6 +505,25 @@ rule5 ::= (("") | ("g" rule5 "h"))
     assert after == expected
 
 
+def test_lookahead_assertion_analyzer_same_suffix():
+    """A rule referenced several times gets a lookahead when every reference is followed by the same
+    elements, and none when the suffixes differ."""
+    before = r"""root ::= "a" rule1 "c" rule3 | "b" rule1 "c" rule3 | "d" rule2 "c" | "e" rule2 "f"
+rule1 ::= "x"
+rule2 ::= "y"
+rule3 ::= "z"
+"""
+    expected = r"""root ::= (("a" rule1 "c" rule3) | ("b" rule1 "c" rule3) | ("d" rule2 "c") | ("e" rule2 "f"))
+rule1 ::= (("x")) (=("c" rule3))
+rule2 ::= (("y"))
+rule3 ::= (("z"))
+"""
+    grammar = _ebnf_to_grammar_no_normalization(before)
+    grammar = GrammarFunctor.lookahead_assertion_analyzer(grammar)
+    after = str(grammar)
+    assert after == expected
+
+
 def test_flatten():
     before = """root ::= or_test sequence_test nested_test empty_test
 or_test ::= ([a] | "b") | "de" | "" | or_test | [^a-z]
@@ -884,7 +903,7 @@ characters_item ::= (("\"") | ([^\"\\\0-\x1f] characters_item) | ("\\" escape ch
 escape ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9]))
 fraction ::= ("" | ("." [0-9] [0-9]*))
 exponent ::= ("" | ("e" sign [0-9] [0-9]*) | ("E" sign [0-9] [0-9]*))
-sign ::= ("" | ("+") | ("-"))
+sign ::= ("" | ("+") | ("-")) (=([0-9] [0-9]*))
 """
 
     grammar = xgr.Grammar.from_ebnf(before)
