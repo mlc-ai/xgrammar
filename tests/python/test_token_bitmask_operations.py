@@ -507,5 +507,24 @@ def test_apply_token_bitmask_inplace_no_warn_when_vocab_size_given():
     assert torch.isfinite(logits[0, 40:]).all()
 
 
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16, torch.bfloat16])
+@pytest.mark.parametrize("vocab_size", [1, 31, 33])
+def test_apply_token_bitmask_inplace_cpu_ignores_padding_bits(dtype: torch.dtype, vocab_size: int):
+    """The bits of the last bitmask word beyond vocab_size are padding. They reject nothing, also
+    when they are zero and every token is allowed."""
+    logits = torch.ones((1, 64), dtype=dtype)
+    bitmask = bool_mask_to_bitmask(torch.ones((1, vocab_size), dtype=torch.bool))
+    bitmask[0, -1] &= (1 << (vocab_size % 32)) - 1
+    xgr.apply_token_bitmask_inplace(logits, bitmask, vocab_size=vocab_size)
+    assert torch.all(logits == 1)
+
+
+@pytest.mark.parametrize("vocab_size", [1, 31, 33])
+def test_get_masked_tokens_from_bitmask_ignores_padding_bits(vocab_size: int):
+    bitmask = bool_mask_to_bitmask(torch.ones((1, vocab_size), dtype=torch.bool))
+    bitmask[0, -1] &= (1 << (vocab_size % 32)) - 1
+    assert _get_masked_tokens_from_bitmask(bitmask, vocab_size) == []
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
