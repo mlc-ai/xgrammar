@@ -3734,6 +3734,44 @@ def test_property_names_validate_decoded_declared_names(name, constraint_kind):
     assert _is_grammar_accept_string(grammar, json.dumps({name: 1}, ensure_ascii=False))
 
 
+@pytest.mark.parametrize("max_length", [10_000, 1_000_000_000])
+def test_property_names_large_max_length_declared_keys(max_length):
+    # Regression: declared names are membership-checked with the Earley parser, not
+    # expanded into a bounded-repetition FSM, so huge maxLength bounds must compile.
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}},
+        "required": ["a"],
+        "propertyNames": {"maxLength": max_length},
+        "additionalProperties": False,
+    }
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert _is_grammar_accept_string(grammar, '{"a":1}')
+
+    # The constraint is enforced, not vacuously skipped: a required declared key
+    # shorter than minLength makes the object unsatisfiable.
+    schema["propertyNames"] = {"minLength": 2, "maxLength": max_length}
+    grammar = xgr.Grammar.from_json_schema(schema)
+    assert not _is_grammar_accept_string(grammar, '{"a":1}')
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_property_names_dropped_keys_respect_min_properties(any_order):
+    # A forbidden optional key stays in the property list as an unsatisfiable slot;
+    # the property counting must not treat that slot as able to satisfy minProperties.
+    schema = {
+        "type": "object",
+        "properties": {"good": {"type": "integer"}, "Bad": {"type": "integer"}},
+        "propertyNames": {"pattern": "^[a-z]+$"},
+        "additionalProperties": False,
+        "minProperties": 1,
+    }
+    grammar = xgr.Grammar.from_json_schema(schema, any_order=any_order)
+    assert _is_grammar_accept_string(grammar, '{"good":1}')
+    assert not _is_grammar_accept_string(grammar, "{}")
+    assert not _is_grammar_accept_string(grammar, '{"Bad":1}')
+
+
 @pytest.mark.parametrize("reference", [False, True])
 @pytest.mark.parametrize("value_first", [False, True])
 @pytest.mark.parametrize("composite", [False, True])
