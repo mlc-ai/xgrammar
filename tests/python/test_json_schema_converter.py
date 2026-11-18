@@ -2513,6 +2513,38 @@ def test_ipv6_format(instance: str, accepted: bool):
     check_schema_with_instance(schema, '"' + instance + '"', is_accepted=accepted)
 
 
+@pytest.mark.parametrize(
+    "date, accepted",
+    [
+        ("2023-01-31", True),
+        ("2023-03-31", True),
+        ("2023-04-30", True),
+        ("2023-04-31", False),
+        ("2023-06-31", False),
+        ("2023-09-31", False),
+        ("2023-11-31", False),
+        ("2023-12-31", True),
+        ("2023-02-28", True),
+        ("2023-02-29", False),
+        ("2023-02-30", False),
+        ("2024-02-29", True),
+        ("2024-02-30", False),
+        ("2000-02-29", True),
+        ("2100-02-29", False),
+        ("1900-02-29", False),
+        ("0400-02-29", True),
+        ("0100-02-29", False),
+    ],
+)
+def test_date_formats_respect_month_length(date: str, accepted: bool):
+    date_schema = {"type": "string", "format": "date"}
+    check_schema_with_instance(date_schema, json.dumps(date), is_accepted=accepted)
+    date_time_schema = {"type": "string", "format": "date-time"}
+    check_schema_with_instance(
+        date_time_schema, json.dumps(date + "T12:00:00Z"), is_accepted=accepted
+    )
+
+
 instance__accepted__test_ipv4_format = [
     # (r"0.0.0.0", True),
     (r"00.00.00.00", True),
