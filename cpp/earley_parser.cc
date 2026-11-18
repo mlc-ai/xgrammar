@@ -25,6 +25,67 @@ using GrammarExpr = Grammar::Impl::GrammarExpr;
 
 bool EarleyParser::IsCompleted() const { return is_completed_.back(); }
 
+bool EarleyParser::SerializeConfiguration(std::string* key) const {
+  const auto latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
+  if (static_cast<size_t>(latest_states.size()) > kMaxConfigurationStates) return false;
+  key->clear();
+  // Most keys are a few hundred bytes. Reserve once instead of growing step by step.
+  key->reserve(512);
+  auto append = [&](int32_t value) {
+    key->append(reinterpret_cast<const char*>(&value), sizeof(value));
+  };
+
+  // rows[i] is the history row that is written to the key as row i.
+  int32_t rows[kMaxConfigurationRows];
+  int32_t num_rows = 1;
+  rows[0] = static_cast<int32_t>(scanable_state_history_.size() - 1);
+  bool too_many_rows = false;
+  auto renamed_row = [&](int32_t row) {
+    if (row == ParserState::kNoPrevInputPos) return int32_t{-1};
+    for (int32_t i = 0; i < num_rows; ++i) {
+      if (rows[i] == row) return i;
+    }
+    if (num_rows == kMaxConfigurationRows) {
+      too_many_rows = true;
+      return int32_t{-1};
+    }
+    rows[num_rows] = row;
+    return num_rows++;
+  };
+  auto append_state = [&](const ParserState& state) {
+    const int32_t fields[] = {
+        state.rule_id,
+        state.sequence_id,
+        state.element_id,
+        renamed_row(state.rule_start_pos),
+        state.budget_deadline,
+        state.sub_element_id,
+        state.repeat_count,
+        state.partial_codepoint,
+        state.active_temperature_rule_id,
+        state.char_budget_deadline
+    };
+    key->append(reinterpret_cast<const char*>(fields), sizeof(fields));
+  };
+
+  append(IsCompleted());
+  append(static_cast<int32_t>(latest_states.size()));
+  for (const auto& state : latest_states) append_state(state);
+  // Appending a row can add the rows its states refer to, so num_rows may grow in the loop.
+  size_t num_states = latest_states.size();
+  for (int32_t i = 0; i < num_rows && !too_many_rows; ++i) {
+    const auto completable_states = rule_id_to_completable_states_[rows[i]];
+    num_states += completable_states.size();
+    if (num_states > kMaxConfigurationStates) return false;
+    append(static_cast<int32_t>(completable_states.size()));
+    for (const auto& [rule_id, state] : completable_states) {
+      append(rule_id);
+      append_state(state);
+    }
+  }
+  return !too_many_rows;
+}
+
 bool EarleyParser::CompletionConsumedMarker(const ParserState& state) const {
   const auto& body = grammar_->GetGrammarExpr(grammar_->GetRule(state.rule_id).body_expr_id);
   if (body.type != GrammarExprType::kTagDispatch) {
@@ -576,7 +637,9 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   }
 }
 
-void EarleyParser::Reset() {
+void EarleyParser::Reset() { ResetToState(RootInitialState()); }
+
+void EarleyParser::ResetToState(const ParserState& initial_state) {
   rule_id_to_completable_states_.PopBack(rule_id_to_completable_states_.size());
   scanable_state_history_.PopBack(scanable_state_history_.size());
   is_completed_.clear();
@@ -589,7 +652,7 @@ void EarleyParser::Reset() {
   tmp_char_budget_entered_ = false;
   capture_recording_ = false;
   XGRAMMAR_DCHECK(tmp_process_state_queue_.empty());
-  PushStateAndExpand(RootInitialState());
+  PushStateAndExpand(initial_state);
 }
 
 void EarleyParser::ExpandNextRuleRefElement(

@@ -12,6 +12,7 @@
 #include <optional>
 #include <ostream>
 #include <queue>
+#include <string>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -712,6 +713,29 @@ class EarleyParser {
    */
   bool IsCompleted() const;
 
+  /*! \brief The most completion rows a serialized configuration may reference. */
+  static constexpr int32_t kMaxConfigurationRows = 16;
+  /*! \brief The most parser states a serialized configuration may contain. */
+  static constexpr size_t kMaxConfigurationStates = 128;
+
+  /*!
+   * \brief Serialize the parser's current configuration: everything that later byte scans and
+   * completions can read.
+   * \details The key holds the completion flag, every field of the latest scanable states, and
+   * the completion rows reachable from them. A state refers to the row where its rule started;
+   * these row numbers are replaced by the order in which the rows are first reached (the latest
+   * row is 0, the root is -1), so two parsers that reached the same configuration after
+   * different inputs get the same key.
+   *
+   * Two parsers with equal keys accept the same bytes from here on and report the same
+   * completion after each of them, provided the grammar has no token or character budgets, token
+   * edges or captures; with those, scanning also reads state that is not in the key.
+   * \param key The output. Its previous content is discarded.
+   * \return False if the configuration exceeds kMaxConfigurationRows or
+   * kMaxConfigurationStates. The key must not be used in that case.
+   */
+  bool SerializeConfiguration(std::string* key) const;
+
   /*!
    * \brief Push the initial state into the Earley parser.
    * \param state The initial state to be pushed.
@@ -724,6 +748,12 @@ class EarleyParser {
    * parser with the root rule.
    */
   void Reset();
+
+  /*!
+   * \brief Reset the parser and start again from the given state, as a parser constructed with
+   * this initial state would.
+   */
+  void ResetToState(const ParserState& initial_state);
 
   /*!
    * \brief Get the current scanable states.

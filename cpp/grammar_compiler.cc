@@ -15,11 +15,13 @@
 #include <string>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
 
 #include "compiled_grammar_impl.h"
+#include "configuration_dfa.h"
 #include "earley_parser.h"
 #include "fsm.h"
 #include "grammar_functor.h"
@@ -38,6 +40,23 @@ namespace xgrammar {
 
 /************** AdaptiveTokenMaskCache Generator **************/
 
+/*!
+ * \brief The configuration DFA that the mask computations of one grammar compilation share.
+ * Every state of every rule is computed over the same vocabulary, so the configurations met
+ * for one state are met again for the others.
+ */
+struct CompilationDfa {
+  /*! \brief Bounds the transitions to 8 MiB, to which the configurations themselves add. */
+  static constexpr int32_t kMaxStates = 8192;
+
+  ConfigurationDfa dfa{kMaxStates};
+  /*!
+   * \brief The rules for which a computation had to leave the DFA, which happens when their
+   * configurations are too large. The other states of these rules use the parser alone.
+   */
+  std::unordered_set<int32_t> unsupported_rules;
+};
+
 /*! \brief The concrete implementation of GrammarMatcherNode. */
 class GrammarMatcherForTokenMaskCache : public EarleyParser {
  public:
@@ -47,7 +66,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::unordered_map<int32_t, DynamicBitset>&
           tag_dispatch_rule_id_to_second_slicing_bitset,
       const TokenizerInfo& tokenizer_info,
-      std::optional<RuleLevelCache>& rule_level_cache
+      std::optional<RuleLevelCache>& rule_level_cache,
+      CompilationDfa* compilation_dfa = nullptr
   )
       : EarleyParser(grammar, init_state),
         init_rule_id_(init_state.rule_id),
@@ -55,7 +75,25 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
         ),
         tokenizer_info_(tokenizer_info),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache),
+        compilation_dfa_(compilation_dfa) {
+    cursor_.Start(this, nullptr);
+  }
+
+  // The cursor refers to this object.
+  GrammarMatcherForTokenMaskCache(const GrammarMatcherForTokenMaskCache&) = delete;
+  GrammarMatcherForTokenMaskCache& operator=(const GrammarMatcherForTokenMaskCache&) = delete;
+
+  /*!
+   * \brief Use this object for another state of the same grammar, as if it had been constructed
+   * with that state. This keeps what the constructor derives from the grammar and the tokenizer.
+   */
+  void ResetInitialState(const ParserState& init_state) {
+    ResetToState(init_state);
+    init_rule_id_ = init_state.rule_id;
+    initial_state_ = init_state;
+  }
+
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -144,6 +182,14 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   // Temporary data for GetTokenEdgeAcceptedIndices.
   std::vector<int32_t> tmp_token_edge_accepted_;
   std::vector<int32_t> tmp_token_edge_excluded_;
+
+  /*! \brief The DFA shared with the other mask computations, or nullptr to use the parser alone. */
+  CompilationDfa* compilation_dfa_ = nullptr;
+  /*!
+   * \brief Advances the parser for the token loop and the lookahead check. It goes through the
+   * DFA during the token loop, and straight to the parser otherwise.
+   */
+  ConfigurationDfaCursor cursor_;
 };
 
 void GrammarMatcherForTokenMaskCache::AdaptCacheWithLookahead(
@@ -322,11 +368,11 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
   auto lookahead_state =
       ParserState(/*rule_id*/ -1, lookahead_assertion_id, 0, ParserState::kNoPrevInputPos, 0);
   lookahead_reached_exclude_token_ = false;
-  PushStateAndExpand(lookahead_state);
+  cursor_.PushLookahead(lookahead_state);
   int token_len = token.size();
-  if (IsCompleted()) {
+  if (cursor_.IsCompleted()) {
     // If the lookahead assertion is already completed, we can accept the token.
-    PopLastStates(1);
+    cursor_.Pop(1);
     return {accepted, can_reach_end};
   }
 
@@ -338,21 +384,21 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
     }
     int last_accept_pos = i - 1;
     for (int pos = i; pos < token_len; ++pos) {
-      if (!Advance(token[pos])) {
+      if (!cursor_.Advance(token[pos])) {
         break;
       }
       last_accept_pos = pos;
       // Case 1. The whole rule is finished.
-      if (IsCompleted()) {
+      if (cursor_.IsCompleted()) {
         // accepted chars: pos - i + 1
         // we need to rollback the pushed initial state as well
-        PopLastStates(pos - i + 2);
+        cursor_.Pop(pos - i + 2);
         return {accepted, can_reach_end};
       }
     }
     // Case 2. The whole token is accepted
     if (last_accept_pos == token_len - 1) {
-      PopLastStates(last_accept_pos - i + 2);
+      cursor_.Pop(last_accept_pos - i + 2);
       can_reach_end = false;
       return {accepted, can_reach_end};
     }
@@ -360,14 +406,14 @@ std::pair<bool, bool> GrammarMatcherForTokenMaskCache::IsTokenPassLookaheadAsser
     // take it whole from the middle; then the parent decides.
     if (lookahead_reached_exclude_token_ ||
         (!has_char_budget_rules_ && FindMidTokenExcludeEdgeRow(last_accept_pos - i + 2, -1))) {
-      PopLastStates(last_accept_pos - i + 2);
+      cursor_.Pop(last_accept_pos - i + 2);
       return {accepted, can_reach_end};
     }
     // Check the next position.
-    PopLastStates(last_accept_pos - i + 1);
+    cursor_.Pop(last_accept_pos - i + 1);
   }
 
-  PopLastStates(1);
+  cursor_.Pop(1);
   can_reach_end = false;
   accepted = false;
   return {accepted, can_reach_end};
@@ -509,6 +555,10 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
     bool is_root_rule,
     const std::vector<int32_t>& token_edge_accepted
 ) {
+  const bool try_dfa =
+      compilation_dfa_ != nullptr && compilation_dfa_->unsupported_rules.count(init_rule_id_) == 0;
+  cursor_.Start(this, try_dfa ? &compilation_dfa_->dfa : nullptr);
+
   const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
   const auto& subtree_nodes_range = tokenizer_info_.GetTrieSubtreeNodesRange();
   // the pair (a, b) means [a, b). Intialize the possible intervals.
@@ -621,7 +671,7 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
         } else if (lcp_len < prev_matched_size) {
           // Case 2. The common prefix is shorter than the previous matched size. Rollback
           // the non-common part.
-          PopLastStates(prev_matched_size - lcp_len);
+          cursor_.Pop(prev_matched_size - lcp_len);
           tmp_can_reach_end_stack_.erase(
               tmp_can_reach_end_stack_.end() - (prev_matched_size - lcp_len),
               tmp_can_reach_end_stack_.end()
@@ -639,11 +689,11 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
       if (accepted) {
         // Accept the rest chars one by one.
         for (int j = prev_matched_size; j < static_cast<int>(token.size()); ++j) {
-          if (!Advance(token[j])) {
+          if (!cursor_.Advance(token[j])) {
             accepted = false;
             break;
           }
-          tmp_can_reach_end_stack_.push_back(IsCompleted());
+          tmp_can_reach_end_stack_.push_back(cursor_.IsCompleted());
           tmp_can_reach_end_prefix_or_stack_.push_back(
               tmp_can_reach_end_stack_.back() || tmp_can_reach_end_prefix_or_stack_.back()
           );
@@ -709,7 +759,11 @@ bool GrammarMatcherForTokenMaskCache::GetTokenMaskWithFirstCharacterCheck(
   }
 
   // Rollback the last matched part.
-  PopLastStates(prev_matched_size);
+  cursor_.Pop(prev_matched_size);
+  if (try_dfa && !cursor_.IsUsingDfa()) {
+    compilation_dfa_->unsupported_rules.insert(init_rule_id_);
+  }
+  cursor_.Start(this, nullptr);
 
   if (possible_intervals.back().second != static_cast<int>(sorted_decoded_vocab.size()) &&
       fill_reject_indices) {
@@ -1227,15 +1281,45 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
     adaptive_token_mask_cache_mutex.emplace();
   }
 
-  auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
-    auto grammar_matcher = GrammarMatcherForTokenMaskCache(
+  // For the grammars that the configuration DFA supports, a single-threaded compilation shares
+  // one DFA and one parser between all states. The DFA is not synchronized, so with several
+  // threads every task has a DFA and a parser of its own.
+  const bool use_dfa = ConfigurationDfa::Supports(compiled_grammar_impl->grammar);
+  const bool share_between_states = use_dfa && max_threads_ == 1;
+  CompilationDfa shared_dfa;
+  std::optional<GrammarMatcherForTokenMaskCache> shared_grammar_matcher;
+
+  auto compute_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+    if (share_between_states) {
+      if (shared_grammar_matcher.has_value()) {
+        shared_grammar_matcher->ResetInitialState(state);
+      } else {
+        shared_grammar_matcher.emplace(
+            compiled_grammar_impl->grammar,
+            state,
+            tag_dispatch_rule_id_to_second_slicing_bitset,
+            tokenizer_info_,
+            rule_level_cache_,
+            &shared_dfa
+        );
+      }
+      return shared_grammar_matcher->GetAdaptiveTokenMask(is_root_rule);
+    }
+    std::optional<CompilationDfa> task_dfa;
+    if (use_dfa) task_dfa.emplace();
+    GrammarMatcherForTokenMaskCache grammar_matcher(
         compiled_grammar_impl->grammar,
         state,
         tag_dispatch_rule_id_to_second_slicing_bitset,
         tokenizer_info_,
-        rule_level_cache_
+        rule_level_cache_,
+        use_dfa ? &task_dfa.value() : nullptr
     );
-    auto cur_adaptive_token_mask_cache = grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
+    return grammar_matcher.GetAdaptiveTokenMask(is_root_rule);
+  };
+
+  auto add_adaptive_token_mask = [&](const ParserState& state, bool is_root_rule) {
+    auto cur_adaptive_token_mask_cache = compute_adaptive_token_mask(state, is_root_rule);
     if (max_threads_ > 1) {
       std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex.value());
       compiled_grammar_impl->adaptive_token_mask_cache[state] = cur_adaptive_token_mask_cache;
