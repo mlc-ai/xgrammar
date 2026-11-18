@@ -157,3 +157,28 @@ def test_named_key_with_override(override):
 def test_unpaired_surrogate_in_schema_name(key):
     with pytest.raises(RuntimeError, match="Failed to parse JSON"):
         xgr.Grammar.from_json_schema('{"type":"object","properties":{"' + key + '":{}}}')
+
+
+@pytest.mark.parametrize("excludes", [[], ["forbidden"]])
+def test_shared_suffix_preserves_property_types_and_terminal_nodes(excludes):
+    schema = {
+        "type": "object",
+        "properties": {
+            "a": {"type": "integer"},
+            "a_id": {"type": "integer"},
+            "b_id": {"type": "string"},
+        },
+        "additionalProperties": {"type": "boolean"},
+    }
+    grammar = grammar_for(schema, excludes)
+    # Both prefixes have the same outgoing suffix; only "a" is itself declared.
+    for key, accepted_value in [
+        (r"\u0061", "1"),
+        (r"\u0062", "true"),
+        (r"a_\u0069d", "1"),
+        (r"b_\u0069d", '"s"'),
+    ]:
+        for value in ["1", '"s"', "true"]:
+            assert _is_grammar_accept_string(grammar, f'{{"{key}":{value}}}') == (
+                value == accepted_value
+            )

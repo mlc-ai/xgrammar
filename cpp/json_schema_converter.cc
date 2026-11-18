@@ -2253,83 +2253,74 @@ std::vector<KeySpelling> KeySpellings(TCodepoint cp) {
   return result;
 }
 
-// Each semantic edge joins all its spellings at one DFA state. Outgoing spellings
-// are prefix-free (schema names contain scalar values), so intermediate byte
-// prefixes can be shared without creating any nondeterministic transitions.
-class DeclaredKeyTrie {
- public:
-  void Insert(const std::string& key) {
-    size_t node = 0;
-    for (auto cp : DecodePropertyName(key)) {
-      auto [it, inserted] = nodes_[node].children.emplace(cp, nodes_.size());
-      node = it->second;
-      if (inserted) nodes_.emplace_back();
-    }
-    nodes_[node].terminal = true;
-  }
-
-  FSMWithStartEnd Finish() const {
-    FSM fsm;
-    std::vector<int> ends;
-    std::vector<int> states(nodes_.size());
-    // Children were allocated after their parents. Intern equivalent suffixes
-    // before expanding their spellings (e.g. field_1_name and field_2_name).
-    std::map<std::pair<bool, std::map<TCodepoint, int>>, int> suffixes;
-    for (size_t i = nodes_.size(); i-- > 0;) {
-      std::map<TCodepoint, int> children;
-      for (auto [cp, child] : nodes_[i].children) children.emplace(cp, states[child]);
-      auto [it, fresh] = suffixes.emplace(std::make_pair(nodes_[i].terminal, children), -1);
-      if (fresh) {
-        int start = it->second = fsm.AddState();
-        if (nodes_[i].terminal) ends.push_back(start);
-        std::map<std::pair<int, uint8_t>, int> prefixes;
-        for (auto [cp, child] : children) {
-          for (const auto& spelling : KeySpellings(cp)) {
-            AddSpelling(&fsm, start, child, spelling, &prefixes);
-          }
-        }
+void AddKeySpelling(
+    FSM* fsm,
+    int state,
+    int child,
+    const KeySpelling& spelling,
+    std::map<std::pair<int, uint8_t>, int>* prefixes
+) {
+  for (size_t i = 0; i < spelling.bytes.size(); ++i) {
+    uint8_t byte = spelling.bytes[i];
+    int next = child;
+    if (i + 1 < spelling.bytes.size()) {
+      auto [it, fresh] = prefixes->emplace(std::make_pair(state, byte), -1);
+      if (!fresh) {
+        state = it->second;
+        continue;
       }
-      states[i] = it->second;
+      next = it->second = fsm->AddState();
     }
-    return FSMWithStartEnd(fsm, states.front(), std::move(ends), true);
-  }
-
- private:
-  static void AddSpelling(
-      FSM* fsm,
-      int state,
-      int child,
-      const KeySpelling& spelling,
-      std::map<std::pair<int, uint8_t>, int>* prefixes
-  ) {
-    for (size_t i = 0; i < spelling.bytes.size(); ++i) {
-      uint8_t byte = spelling.bytes[i];
-      int next = child;
-      if (i + 1 < spelling.bytes.size()) {
-        auto [it, fresh] = prefixes->emplace(std::make_pair(state, byte), -1);
-        if (!fresh) {
-          state = it->second;
-          continue;
-        }
-        next = it->second = fsm->AddState();
-      }
-      fsm->AddEdge(state, next, byte, byte);
-      if (spelling.IsHexLetter(i)) {
-        int upper = byte - 'a' + 'A';
-        fsm->AddEdge(state, next, upper, upper);
-      }
-      state = next;
+    fsm->AddEdge(state, next, byte, byte);
+    if (spelling.IsHexLetter(i)) {
+      int upper = byte - 'a' + 'A';
+      fsm->AddEdge(state, next, upper, upper);
     }
+    state = next;
   }
-
-  struct Node {
-    bool terminal = false;
-    std::map<TCodepoint, size_t> children;
-  };
-  std::vector<Node> nodes_{1};
-};
+}
 
 }  // namespace
+
+void JSONSchemaConverter::TrieNode::Insert(const std::string& key) {
+  // The schema parser already interpreted JSON escapes. Decode only the UTF-8.
+  TrieNode* node = this;
+  for (auto cp : DecodePropertyName(key)) node = &node->children[cp];
+  node->is_terminal = true;
+}
+
+FSMWithStartEnd JSONSchemaConverter::BuildKeyFSM(TrieNode&& root) {
+  std::vector<TrieNode*> nodes{&root};
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    for (auto& entry : nodes[i]->children) nodes.push_back(&entry.second);
+  }
+
+  FSM fsm;
+  std::vector<int> ends;
+  std::map<std::pair<bool, std::map<TCodepoint, int>>, int> suffixes;
+  // Process children first so equal suffixes (e.g. field_1_name and field_2_name)
+  // reuse the same state. Literal and escaped spellings converge on that state.
+  for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
+    TrieNode& node = **it;
+    std::map<TCodepoint, int> children;
+    for (const auto& [cp, child] : node.children) children.emplace(cp, child.state);
+    auto [suffix, fresh] = suffixes.emplace(std::make_pair(node.is_terminal, children), -1);
+    if (fresh) {
+      int start = suffix->second = fsm.AddState();
+      if (node.is_terminal) ends.push_back(start);
+      std::map<std::pair<int, uint8_t>, int> prefixes;
+      for (auto [cp, child] : children) {
+        for (const auto& spelling : KeySpellings(cp)) {
+          AddKeySpelling(&fsm, start, child, spelling, &prefixes);
+        }
+      }
+    }
+    node.state = suffix->second;
+    // Release processed descendants bottom-up, even for a very long name.
+    node.children.clear();
+  }
+  return FSMWithStartEnd(fsm, root.state, std::move(ends), true);
+}
 
 int32_t JSONSchemaConverter::GetKeyPatternExcluding(
     const std::vector<ObjectSpec::Property>& properties, const std::string& rule_name
@@ -2337,9 +2328,9 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
   if (properties.empty()) {
     return KeyPatternExpression();
   }
-  DeclaredKeyTrie declared;
-  for (const auto& property : properties) declared.Insert(property.name);
-  auto remaining = declared.Finish().Not();
+  TrieNode root;
+  for (const auto& property : properties) root.Insert(property.name);
+  auto remaining = BuildKeyFSM(std::move(root)).Not();
   XGRAMMAR_CHECK(remaining.IsOk());
   auto valid = GrammarFSMBuilder::Regex(kJSONStringBodyRegex, false);
   XGRAMMAR_CHECK(valid.IsOk());
@@ -2998,37 +2989,41 @@ int32_t JSONSchemaConverter::FormatPropertyKey(
     });
   };
   if (std::any_of(excludes_.begin(), excludes_.end(), may_occur)) {
-    DeclaredKeyTrie declared;
-    declared.Insert(key);
+    TrieNode root;
+    root.Insert(key);
     return Sequence(
-        {ByteString("\""), EmitFilteredString(declared.Finish(), "property_key", true, false)}
+        {ByteString("\""),
+         EmitFilteredString(BuildKeyFSM(std::move(root)), "property_key", true, false)}
     );
   }
   std::vector<int32_t> elements{ByteString("\"")};
   for (auto cp : DecodePropertyName(key)) {
-    auto [it, inserted] = key_character_rules_.emplace(cp, -1);
-    if (inserted) {
-      std::vector<int32_t> choices;
-      for (const auto& spelling : KeySpellings(cp)) {
-        std::vector<int32_t> parts;
-        size_t begin = 0;
-        for (size_t i = 0; i < spelling.bytes.size(); ++i) {
-          if (!spelling.IsHexLetter(i)) continue;
-          if (i > begin) parts.push_back(ByteString(spelling.bytes.substr(begin, i - begin)));
-          int lower = spelling.bytes[i], upper = lower - 'a' + 'A';
-          parts.push_back(builder_.AddCharacterClass({{upper, upper}, {lower, lower}}));
-          begin = i + 1;
-        }
-        if (begin < spelling.bytes.size())
-          parts.push_back(ByteString(spelling.bytes.substr(begin)));
-        choices.push_back(Sequence(parts));
-      }
-      it->second = builder_.AddRuleWithHint("key_character", Choice(choices));
-    }
-    elements.push_back(RuleRef(it->second));
+    elements.push_back(PropertyKeyCharacter(cp));
   }
   elements.push_back(ByteString("\""));
   return Sequence(elements);
+}
+
+int32_t JSONSchemaConverter::PropertyKeyCharacter(TCodepoint cp) {
+  auto [it, inserted] = key_character_rules_.emplace(cp, -1);
+  if (inserted) {
+    std::vector<int32_t> choices;
+    for (const auto& spelling : KeySpellings(cp)) {
+      std::vector<int32_t> parts;
+      size_t begin = 0;
+      for (size_t i = 0; i < spelling.bytes.size(); ++i) {
+        if (!spelling.IsHexLetter(i)) continue;
+        if (i > begin) parts.push_back(ByteString(spelling.bytes.substr(begin, i - begin)));
+        int lower = spelling.bytes[i], upper = lower - 'a' + 'A';
+        parts.push_back(builder_.AddCharacterClass({{upper, upper}, {lower, lower}}));
+        begin = i + 1;
+      }
+      if (begin < spelling.bytes.size()) parts.push_back(ByteString(spelling.bytes.substr(begin)));
+      choices.push_back(Sequence(parts));
+    }
+    it->second = builder_.AddRuleWithHint("key_character", Choice(choices));
+  }
+  return RuleRef(it->second);
 }
 
 int32_t JSONSchemaConverter::FormatProperty(
