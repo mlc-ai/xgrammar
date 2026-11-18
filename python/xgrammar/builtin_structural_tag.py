@@ -3268,6 +3268,31 @@ def get_exaone_structural_tag(
 _MUSE_MARKER_TOKENS = ["<|start|>", "<|message|>", "<|eom|>", "<|eot|>"]
 
 
+def _muse_escape_header(text: str) -> str:
+    """The Muse chat template's ``esc_header``, used for the ``to=`` recipient."""
+    for old, new in (
+        ("<|", "< |"),
+        ("<image>", "< image>"),
+        ("<video>", "< video>"),
+        ("<audio>", "< audio>"),
+        ("\r", " "),
+        ("\n", " "),
+    ):
+        text = text.replace(old, new)
+    return text
+
+
+def _muse_escape_attr(text: str) -> str:
+    """The Muse chat template's ``esc_attr``, used for the ``<atem:invoke name="...">`` value.
+
+    Parameter names are escaped the same way by the ``muse_xml`` JSON-schema style.
+    """
+    text = _muse_escape_header(text)
+    for old, new in (("&", "&amp;"), ('"', "&quot;"), ("'", "&#39;"), ("<", "&lt;"), (">", "&gt;")):
+        text = text.replace(old, new)
+    return text
+
+
 @register_model_structural_tag("muse", marker_tokens=_MUSE_MARKER_TOKENS)
 def get_muse_structural_tag(
     tools: Optional[List[FunctionToolParam]] = None,
@@ -3308,7 +3333,11 @@ def get_muse_structural_tag(
     therefore not part of the structural tag.
 
     String arguments are raw text; other values are JSON. Arguments are
-    constrained by :class:`JSONSchemaFormat` with ``style="muse_xml"``.
+    constrained by :class:`JSONSchemaFormat` with ``style="muse_xml"``. As in
+    the template, the invoked function name and the parameter names are
+    XML-attribute escaped (``&`` becomes ``&amp;`` and so on) while the
+    recipient after ``to=`` is not, and the control markers cannot appear in
+    argument values when ``exclude_special_tokens`` is set.
 
     ``reasoning="enabled"`` requires the turn to start with a ``to=self``
     message, ``"auto"`` makes reasoning messages optional, and ``"disabled"``
@@ -3357,14 +3386,16 @@ def get_muse_structural_tag(
             elements=[
                 ConstStringFormat(
                     value=(
-                        f" to={name}{MESSAGE}<atem:function_calls>\n"
-                        f'<atem:invoke name="{name}">\n'
+                        f" to={_muse_escape_header(name)}{MESSAGE}<atem:function_calls>\n"
+                        f'<atem:invoke name="{_muse_escape_attr(name)}">\n'
                     )
                 ),
                 JSONSchemaFormat(
                     json_schema=_get_function_parameters(tool.function),
                     style="muse_xml",
                     any_order=any_order,
+                    # The template escapes "<|" in argument values, so no marker appears in them.
+                    excludes=text_excludes,
                     max_whitespace_cnt=max_whitespace_cnt,
                 ),
                 ConstStringFormat(value="</atem:invoke>\n</atem:function_calls>"),

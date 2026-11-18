@@ -4093,6 +4093,18 @@ int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::s
   return JSONSchemaConverter::GenerateEnum(spec, rule_name);
 }
 
+std::string XMLToolCallingConverter::EscapeAttrValue(const std::string& value) const {
+  // Escape a parameter name the way the model's chat template renders it inside the key wrapper.
+  switch (json_format_) {
+    case JSONFormat::kKimiK3XML:
+      return converter_ext::EscapeKimiK3AttrValue(value);
+    case JSONFormat::kMuseXML:
+      return converter_ext::EscapeMuseAttrValue(value);
+    default:
+      return value;
+  }
+}
+
 int32_t XMLToolCallingConverter::FormatPropertyKey(
     const std::string& key, const SchemaSpecPtr& schema
 ) {
@@ -4103,12 +4115,12 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
     if (json_format_ == JSONFormat::kKimiK3XML) {
       pinned_type = GetRenderedJSONType(schema);
     }
-    if (!IsAllowedString(EscapeAttrValue(key))) {
+    const std::string rendered_key = EscapeAttrValue(key);
+    if (!IsAllowedString(rendered_key)) {
       return Unsatisfiable();
     }
     return Sequence(
-        {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
-         XMLKeySuffix(pinned_type)}
+        {ByteString(xml_wrapper_.key_wrapper_prefix + rendered_key), XMLKeySuffix(pinned_type)}
     );
   }
   return JSONSchemaConverter::FormatPropertyKey(key, schema);

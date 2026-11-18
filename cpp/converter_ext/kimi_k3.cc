@@ -23,12 +23,7 @@ const XMLKeySuffix& GetKimiK3XMLKeySuffix() {
   return suffix;
 }
 
-}  // namespace converter_ext
-
-std::string XMLToolCallingConverter::EscapeAttrValue(const std::string& value) const {
-  if (json_format_ != JSONFormat::kKimiK3XML) {
-    return value;
-  }
+std::string EscapeKimiK3AttrValue(const std::string& value) {
   // Kimi-K3's renderer escapes attribute values with & -> &amp; and " -> &quot;.
   std::string escaped;
   escaped.reserve(value.size());
@@ -44,4 +39,5 @@ std::string XMLToolCallingConverter::EscapeAttrValue(const std::string& value) c
   return escaped;
 }
 
+}  // namespace converter_ext
 }  // namespace xgrammar
