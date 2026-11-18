@@ -3629,6 +3629,311 @@ def test_multiple_pattern_properties_with_properties():
     )
 
 
+# A key that matches several patternProperties entries (or a named property and an entry) must
+# satisfy every matching value schema. Regression tests for #965 and #964.
+OVERLAPPING_PATTERN_SCHEMA = {
+    "type": "object",
+    "patternProperties": {"^a[a-z]*$": {"type": "string"}, "^[a-z]*z$": {"type": "integer"}},
+}
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize(
+    "instance, accepted",
+    [
+        ('{"abz":1}', False),  # matches both: must be a string and an integer
+        ('{"abz":"x"}', False),
+        ('{"ab":"x"}', True),
+        ('{"bz":1}', True),
+        ('{"ab":"x","bz":1}', True),
+        ('{"ab":1}', False),
+        ("{}", True),
+    ],
+)
+def test_overlapping_pattern_properties_conflict(instance: str, accepted: bool, any_order: bool):
+    """Regression test for #965: overlapping patternProperties value schemas are AND, not OR."""
+    grammar = xgr.Grammar.from_json_schema(
+        json.dumps(OVERLAPPING_PATTERN_SCHEMA), any_order=any_order
+    )
+    assert _is_grammar_accept_string(grammar, instance) == accepted
+
+
+def test_overlapping_pattern_properties_keys_are_disjoint():
+    """Keys matching both entries are carved out of both key rules; other keys are untouched."""
+    ebnf = _json_schema_to_ebnf(OVERLAPPING_PATTERN_SCHEMA)
+    assert 'Regex("^a[a-z]*$"' not in ebnf
+    assert 'Regex("^[a-z]*z$"' not in ebnf
+    # The two value rules are still the plain basic types: only the key rules changed.
+    assert "basic_string" in ebnf and "basic_integer" in ebnf
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+@pytest.mark.parametrize(
+    "instance, accepted",
+    [('{"x":1}', False), ('{"x":"a"}', False), ('{"x":"a","x":1}', False), ("{}", True)],
+)
+def test_property_and_pattern_property_conflict(instance: str, accepted: bool, any_order: bool):
+    """Regression test for #964: a named property matching a patternProperties entry with a
+    conflicting value schema can take no value."""
+    schema = {
+        "type": "object",
+        "properties": {"x": {"type": "string"}},
+        "patternProperties": {"^x$": {"type": "integer"}},
+    }
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema), any_order=any_order)
+    assert _is_grammar_accept_string(grammar, instance) == accepted
+
+
+def test_required_property_and_pattern_property_conflict_is_unsatisfiable():
+    schema = {
+        "type": "object",
+        "properties": {"x": {"type": "string"}},
+        "required": ["x"],
+        "patternProperties": {"^x$": {"type": "integer"}},
+    }
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    for instance in ['{"x":1}', '{"x":"a"}', "{}"]:
+        assert not _is_grammar_accept_string(grammar, instance)
+
+
+@pytest.mark.parametrize(
+    "schema, instance, accepted",
+    [
+        # Identical value schemas: a key matching both entries is fine.
+        (
+            {
+                "type": "object",
+                "patternProperties": {
+                    "^a[a-z]*$": {"type": "string"},
+                    "^[a-z]*z$": {"type": "string"},
+                },
+            },
+            '{"abz":"hello"}',
+            True,
+        ),
+        # An unconstrained entry yields to the typed entry on the keys they share.
+        (
+            {
+                "type": "object",
+                "patternProperties": {"^[a-z]+$": {}, "^a[a-z]*$": {"type": "string"}},
+            },
+            '{"ab":1}',
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "patternProperties": {"^[a-z]+$": {}, "^a[a-z]*$": {"type": "string"}},
+            },
+            '{"ab":"x","q":1}',
+            True,
+        ),
+        # Three entries: a key matching an unconstrained entry and two conflicting ones.
+        (
+            {
+                "type": "object",
+                "patternProperties": {
+                    "^[a-z]+$": {},
+                    "^a[a-z]*$": {"type": "string"},
+                    "^[a-z]*z$": {"type": "integer"},
+                },
+            },
+            '{"abz":true}',
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "patternProperties": {
+                    "^[a-z]+$": {},
+                    "^a[a-z]*$": {"type": "string"},
+                    "^[a-z]*z$": {"type": "integer"},
+                },
+            },
+            '{"ab":"x","bz":1,"q":true}',
+            True,
+        ),
+        # An unconstrained named property takes the matching entry's schema.
+        (
+            {
+                "type": "object",
+                "properties": {"x": {}},
+                "patternProperties": {"^x$": {"type": "integer"}},
+            },
+            '{"x":"a"}',
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"x": {}},
+                "patternProperties": {"^x$": {"type": "integer"}},
+            },
+            '{"x":1}',
+            True,
+        ),
+        # A typed named property keeps its schema; the unconstrained entry must not take its name.
+        (
+            {
+                "type": "object",
+                "properties": {"x": {"type": "integer"}},
+                "patternProperties": {"^[a-z]$": {}},
+            },
+            '{"x":"a"}',
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"x": {"type": "integer"}},
+                "patternProperties": {"^[a-z]$": {}},
+            },
+            '{"x":1,"y":"a"}',
+            True,
+        ),
+        # Named properties alongside overlapping entries.
+        (
+            {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                **OVERLAPPING_PATTERN_SCHEMA,
+            },
+            '{"name":"n","abz":1}',
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"name": {"type": "string"}},
+                **OVERLAPPING_PATTERN_SCHEMA,
+            },
+            '{"name":"n","ab":"x","bz":2}',
+            True,
+        ),
+        # Property count constraints go through the other GetPartialRuleForProperties paths.
+        (
+            {
+                "properties": {"name": {"type": "string"}},
+                "minProperties": 2,
+                **OVERLAPPING_PATTERN_SCHEMA,
+            },
+            '{"name":"n","abz":1}',
+            False,
+        ),
+        (
+            {
+                "properties": {"name": {"type": "string"}},
+                "minProperties": 2,
+                **OVERLAPPING_PATTERN_SCHEMA,
+            },
+            '{"name":"n","bz":1}',
+            True,
+        ),
+        ({"maxProperties": 2, **OVERLAPPING_PATTERN_SCHEMA}, '{"ab":"x","abz":1}', False),
+        ({"maxProperties": 2, **OVERLAPPING_PATTERN_SCHEMA}, '{"ab":"x","bz":1}', True),
+        # A typed additionalProperties next to overlapping entries.
+        (
+            {"additionalProperties": {"type": "boolean"}, **OVERLAPPING_PATTERN_SCHEMA},
+            '{"abz":1}',
+            False,
+        ),
+    ],
+)
+def test_overlapping_pattern_properties_cases(
+    schema: Dict[str, Any], instance: str, accepted: bool
+):
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+    # The fixed-whitespace grammar expects json.dumps separators; hand it the parsed instance.
+    check_schema_with_instance(
+        schema, json.loads(instance), is_accepted=accepted, any_whitespace=False
+    )
+
+
+def test_overlapping_pattern_properties_unknown_conjunction_keeps_choice():
+    """Two overlapping object schemas cannot be combined without a schema merge; the grammar
+    keeps accepting either (with a warning) rather than rejecting valid instances."""
+    schema = {
+        "type": "object",
+        "patternProperties": {
+            "^a[a-z]*$": {"type": "object", "properties": {"i": {"type": "integer"}}},
+            "^[a-z]*z$": {"type": "object", "properties": {"s": {"type": "string"}}},
+        },
+    }
+    check_schema_with_instance(schema, '{"abz":{"i":1}}')
+    check_schema_with_instance(schema, '{"abz":{"s":"x"}}')
+    check_schema_with_instance(schema, '{"abz":1}', is_accepted=False)
+
+
+def test_overlapping_pattern_properties_token_mask():
+    """The compiled token masks reject every value after a key that matches conflicting entries,
+    and keep a valid continuation after every prefix of an accepted instance."""
+    vocab = ["{", "}", '"', "a", "b", "z", ":", ",", "1", "x", " "]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
+    compiled = compiler.compile_json_schema(json.dumps(OVERLAPPING_PATTERN_SCHEMA))
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer_info.vocab_size)
+
+    def allowed(matcher):
+        matcher.fill_next_token_bitmask(bitmask)
+        return {vocab[i] for i in range(len(vocab)) if int(bitmask[0, i // 32]) & (1 << (i % 32))}
+
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string('{"abz')
+    assert '"' not in allowed(matcher)  # the key cannot close: it would match both entries
+
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string('{"ab":')
+    assert allowed(matcher) >= {'"', " "}
+    assert "1" not in allowed(matcher)
+
+    for instance in ['{"ab":"x","bz":1}', '{"bz":1}', '{"a":"x"}']:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        for char in instance:
+            assert allowed(matcher), f"dead end before {char!r} in {instance}"
+            assert matcher.accept_string(char)
+        assert matcher.is_terminated()
+
+
+def test_overlapping_pattern_properties_unchanged_grammar_without_conflict():
+    """Entries whose key languages do not overlap, or whose value schemas agree, keep the exact
+    rules they had (a single Regex node per key): the analysis only rewrites overlapping
+    entries with conflicting value schemas."""
+    disjoint = {
+        "type": "object",
+        "patternProperties": {"^a[a-z]*$": {"type": "string"}, "^b[a-z]*$": {"type": "integer"}},
+    }
+    same = {
+        "type": "object",
+        "patternProperties": {"^a[a-z]*$": {"type": "string"}, "^[a-z]*z$": {"type": "string"}},
+    }
+    any_disjoint = {
+        "type": "object",
+        "patternProperties": {"^a[a-z]*$": {}, "^b[a-z]*$": {"type": "integer"}},
+    }
+    for schema in [disjoint, same, any_disjoint]:
+        ebnf = _json_schema_to_ebnf(schema)
+        assert "_key_exclude" not in ebnf
+        for pattern in schema["patternProperties"]:
+            assert f'Regex("{pattern}", json_string=true)' in ebnf
+
+
+@pytest.mark.parametrize("json_format", ["qwen_xml", "gemma"])
+def test_overlapping_pattern_properties_other_formats(json_format: str):
+    """The raw-key formats carve the conflicting keys as well."""
+    ebnf = _json_schema_to_ebnf(OVERLAPPING_PATTERN_SCHEMA, json_format=json_format)
+    assert "_key_exclude" in ebnf
+    grammar = xgr.Grammar.from_ebnf(ebnf)
+    if json_format == "gemma":
+        assert not _is_grammar_accept_string(grammar, "{abz:1}")
+        assert not _is_grammar_accept_string(grammar, '{abz:<|"|>x<|"|>}')
+        assert _is_grammar_accept_string(grammar, '{ab:<|"|>x<|"|>,bz:1}')
+    else:
+        assert not _is_grammar_accept_string(grammar, "<parameter=abz>1</parameter>")
+        assert _is_grammar_accept_string(
+            grammar, "<parameter=ab>x</parameter><parameter=bz>1</parameter>"
+        )
+
+
 def test_forward_slash_in_const():
     # Regression: picojson used to serialize const/enum strings with "\/"
     # for every "/", which the EBNF lexer then rejected as an invalid
