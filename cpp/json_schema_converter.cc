@@ -1404,7 +1404,9 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
     spec.property_names = std::move(prop_names_result).Unwrap();
   }
 
-  spec.allow_additional_properties = !config_.strict_mode;
+  // An unevaluatedProperties keyword decides what happens to undeclared keys, so the default of
+  // non-strict mode must not keep allowing them next to it.
+  spec.allow_additional_properties = !config_.strict_mode && !schema.count("unevaluatedProperties");
   if (schema.count("additionalProperties")) {
     auto add_props = schema.at("additionalProperties");
     if (add_props.is<bool>()) {
