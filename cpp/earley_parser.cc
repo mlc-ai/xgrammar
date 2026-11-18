@@ -213,6 +213,12 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
 
     // Check if the parent_state sits on a kRepeatRef edge
     bool handled_as_repeat = false;
+    const bool has_repeat_ref =
+        GetFsmStateFlags(parent_state.rule_id, parent_state.element_id) & kFsmStateHasRepeatRef;
+    if (!has_repeat_ref) {
+      Enqueue(parent_state);
+      continue;
+    }
     const auto& parent_fsm = grammar_->per_rule_fsms[parent_state.rule_id].value();
     for (const auto& edge : parent_fsm.GetFsm().GetFsm().GetEdges(parent_state.element_id)) {
       // Because of invariance, a state with a kRepeatRef edge has exactly one outgoing edge.
@@ -415,12 +421,12 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   }
 
   // execute Predict and Complete for all states in the queue until empty.
-  rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  rule_id_to_completable_states_.PushBackEmptyRow();
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
   while (!tmp_process_state_queue_.empty()) {
-    const auto state = std::move(tmp_process_state_queue_.front());
+    const ParserState state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
     auto [scanable, completable] = Predict(state, debug_print);
     if (completable) {
@@ -522,6 +528,9 @@ uint8_t EarleyParser::InitializeFsmStateFlags(int32_t rule_id, int32_t state_id)
       }
     } else if (edge.IsRuleRef() || edge.IsEpsilon() || edge.IsRepeatRef()) {
       flags |= kFsmStateNonTerminal;
+      if (edge.IsRepeatRef()) {
+        flags |= kFsmStateHasRepeatRef;
+      }
     }
   }
   return flags;
@@ -550,7 +559,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   tmp_states_to_be_added_.clear();
   tmp_completed_lazy_occurrences_.clear();
   Enqueue(state);
-  rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  rule_id_to_completable_states_.PushBackEmptyRow();
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
@@ -775,7 +784,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  ) != rule_id_to_completable_states_.Back().end();
         };
         const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
-        std::vector<std::pair<int32_t, ParserState>> to_added_states;
+        auto& to_added_states = tmp_right_recursion_parents_;
+        to_added_states.clear();
         for (const auto& parent_state_iter : parent_states_map) {
           if (parent_state_iter.first != state.rule_id) continue;
           const auto& parent_state = parent_state_iter.second;
@@ -1217,12 +1227,12 @@ bool EarleyParser::AdvanceAtomicToken(
     }
     return false;
   }
-  rule_id_to_completable_states_.PushBack(std::vector<std::pair<int32_t, ParserState>>());
+  rule_id_to_completable_states_.PushBackEmptyRow();
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
   while (!tmp_process_state_queue_.empty()) {
-    const auto state = std::move(tmp_process_state_queue_.front());
+    const auto state = tmp_process_state_queue_.front();
     tmp_process_state_queue_.pop();
     auto [scanable, completable] = Predict(state, debug_print);
     if (completable) {
@@ -1269,37 +1279,14 @@ int32_t EarleyParser::FindMidTokenExcludeEdgeRow(int32_t num_rows, int32_t token
   return 0;
 }
 
-bool RepeatDetector::IsVisited(const ParserState& state) const {
-  // If the size is larger than the threshold, then we use the set to check.
-  if (size_ > transition_threshold_) {
-    return visited_set_.find(state) != visited_set_.end();
-  }
-  return std::find_if(
-             visited_vector_.begin(),
-             visited_vector_.begin() + size_,
-             [&state](const ParserState& s) { return StateEqualForParsing()(state, s); }
-         ) != visited_vector_.begin() + size_;
-}
-
-void RepeatDetector::Insert(const ParserState& state) {
+void RepeatDetector::InsertSlow(const ParserState& state) {
   if (size_ == transition_threshold_) {
     for (const auto& s : visited_vector_) {
       visited_set_.insert(s);
     }
   }
   size_++;
-  if (size_ > transition_threshold_) {
-    visited_set_.insert(state);
-  } else {
-    visited_vector_[size_ - 1] = state;
-  }
-}
-
-void RepeatDetector::Clear() {
-  if (size_ > transition_threshold_) {
-    visited_set_.clear();
-  }
-  size_ = 0;
+  visited_set_.insert(state);
 }
 
 }  // namespace xgrammar

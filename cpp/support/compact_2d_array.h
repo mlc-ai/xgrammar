@@ -213,6 +213,9 @@ class Compact2DArray {
    */
   int32_t PushBack(const Row& row) { return PushBack(row.data, row.data_len); }
 
+  /*! \brief Insert an empty row at the end. */
+  void PushBackEmptyRow() { indptr_.push_back(static_cast<int32_t>(data_.size())); }
+
   /*!
    * \brief Push back a new element in the latest row.
    * \param new_data the element to be pushed.
