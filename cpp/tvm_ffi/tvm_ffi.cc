@@ -145,6 +145,7 @@ class TokenizerInfoObj : public ffi::Object {
       int64_t vocab_type,
       ffi::AnyView vocab_size_opt,
       ffi::AnyView stop_token_ids_opt,
+      ffi::AnyView special_token_ids_opt,
       bool add_prefix_space
   )
       : value(NullObj{}) {
@@ -154,6 +155,7 @@ class TokenizerInfoObj : public ffi::Object {
         static_cast<int>(vocab_type),
         OptionalIntFromView(vocab_size_opt),
         OptionalInt32VectorFromView(stop_token_ids_opt),
+        OptionalInt32VectorFromView(special_token_ids_opt),
         add_prefix_space
     );
     XGRAMMAR_FFI_TRY_END();
@@ -289,9 +291,12 @@ TVM_FFI_STATIC_INIT_BLOCK() {
   using O = ffi::ObjectRef;
 
   // TokenizerInfo: init(encoded_vocab, vocab_type, vocab_size_opt, stop_token_ids_opt,
-  // add_prefix_space)
+  // special_token_ids_opt, add_prefix_space)
   refl::ObjectDef<TokenizerInfoObj>()
-      .def(refl::init<ffi::Array<ffi::Any>, int64_t, ffi::AnyView, ffi::AnyView, bool>())
+      .def(
+          refl::init<ffi::Array<ffi::Any>, int64_t, ffi::AnyView, ffi::AnyView, ffi::AnyView, bool>(
+          )
+      )
       .def(
           "vocab_type",
           [](const TokenizerInfoObj* o) {
