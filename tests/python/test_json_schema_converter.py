@@ -2179,6 +2179,37 @@ def test_object_error_handle():
     )
 
 
+@pytest.mark.parametrize("keyword", ["additionalProperties", "unevaluatedProperties"])
+@pytest.mark.parametrize(
+    "name, instance, accepted",
+    [
+        ("名字", '{"名字":"x"}', True),
+        ("名字", '{"名字":1}', False),
+        ("名字", '{"名字":"x","名字":1}', False),
+        # U+540D and U+5417 share their first two UTF-8 bytes.
+        ("名字", '{"吗":1}', True),
+        ("名字", '{"名":1}', True),
+        ("名字", '{"名字2":1}', True),
+        ("名字", '{"名字":"x","吗":1}', True),
+        ("é", '{"é":"x"}', True),
+        ("é", '{"é":1}', False),
+        ("é", '{"è":1}', True),
+        # U+00C3 has the same value as the first UTF-8 byte of "é".
+        ("é", '{"Ã":1}', True),
+        ("é", '{"x":1}', True),
+    ],
+)
+def test_non_ascii_property_name_is_not_an_additional_property(
+    keyword: str, name: str, instance: str, accepted: bool
+):
+    schema = {
+        "type": "object",
+        "properties": {name: {"type": "string"}},
+        keyword: {"type": "integer"},
+    }
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
 def test_additional_properties_type_enforcement():
     """Regression test for #208: additionalProperties: true must still
     enforce declared types for defined (non-required) properties."""
