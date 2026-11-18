@@ -327,6 +327,7 @@
         <span class="s2">"kimi_k3_xml"</span><span class="p">,</span>
         <span class="s2">"deepseek_v4_1_xml"</span><span class="p">,</span>
         <span class="s2">"gemma"</span><span class="p">,</span>
+        <span class="s2">"muse_xml"</span><span class="p">,</span>
     <span class="p">]</span> <span class="o">=</span> <span class="s2">"json"</span>
 <span class="w">    </span><span class="sd">"""How to parse the content. Valid values: \"json\" (standard JSON), \"qwen_xml\" (Qwen XML:</span>
 <span class="sd">    &lt;parameter=key&gt;value&lt;/parameter&gt;), \"minimax_xml\" (MiniMax XML:</span>
@@ -338,7 +339,8 @@
 <span class="sd">    \"cohere_xml\" (Cohere XML: &lt;cofl:value name=\"key\" type=\"raw|json|dict|list\"&gt;value&lt;/cofl:value&gt;),</span>
 <span class="sd">    \"kimi_k3_xml\" (Kimi-K3: &lt;|open|&gt;argument key=\"key\" type=\"type\"&lt;|sep|&gt;value&lt;|close|&gt;argument&lt;|sep|&gt;),</span>
 <span class="sd">    \"gemma\" (Gemma 4: {key:&lt;|\"|&gt;string value&lt;|\"|&gt;,key2:123}; unquoted keys and &lt;|\"|&gt;-delimited</span>
-<span class="sd">    strings at every nesting level)."""</span>
+<span class="sd">    strings at every nesting level),</span>
+<span class="sd">    \"muse_xml\" (Muse ATEM: &lt;atem:parameter name=\"key\"&gt;value&lt;/atem:parameter&gt;)."""</span>
     <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 <span class="w">    </span><span class="sd">"""Whether object properties may appear in any order.</span>
 

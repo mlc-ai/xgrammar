@@ -3608,6 +3608,203 @@
 
 
 
+<span class="n">_MUSE_MARKER_TOKENS</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"&lt;|start|&gt;"</span><span class="p">,</span> <span class="s2">"&lt;|message|&gt;"</span><span class="p">,</span> <span class="s2">"&lt;|eom|&gt;"</span><span class="p">,</span> <span class="s2">"&lt;|eot|&gt;"</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_muse_escape_header</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The Muse chat template's ``esc_header``, used for the ``to=`` recipient."""</span>
+    <span class="k">for</span> <span class="n">old</span><span class="p">,</span> <span class="n">new</span> <span class="ow">in</span> <span class="p">(</span>
+        <span class="p">(</span><span class="s2">"&lt;|"</span><span class="p">,</span> <span class="s2">"&lt; |"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"&lt;image&gt;"</span><span class="p">,</span> <span class="s2">"&lt; image&gt;"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"&lt;video&gt;"</span><span class="p">,</span> <span class="s2">"&lt; video&gt;"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"&lt;audio&gt;"</span><span class="p">,</span> <span class="s2">"&lt; audio&gt;"</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"</span><span class="se">\r</span><span class="s2">"</span><span class="p">,</span> <span class="s2">" "</span><span class="p">),</span>
+        <span class="p">(</span><span class="s2">"</span><span class="se">\n</span><span class="s2">"</span><span class="p">,</span> <span class="s2">" "</span><span class="p">),</span>
+    <span class="p">):</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">new</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">text</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_muse_escape_attr</span><span class="p">(</span><span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""The Muse chat template's ``esc_attr``, used for the ``&lt;atem:invoke name="..."&gt;`` value.</span>
+
+<span class="sd">    Parameter names are escaped the same way by the ``muse_xml`` JSON-schema style.</span>
+<span class="sd">    """</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="n">_muse_escape_header</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">old</span><span class="p">,</span> <span class="n">new</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"&amp;"</span><span class="p">,</span> <span class="s2">"&amp;amp;"</span><span class="p">),</span> <span class="p">(</span><span class="s1">'"'</span><span class="p">,</span> <span class="s2">"&amp;quot;"</span><span class="p">),</span> <span class="p">(</span><span class="s2">"'"</span><span class="p">,</span> <span class="s2">"&amp;#39;"</span><span class="p">),</span> <span class="p">(</span><span class="s2">"&lt;"</span><span class="p">,</span> <span class="s2">"&amp;lt;"</span><span class="p">),</span> <span class="p">(</span><span class="s2">"&gt;"</span><span class="p">,</span> <span class="s2">"&amp;gt;"</span><span class="p">)):</span>
+        <span class="n">text</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">replace</span><span class="p">(</span><span class="n">old</span><span class="p">,</span> <span class="n">new</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">text</span>
+
+
+<div class="viewcode-block" id="get_muse_structural_tag">
+<a class="viewcode-back" href="../../api/python/builtin_structural_tag.html#xgrammar.builtin_structural_tag.get_muse_structural_tag">[docs]</a>
+<span class="nd">@register_model_structural_tag</span><span class="p">(</span><span class="s2">"muse"</span><span class="p">,</span> <span class="n">marker_tokens</span><span class="o">=</span><span class="n">_MUSE_MARKER_TOKENS</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_muse_structural_tag</span><span class="p">(</span>
+    <span class="n">tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">FunctionToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">builtin_tools</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">BuiltinToolParam</span><span class="p">]]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">tool_choice</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">,</span> <span class="s2">"forced"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"auto"</span><span class="p">,</span>
+    <span class="n">reasoning</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"enabled"</span><span class="p">,</span> <span class="s2">"disabled"</span><span class="p">,</span> <span class="s2">"auto"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"enabled"</span><span class="p">,</span>
+    <span class="n">any_order</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">exclude_special_tokens</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="n">max_whitespace_cnt</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">parallel_tool_calls</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StructuralTag</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Get Muse (ATEM) style structural tag format.</span>
+
+<span class="sd">    Corresponding model key: ``"muse"``.</span>
+
+<span class="sd">    Reference: https://huggingface.co/meta-models/Muse-Spark-Open-816B-A42B/blob/main/chat_template.jinja</span>
+
+<span class="sd">    A Muse turn is a sequence of messages, each addressed to a recipient. The</span>
+<span class="sd">    generation prompt ends at ``&lt;|start|&gt;assistant``, so the first message</span>
+<span class="sd">    starts at its recipient::</span>
+
+<span class="sd">         to=self&lt;|message|&gt;REASONING&lt;|eom|&gt;</span>
+<span class="sd">        &lt;|start|&gt;assistant to=NAME&lt;|message|&gt;&lt;atem:function_calls&gt;</span>
+<span class="sd">        &lt;atem:invoke name="NAME"&gt;</span>
+<span class="sd">        &lt;atem:parameter name="KEY"&gt;VALUE&lt;/atem:parameter&gt;</span>
+<span class="sd">        &lt;/atem:invoke&gt;</span>
+<span class="sd">        &lt;/atem:function_calls&gt;&lt;|eom|&gt;</span>
+<span class="sd">        &lt;|start|&gt;assistant to=user&lt;|message|&gt;FINAL ANSWER</span>
+
+<span class="sd">    (shown one message per line; there is no newline between messages). A</span>
+<span class="sd">    message addressed to ``self`` is reasoning, one addressed to ``commentary``</span>
+<span class="sd">    is a user-visible update, one addressed to ``user`` is the final answer, and</span>
+<span class="sd">    one addressed to a tool name calls that tool. Each tool call is its own</span>
+<span class="sd">    message; reasoning and commentary messages may come before and between</span>
+<span class="sd">    tool calls. ``&lt;|eom|&gt;`` closes a message that is followed by another one. The</span>
+<span class="sd">    last message of the turn is closed by ``&lt;|eot|&gt;``, which is a stop token and</span>
+<span class="sd">    therefore not part of the structural tag.</span>
+
+<span class="sd">    String arguments are raw text; other values are JSON. Arguments are</span>
+<span class="sd">    constrained by :class:`JSONSchemaFormat` with ``style="muse_xml"``. As in</span>
+<span class="sd">    the template, the invoked function name and the parameter names are</span>
+<span class="sd">    XML-attribute escaped (``&amp;`` becomes ``&amp;amp;`` and so on) while the</span>
+<span class="sd">    recipient after ``to=`` is not, and the control markers cannot appear in</span>
+<span class="sd">    argument values when ``exclude_special_tokens`` is set.</span>
+
+<span class="sd">    ``reasoning="enabled"`` requires the turn to start with a ``to=self``</span>
+<span class="sd">    message, ``"auto"`` makes reasoning messages optional, and ``"disabled"``</span>
+<span class="sd">    forbids them.</span>
+
+<span class="sd">    Parameters are normalized by :func:`get_model_structural_tag` before this</span>
+<span class="sd">    function is called:</span>
+
+<span class="sd">    - ``tools``: a list of function tools. Each tool should have a ``function``</span>
+<span class="sd">      object containing ``name`` and ``parameters`` fields.</span>
+<span class="sd">    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or adaptive</span>
+<span class="sd">      ``"auto"`` reasoning.</span>
+
+<span class="sd">    Supported models:</span>
+
+<span class="sd">    - Muse Spark Open</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    StructuralTag</span>
+<span class="sd">        A structural tag for Muse function calling format.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">builtin_tools</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Muse does not support builtin tools."</span><span class="p">)</span>
+
+    <span class="n">MESSAGE</span> <span class="o">=</span> <span class="s2">"&lt;|message|&gt;"</span>
+    <span class="n">END_OF_MESSAGE</span> <span class="o">=</span> <span class="s2">"&lt;|eom|&gt;"</span>
+    <span class="n">NEXT_MESSAGE</span> <span class="o">=</span> <span class="s2">"&lt;|start|&gt;assistant"</span>
+    <span class="n">text_excludes</span> <span class="o">=</span> <span class="n">_text_excludes</span><span class="p">(</span><span class="n">exclude_special_tokens</span><span class="p">,</span> <span class="n">_MUSE_MARKER_TOKENS</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_text_message</span><span class="p">(</span><span class="n">recipient</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""A free-text message that is followed by another message."""</span>
+        <span class="k">return</span> <span class="n">SequenceFormat</span><span class="p">(</span>
+            <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">" to=</span><span class="si">{</span><span class="n">recipient</span><span class="si">}</span><span class="s2">"</span><span class="p">),</span>
+                <span class="n">TagFormat</span><span class="p">(</span>
+                    <span class="n">begin</span><span class="o">=</span><span class="n">MESSAGE</span><span class="p">,</span> <span class="n">content</span><span class="o">=</span><span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">text_excludes</span><span class="p">),</span> <span class="n">end</span><span class="o">=</span><span class="n">END_OF_MESSAGE</span>
+                <span class="p">),</span>
+                <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">NEXT_MESSAGE</span><span class="p">),</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_call_message</span><span class="p">(</span><span class="n">tool</span><span class="p">:</span> <span class="n">FunctionToolParam</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+        <span class="n">name</span> <span class="o">=</span> <span class="n">tool</span><span class="o">.</span><span class="n">function</span><span class="o">.</span><span class="n">name</span>
+        <span class="k">return</span> <span class="n">SequenceFormat</span><span class="p">(</span>
+            <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                <span class="n">ConstStringFormat</span><span class="p">(</span>
+                    <span class="n">value</span><span class="o">=</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">" to=</span><span class="si">{</span><span class="n">_muse_escape_header</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="si">}{</span><span class="n">MESSAGE</span><span class="si">}</span><span class="s2">&lt;atem:function_calls&gt;</span><span class="se">\n</span><span class="s2">"</span>
+                        <span class="sa">f</span><span class="s1">'&lt;atem:invoke name="</span><span class="si">{</span><span class="n">_muse_escape_attr</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="si">}</span><span class="s1">"&gt;</span><span class="se">\n</span><span class="s1">'</span>
+                    <span class="p">)</span>
+                <span class="p">),</span>
+                <span class="n">JSONSchemaFormat</span><span class="p">(</span>
+                    <span class="n">json_schema</span><span class="o">=</span><span class="n">_get_function_parameters</span><span class="p">(</span><span class="n">tool</span><span class="o">.</span><span class="n">function</span><span class="p">),</span>
+                    <span class="n">style</span><span class="o">=</span><span class="s2">"muse_xml"</span><span class="p">,</span>
+                    <span class="n">any_order</span><span class="o">=</span><span class="n">any_order</span><span class="p">,</span>
+                    <span class="c1"># The template escapes "&lt;|" in argument values, so no marker appears in them.</span>
+                    <span class="n">excludes</span><span class="o">=</span><span class="n">text_excludes</span><span class="p">,</span>
+                    <span class="n">max_whitespace_cnt</span><span class="o">=</span><span class="n">max_whitespace_cnt</span><span class="p">,</span>
+                <span class="p">),</span>
+                <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="s2">"&lt;/atem:invoke&gt;</span><span class="se">\n</span><span class="s2">&lt;/atem:function_calls&gt;"</span><span class="p">),</span>
+            <span class="p">]</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_one_of</span><span class="p">(</span><span class="n">formats</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Format</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">Format</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">formats</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">formats</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">OrFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="n">formats</span><span class="p">)</span>
+
+    <span class="c1"># Messages that may come before the tool calls or the final answer.</span>
+    <span class="n">leading</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Format</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">_text_message</span><span class="p">(</span><span class="s2">"commentary"</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="n">reasoning</span> <span class="o">!=</span> <span class="s2">"disabled"</span><span class="p">:</span>
+        <span class="n">leading</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">_text_message</span><span class="p">(</span><span class="s2">"self"</span><span class="p">))</span>
+    <span class="n">interleaved</span> <span class="o">=</span> <span class="n">StarFormat</span><span class="p">(</span><span class="n">content</span><span class="o">=</span><span class="n">_one_of</span><span class="p">(</span><span class="n">leading</span><span class="p">))</span>
+
+    <span class="n">tools</span> <span class="o">=</span> <span class="n">tools</span> <span class="ow">or</span> <span class="p">[]</span>
+    <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"forced"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Forced tool choice must resolve to exactly one tool."</span><span class="p">)</span>
+        <span class="n">calls</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Format</span><span class="p">]</span> <span class="o">=</span> <span class="n">_call_message</span><span class="p">(</span><span class="n">tools</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">elif</span> <span class="n">tool_choice</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"auto"</span><span class="p">,</span> <span class="s2">"required"</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"required"</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">tools</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Required tool choice needs at least one function tool."</span><span class="p">)</span>
+        <span class="n">calls</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">tools</span><span class="p">:</span>
+            <span class="n">calls</span> <span class="o">=</span> <span class="n">_one_of</span><span class="p">([</span><span class="n">_call_message</span><span class="p">(</span><span class="n">tool</span><span class="p">)</span> <span class="k">for</span> <span class="n">tool</span> <span class="ow">in</span> <span class="n">tools</span><span class="p">])</span>
+            <span class="k">if</span> <span class="n">parallel_tool_calls</span><span class="p">:</span>
+                <span class="c1"># Reasoning and commentary messages may also come between two calls.</span>
+                <span class="n">calls</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
+                    <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                        <span class="n">calls</span><span class="p">,</span>
+                        <span class="n">StarFormat</span><span class="p">(</span>
+                            <span class="n">content</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span>
+                                <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+                                    <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="n">END_OF_MESSAGE</span> <span class="o">+</span> <span class="n">NEXT_MESSAGE</span><span class="p">),</span>
+                                    <span class="n">interleaved</span><span class="p">,</span>
+                                    <span class="n">calls</span><span class="p">,</span>
+                                <span class="p">]</span>
+                            <span class="p">)</span>
+                        <span class="p">),</span>
+                    <span class="p">]</span>
+                <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unsupported tool choice: </span><span class="si">{</span><span class="n">tool_choice</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">final_answer</span> <span class="o">=</span> <span class="n">SequenceFormat</span><span class="p">(</span>
+        <span class="n">elements</span><span class="o">=</span><span class="p">[</span>
+            <span class="n">ConstStringFormat</span><span class="p">(</span><span class="n">value</span><span class="o">=</span><span class="sa">f</span><span class="s2">" to=user</span><span class="si">{</span><span class="n">MESSAGE</span><span class="si">}</span><span class="s2">"</span><span class="p">),</span>
+            <span class="n">AnyTextFormat</span><span class="p">(</span><span class="n">excludes</span><span class="o">=</span><span class="n">text_excludes</span><span class="p">),</span>
+        <span class="p">]</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">tool_choice</span> <span class="o">==</span> <span class="s2">"auto"</span><span class="p">:</span>
+        <span class="n">last_messages</span> <span class="o">=</span> <span class="n">final_answer</span> <span class="k">if</span> <span class="n">calls</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">OrFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="p">[</span><span class="n">calls</span><span class="p">,</span> <span class="n">final_answer</span><span class="p">])</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">calls</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+        <span class="n">last_messages</span> <span class="o">=</span> <span class="n">calls</span>
+
+    <span class="n">elements</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">Format</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">interleaved</span><span class="p">,</span> <span class="n">last_messages</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">reasoning</span> <span class="o">==</span> <span class="s2">"enabled"</span><span class="p">:</span>
+        <span class="n">elements</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">_text_message</span><span class="p">(</span><span class="s2">"self"</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">StructuralTag</span><span class="p">(</span><span class="nb">format</span><span class="o">=</span><span class="n">SequenceFormat</span><span class="p">(</span><span class="n">elements</span><span class="o">=</span><span class="n">elements</span><span class="p">))</span></div>
+
+
+
 <span class="c1"># Backward-compatible alias</span>
 <span class="n">get_builtin_structural_tag</span> <span class="o">=</span> <span class="n">get_model_structural_tag</span>
 <span class="sd">"""Alias for :func:`get_model_structural_tag`. Deprecated."""</span>
