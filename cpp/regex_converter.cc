@@ -294,7 +294,7 @@ void RegexConverter::HandleGroupModifier() {
     RaiseError("Lookbehind is not supported yet.");
   } else if (*current_ == '<') {
     ++current_;
-    while (current_ != end_ && isalpha(*current_)) {
+    while (current_ != end_ && (isalnum(*current_) || *current_ == '_')) {
       ++current_;
     }
     if (current_ == end_ || *current_ != '>') {
