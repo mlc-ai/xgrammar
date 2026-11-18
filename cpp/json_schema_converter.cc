@@ -33,6 +33,7 @@
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
+#include "support/encoding.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
 
@@ -2348,6 +2349,24 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
   );
 }
 
+/*! \brief Whether the automaton has a character edge on a byte a JSON string must escape. */
+static bool HasJSONEscapedCharEdge(const FSMWithStartEnd& fsm) {
+  const auto& forbidden_chars = GrammarFSMBuilder::JSONStringForbiddenChars();
+  for (int state = 0; state < fsm.NumStates(); ++state) {
+    for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+      if (!edge.IsCharRange()) {
+        continue;
+      }
+      for (int byte = edge.min; byte <= std::min<int>(edge.max, 0xFF); ++byte) {
+        if (forbidden_chars[byte]) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /*!
  * \brief Emit the grammar expression matching a regex. Prefer the Regex node with
  * json_string=true so the pattern is compiled into a single automaton by GrammarFSMBuilder;
@@ -2360,15 +2379,15 @@ int32_t JSONSchemaConverter::GenerateFromSpec(
 int32_t JSONSchemaConverter::RegexExpression(
     const std::string& regex, bool json_string, bool force_cfg_expansion
 ) {
-  bool can_use_fsm = !force_cfg_expansion;
-  if (json_string) {
-    can_use_fsm =
-        can_use_fsm && std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
-          return character >= 0x20 && character <= 0x7e;
-        });
-  }
-  if (can_use_fsm) {
-    auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string);
+  // The CFG expansion of a pattern outside printable ASCII lets its character matches take the
+  // characters a JSON string must escape. The automaton replaces it only when it has no edge on
+  // one of them, so both accept the same language; the json_string build is then the same too.
+  const bool check_escapes =
+      json_string && !std::all_of(regex.begin(), regex.end(), [](unsigned char character) {
+        return character >= 0x20 && character <= 0x7e;
+      });
+  if (!force_cfg_expansion && (!check_escapes || ValidUTF8PrefixLength(regex) == regex.size())) {
+    auto fsm_result = GrammarFSMBuilder::Regex(regex, json_string && !check_escapes);
     if (fsm_result.IsOk()) {
       auto fsm = std::move(fsm_result).Unwrap();
       std::unordered_set<int> reachable_states;
@@ -2377,7 +2396,7 @@ int32_t JSONSchemaConverter::RegexExpression(
           std::none_of(reachable_states.begin(), reachable_states.end(), [&](int state) {
             return fsm.IsEndState(state);
           });
-      if (!language_is_empty) {
+      if (!language_is_empty && !(check_escapes && HasJSONEscapedCharEdge(fsm))) {
         return builder_.AddRegex(regex, json_string);
       }
     }

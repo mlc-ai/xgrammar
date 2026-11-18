@@ -464,12 +464,31 @@ def test_json_schema_pattern_fallback_to_cfg():
     grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
     assert "Regex(" not in str(grammar)
 
-    # A pattern with non-printable-ASCII characters also falls back to the CFG expansion.
+    # So does a pattern with characters outside printable ASCII whose matches can contain a
+    # character that a JSON string must escape: the expansion keeps accepting those.
+    for pattern in ["^你.*好$", "^[^£]+$", "^a\tb$"]:
+        schema = json.dumps({"type": "string", "pattern": pattern})
+        grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+        assert "Regex(" not in str(grammar)
+
+
+def test_json_schema_pattern_non_ascii_uses_regex_macro():
+    # A pattern with non-ASCII characters that never matches a character a JSON string must
+    # escape accepts the same strings either way, so it is compiled into the automaton.
     schema = json.dumps({"type": "string", "pattern": "^[一-龥]+$"})
     grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
-    assert "Regex(" not in str(grammar)
+    assert "json_string=true" in str(grammar)
     assert _is_grammar_accept_string(grammar, '"你好"')
     assert not _is_grammar_accept_string(grammar, '"ab"')
+    assert not _is_grammar_accept_string(grammar, '""')
+
+    schema = json.dumps({"type": "string", "pattern": "^[A-Za-z0-9 £]{1,75}$"})
+    grammar = xgr.Grammar.from_json_schema(schema, any_whitespace=False)
+    assert "json_string=true" in str(grammar)
+    assert _is_grammar_accept_string(grammar, '"£5 a"')
+    assert _is_grammar_accept_string(grammar, '"' + "£" * 75 + '"')
+    assert not _is_grammar_accept_string(grammar, '"' + "£" * 76 + '"')
+    assert not _is_grammar_accept_string(grammar, '"€"')
 
 
 def test_json_schema_pattern_properties():
