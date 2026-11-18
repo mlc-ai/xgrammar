@@ -2315,6 +2315,10 @@ instance__accepted__test_email_format = [
     (r"name/surname@example.com", True),
     (r"admin@example", True),
     (r"example@s.example", True),
+    (r"user@mail.x.com", True),
+    (r"a@x.y.example", True),
+    (r"a@x..example", False),
+    (r"a@x.y-.example", False),
     (r"\" \"@example.org", True),  #
     (r"\"john..doe\"@example.org", True),  #
     (r"mailhost!username@example.org", True),

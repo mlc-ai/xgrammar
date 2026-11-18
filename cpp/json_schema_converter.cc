@@ -3666,7 +3666,7 @@ std::optional<std::string> JSONSchemaConverter::JSONFormatToRegexPattern(
     std::string quoted_string =
         quote + "(" + quoted_pair + "|[\\x20\\x21\\x23-\\x5B\\x5D-\\x7E])*" + quote;
     std::string domain =
-        "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9][\\-A-Za-z0-9]*[A-Za-z0-9])*"
+        "([A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)((\\.[A-Za-z0-9]([\\-A-Za-z0-9]*[A-Za-z0-9])?)*"
         ")";
     m["email"] = "^(" + dot_string + "|" + quoted_string + ")@" + domain + "$";
 
