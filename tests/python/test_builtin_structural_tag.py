@@ -4,7 +4,7 @@ import copy
 import json
 import re
 import time
-from typing import Any, Dict, List, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Set, Tuple
 
 import pytest
 from tokenizer_utils import load_tokenizer
@@ -3154,6 +3154,467 @@ def test_mimo_parameter_order_and_serialization(any_order):
     )
 
 
+# ---------- Test: Muse ----------
+
+_MUSE_SCHEMA = {
+    "type": "object",
+    "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+    "required": ["query", "limit"],
+    "additionalProperties": False,
+}
+_MUSE_TOOLS = [
+    {"type": "function", "function": {"name": name, "parameters": _MUSE_SCHEMA}}
+    for name in ("search", "web.find")
+]
+_MUSE_NEXT = "<|eom|><|start|>assistant"
+_MUSE_REASONING = " to=self<|message|>Plan.\n" + _MUSE_NEXT
+_MUSE_ANSWER = " to=user<|message|>Answer."
+
+
+def _muse_call(name: str = "search", parameters: Optional[str] = None) -> str:
+    if parameters is None:
+        parameters = (
+            '<atem:parameter name="query">北京 &amp; "quoted"\n</atem:parameter>\n'
+            '<atem:parameter name="limit">2</atem:parameter>\n'
+        )
+    return (
+        f' to={name}<|message|><atem:function_calls>\n<atem:invoke name="{name}">\n'
+        f"{parameters}</atem:invoke>\n</atem:function_calls>"
+    )
+
+
+@pytest.mark.parametrize("reasoning", ["enabled", "disabled", "auto"])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced", "none"])
+def test_muse_reasoning_and_tool_choice(reasoning, policy):
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag("muse", tools=_MUSE_TOOLS, reasoning=reasoning, tool_choice=choice)
+    )
+    prefix = _MUSE_REASONING if reasoning != "disabled" else ""
+    call = _muse_call()
+    assert _is_grammar_accept_string(grammar, prefix + call) == (policy != "none")
+    assert _is_grammar_accept_string(grammar, prefix + _MUSE_ANSWER) == (policy in ("auto", "none"))
+    assert _is_grammar_accept_string(grammar, prefix + call + _MUSE_NEXT + call) == (
+        policy in ("auto", "required")
+    )
+    assert _is_grammar_accept_string(grammar, prefix + _muse_call("web.find")) == (
+        policy in ("auto", "required")
+    )
+    # A user-visible update may come before the call or the answer.
+    commentary = " to=commentary<|message|>Searching." + _MUSE_NEXT
+    assert _is_grammar_accept_string(grammar, prefix + commentary + call) == (policy != "none")
+    # Reasoning and commentary may also come between two calls.
+    between = commentary if reasoning == "disabled" else commentary + _MUSE_REASONING
+    assert _is_grammar_accept_string(grammar, prefix + call + _MUSE_NEXT + between + call) == (
+        policy in ("auto", "required")
+    )
+    # The final answer ends the turn; nothing may follow it.
+    assert not _is_grammar_accept_string(grammar, prefix + _MUSE_ANSWER + _MUSE_NEXT + call)
+    # Reasoning is required when enabled, optional when auto and forbidden when disabled.
+    assert _is_grammar_accept_string(grammar, call) == (policy != "none" and reasoning != "enabled")
+    assert _is_grammar_accept_string(grammar, _MUSE_REASONING + call) == (
+        policy != "none" and reasoning != "disabled"
+    )
+    assert _is_grammar_accept_string(grammar, _MUSE_REASONING * 2 + call) == (
+        policy != "none" and reasoning != "disabled"
+    )
+
+
+_MUSE_LIMIT = '<atem:parameter name="limit">2</atem:parameter>\n'
+
+
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize(
+    "output",
+    [
+        _muse_call("unknown"),
+        # The recipient and the invoked name must be the same tool.
+        _muse_call().replace(" to=search", " to=web.find"),
+        _muse_call().replace(" to=search", ""),
+        _muse_call().replace("<atem:function_calls>\n", ""),
+        _muse_call().replace(_MUSE_LIMIT, ""),
+        _muse_call().replace('name="limit">2', 'name="limit">wrong'),
+        _muse_call().replace('name="limit">2', 'name="limit">0'),
+        _muse_call().replace('name="limit">2', 'name="unknown">2'),
+        _muse_call().replace(_MUSE_LIMIT, _MUSE_LIMIT * 2),
+        _muse_call().replace("<atem:parameter", "<parameter"),
+        _muse_call().replace("</atem:function_calls>", ""),
+        # A message must be closed before the next one starts.
+        _muse_call() + "<|start|>assistant" + _muse_call(),
+        _muse_call() + "<|eom|>",
+        _muse_call() + "<|eot|>",
+        " to=self<|message|>Plan." + _muse_call(),
+    ],
+)
+def test_muse_rejects_invalid_calls(policy, output):
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    tag = get_model_structural_tag("muse", tools=_MUSE_TOOLS, reasoning=False, tool_choice=choice)
+    check_stag_with_instance(tag, output, False)
+
+
+@pytest.mark.parametrize("marker", ["<|start|>", "<|message|>", "<|eom|>", "<|eot|>"])
+def test_muse_free_text_excludes_markers(marker):
+    def accepts(output: str, **kwargs: Any) -> bool:
+        tag = get_model_structural_tag("muse", tools=_MUSE_TOOLS, **kwargs)
+        return _is_grammar_accept_string(xgr.Grammar.from_structural_tag(tag), output)
+
+    answer = f" to=user<|message|>before {marker} after"
+    reasoning = f" to=self<|message|>before {marker} after{_MUSE_NEXT}{_MUSE_ANSWER}"
+    assert not accepts(answer, reasoning="disabled")
+    assert not accepts(reasoning, reasoning="enabled")
+    assert accepts(answer, reasoning="disabled", exclude_special_tokens=False)
+    # <|eom|> still closes the reasoning message when markers are otherwise allowed.
+    assert accepts(reasoning, reasoning="enabled", exclude_special_tokens=False) == (
+        marker != "<|eom|>"
+    )
+
+
+@pytest.mark.parametrize(
+    "parameters", [None, {}, {"type": "object", "properties": {}, "additionalProperties": False}]
+)
+def test_muse_empty_arguments(parameters):
+    tag = get_model_structural_tag(
+        "muse",
+        tools=[{"type": "function", "function": {"name": "run", "parameters": parameters}}],
+        reasoning=False,
+        tool_choice="required",
+    )
+    check_stag_with_instance(tag, _muse_call("run", ""), True)
+
+
+@pytest.mark.parametrize(
+    "function",
+    [
+        {"name": "search"},
+        {"name": "search", "parameters": {}},
+        {"name": "search", "parameters": _MUSE_SCHEMA, "strict": False},
+    ],
+)
+def test_muse_unconstrained_parameters(function):
+    tag = get_model_structural_tag(
+        "muse",
+        tools=[{"type": "function", "function": function}],
+        reasoning=False,
+        tool_choice="required",
+    )
+    check_stag_with_instance(
+        tag,
+        _muse_call(parameters='<atem:parameter name="extra">free text</atem:parameter>\n'),
+        True,
+    )
+
+
+def test_muse_argument_values():
+    """Strings are raw text, other values are JSON."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string"},
+            "flag": {"type": "boolean"},
+            "nothing": {"type": "null"},
+            "ratio": {"type": "number"},
+            "items": {"type": "array", "items": {"type": "string"}},
+            "nested": {"type": "object", "properties": {"unit": {"enum": ["C", "F"]}}},
+        },
+        "required": ["text", "flag", "nothing", "ratio", "items", "nested"],
+        "additionalProperties": False,
+    }
+    tag = get_model_structural_tag(
+        "muse",
+        tools=[{"type": "function", "function": {"name": "search", "parameters": schema}}],
+        reasoning=False,
+        tool_choice="required",
+    )
+    values = {
+        "text": 'line one\n "two" <b>&amp;</b>',
+        "flag": "true",
+        "nothing": "null",
+        "ratio": "1.5",
+        "items": '["a", "b"]',
+        "nested": '{"unit": "C"}',
+    }
+
+    def call(**overrides: str) -> str:
+        return _muse_call(
+            parameters="".join(
+                f'<atem:parameter name="{key}">{value}</atem:parameter>\n'
+                for key, value in {**values, **overrides}.items()
+            )
+        )
+
+    check_stag_with_instance(tag, call(), True)
+    for overrides in (
+        {"flag": "True"},
+        {"flag": '"true"'},
+        {"nothing": "None"},
+        {"ratio": "fast"},
+        {"items": "a, b"},
+        {"items": "[1]"},
+        {"nested": '{"unit": "K"}'},
+        {"text": "closes </atem:parameter> early"},
+    ):
+        check_stag_with_instance(tag, call(**overrides), False)
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_muse_parameter_order_and_serialization(any_order):
+    tag = get_model_structural_tag(
+        "muse",
+        tools=_MUSE_TOOLS,
+        reasoning=False,
+        tool_choice="required",
+        any_order=any_order,
+        max_whitespace_cnt=2,
+    )
+    grammar = xgr.Grammar.from_structural_tag(tag.model_dump_json())
+    query = '<atem:parameter name="query">北京</atem:parameter>\n'
+    assert _is_grammar_accept_string(grammar, _muse_call(parameters=query + _MUSE_LIMIT))
+    assert (
+        _is_grammar_accept_string(grammar, _muse_call(parameters=_MUSE_LIMIT + query)) == any_order
+    )
+    assert not _is_grammar_accept_string(
+        grammar, _muse_call(parameters=query + "   " + _MUSE_LIMIT)
+    )
+
+
+def test_muse_rejects_builtin_tools():
+    with pytest.raises(ValueError, match="does not support builtin tools"):
+        get_model_structural_tag("muse", tools=[{"type": "web_search"}])
+
+
+# ---------- Test: Muse end-to-end responses ----------
+
+_MUSE_E2E_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {"type": "string"},
+                    "days": {"type": "integer"},
+                    "unit": {"enum": ["C", "F"]},
+                },
+                "required": ["city", "days"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "filters": {
+                        "type": "object",
+                        "properties": {
+                            "tags": {"type": "array", "items": {"type": "string"}},
+                            "recent": {"type": "boolean"},
+                        },
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
+
+# Complete assistant turns as the official chat template renders them after the
+# "<|start|>assistant" generation prompt, with _MUSE_E2E_TOOLS. The trailing <|eot|> is the stop
+# token, so it is stripped before matching.
+_MUSE_E2E_RESPONSES = {
+    "answer": " to=user<|message|>Hello! How can I help?<|eot|>",
+    "reasoning_answer": (
+        " to=self<|message|>The user greets me.<|eom|>"
+        "<|start|>assistant to=user<|message|>Hello! How can I help?<|eot|>"
+    ),
+    "one_call": (
+        " to=self<|message|>Need weather.<|eom|>"
+        "<|start|>assistant to=get_weather<|message|><atem:function_calls>\n"
+        '<atem:invoke name="get_weather">\n'
+        '<atem:parameter name="city">Paris</atem:parameter>\n'
+        '<atem:parameter name="days">3</atem:parameter>\n'
+        '<atem:parameter name="unit">C</atem:parameter>\n'
+        "</atem:invoke>\n"
+        "</atem:function_calls><|eot|>"
+    ),
+    "two_calls": (
+        " to=self<|message|>Need both.<|eom|>"
+        "<|start|>assistant to=commentary<|message|>Let me check.<|eom|>"
+        "<|start|>assistant to=get_weather<|message|><atem:function_calls>\n"
+        '<atem:invoke name="get_weather">\n'
+        '<atem:parameter name="city">New York</atem:parameter>\n'
+        '<atem:parameter name="days">1</atem:parameter>\n'
+        "</atem:invoke>\n"
+        "</atem:function_calls><|eom|>"
+        "<|start|>assistant to=search<|message|><atem:function_calls>\n"
+        '<atem:invoke name="search">\n'
+        '<atem:parameter name="query">events in New York</atem:parameter>\n'
+        '<atem:parameter name="filters">{"tags": ["music", "art"], "recent": true}'
+        "</atem:parameter>\n"
+        "</atem:invoke>\n"
+        "</atem:function_calls><|eot|>"
+    ),
+}
+
+
+def _muse_e2e_grammar(**kwargs: Any) -> xgr.Grammar:
+    return xgr.Grammar.from_structural_tag(
+        get_model_structural_tag("muse", tools=_MUSE_E2E_TOOLS, **kwargs)
+    )
+
+
+def _muse_e2e_accepts(grammar: xgr.Grammar, response: str) -> bool:
+    assert response.endswith("<|eot|>")
+    return _is_grammar_accept_string(grammar, response[: -len("<|eot|>")])
+
+
+@pytest.mark.parametrize(
+    "kwargs, accepted",
+    [
+        pytest.param(
+            {"tool_choice": "auto", "reasoning": "enabled"},
+            {"reasoning_answer", "one_call", "two_calls"},
+            id="auto-reasoning",
+        ),
+        pytest.param(
+            {"tool_choice": "auto", "reasoning": "disabled"}, {"answer"}, id="auto-no-reasoning"
+        ),
+        pytest.param(
+            {"tool_choice": "auto", "reasoning": "auto"},
+            {"answer", "reasoning_answer", "one_call", "two_calls"},
+            id="auto-adaptive-reasoning",
+        ),
+        pytest.param(
+            {"tool_choice": "none", "reasoning": "enabled"}, {"reasoning_answer"}, id="none"
+        ),
+        pytest.param(
+            {"tool_choice": "required", "reasoning": "enabled"},
+            {"one_call", "two_calls"},
+            id="required",
+        ),
+        pytest.param(
+            {
+                "tool_choice": {"type": "function", "function": {"name": "get_weather"}},
+                "reasoning": "enabled",
+            },
+            {"one_call"},
+            id="forced",
+        ),
+        pytest.param(
+            {"tool_choice": "auto", "reasoning": "enabled", "parallel_tool_calls": False},
+            {"reasoning_answer", "one_call"},
+            id="auto-single-call",
+        ),
+    ],
+)
+def test_muse_e2e_complete_responses(kwargs: Dict[str, Any], accepted: Set[str]):
+    grammar = _muse_e2e_grammar(**kwargs)
+    for name, response in _MUSE_E2E_RESPONSES.items():
+        assert _muse_e2e_accepts(grammar, response) == (name in accepted), name
+
+
+@pytest.mark.parametrize(
+    "old, new",
+    [
+        # Argument values must match the tool schema.
+        ('name="days">3<', 'name="days">three<'),
+        ('name="unit">C<', 'name="unit">K<'),
+        ('<atem:parameter name="city">Paris</atem:parameter>\n', ""),
+        ('name="unit">C</atem:parameter>\n', 'name="unit">C</atem:parameter>\n' * 2),
+        # The recipient and the invoked function must be the same declared tool.
+        ("to=get_weather", "to=get_time"),
+        ('<atem:invoke name="get_weather">', '<atem:invoke name="search">'),
+        # Messages are separated by <|eom|><|start|>assistant.
+        ("<|eom|><|start|>assistant to=get_weather", "<|start|>assistant to=get_weather"),
+        ("<|eom|><|start|>assistant to=get_weather", "<|eom|> to=get_weather"),
+        # Nothing may follow the final tool call.
+        ("</atem:function_calls><|eot|>", "</atem:function_calls>Done.<|eot|>"),
+    ],
+)
+def test_muse_e2e_rejects_malformed_responses(old: str, new: str):
+    grammar = _muse_e2e_grammar(tool_choice="auto", reasoning="enabled")
+    response = _MUSE_E2E_RESPONSES["one_call"]
+    assert old in response
+    assert not _muse_e2e_accepts(grammar, response.replace(old, new))
+
+
+_MUSE_ESCAPE_KEY = '<tag>\'s "id"'
+_MUSE_ESCAPE_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "q&a.lookup",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "q&a": {"type": "string"},
+                    _MUSE_ESCAPE_KEY: {"type": "integer"},
+                    "items": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["q&a", _MUSE_ESCAPE_KEY, "items"],
+                "additionalProperties": False,
+            },
+        },
+    }
+]
+
+# The official chat template's rendering of a call to _MUSE_ESCAPE_TOOLS with the arguments
+# {"q&a": "x <|eom|> y", _MUSE_ESCAPE_KEY: 7, "items": ["<|eot|>"]}. The recipient after to= is
+# not entity-escaped, the invoked name and the parameter names are (esc_attr), and "<|" in
+# argument values is broken up as "< |" (esc).
+_MUSE_ESCAPE_RESPONSE = (
+    " to=self<|message|>Look it up.<|eom|>"
+    "<|start|>assistant to=q&a.lookup<|message|><atem:function_calls>\n"
+    '<atem:invoke name="q&amp;a.lookup">\n'
+    '<atem:parameter name="q&amp;a">x < |eom|> y</atem:parameter>\n'
+    '<atem:parameter name="&lt;tag&gt;&#39;s &quot;id&quot;">7</atem:parameter>\n'
+    '<atem:parameter name="items">["< |eot|>"]</atem:parameter>\n'
+    "</atem:invoke>\n"
+    "</atem:function_calls><|eot|>"
+)
+
+
+@pytest.mark.parametrize(
+    "old, new",
+    [
+        pytest.param(None, None, id="template-rendering"),
+        # Names must be escaped exactly as the template does.
+        pytest.param('name="q&amp;a.lookup"', 'name="q&a.lookup"', id="raw-invoke-name"),
+        pytest.param("to=q&a.lookup", "to=q&amp;a.lookup", id="escaped-recipient"),
+        pytest.param('name="q&amp;a">', 'name="q&a">', id="raw-parameter-name"),
+        pytest.param(
+            '"&lt;tag&gt;&#39;s &quot;id&quot;"', '"&lt;tag&gt;\'s &quot;id&quot;"', id="raw-quote"
+        ),
+        # Control markers cannot appear in argument values, raw or nested in JSON.
+        pytest.param("x < |eom|> y", "x <|eom|> y", id="marker-in-string-value"),
+        pytest.param('["< |eot|>"]', '["<|eot|>"]', id="marker-in-nested-json-string"),
+    ],
+)
+def test_muse_e2e_escaped_names_and_values(old: Optional[str], new: Optional[str]):
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag("muse", tools=_MUSE_ESCAPE_TOOLS, reasoning="enabled")
+    )
+    if old is None:
+        assert _muse_e2e_accepts(grammar, _MUSE_ESCAPE_RESPONSE)
+    else:
+        assert old in _MUSE_ESCAPE_RESPONSE
+        assert not _muse_e2e_accepts(grammar, _MUSE_ESCAPE_RESPONSE.replace(old, new))
+
+
+def test_muse_argument_markers_follow_exclude_special_tokens():
+    response = _MUSE_ESCAPE_RESPONSE.replace("x < |eom|> y", "x <|eom|> y")
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "muse", tools=_MUSE_ESCAPE_TOOLS, reasoning="enabled", exclude_special_tokens=False
+        )
+    )
+    assert _muse_e2e_accepts(grammar, response)
+
+
 # ---------- Test: parallel_tool_calls ----------
 
 _PARALLEL_TOOLS = make_tools(["t1", "t2"])
@@ -3175,7 +3636,18 @@ _KIMI_K3_CALL = (
 )
 
 # (model, output with one tool call, the same output with two tool calls)
+_MUSE_T_CALL = (
+    ' to={n}<|message|><atem:function_calls>\n<atem:invoke name="{n}">\n'
+    '<atem:parameter name="q">v</atem:parameter>\n</atem:invoke>\n</atem:function_calls>'
+)
+
 _parallel_tool_calls_cases = [
+    pytest.param(
+        "muse",
+        _MUSE_T_CALL.format(n="t1"),
+        _MUSE_T_CALL.format(n="t1") + "<|eom|><|start|>assistant" + _MUSE_T_CALL.format(n="t2"),
+        id="muse",
+    ),
     pytest.param(
         "mimo",
         "<tool_call><function=t1><parameter=q>v</parameter></function></tool_call>",

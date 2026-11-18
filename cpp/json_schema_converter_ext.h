@@ -372,6 +372,19 @@ XMLWrapper GetDeepSeekV41XMLWrapper();
 XMLWrapper GetGLMXMLWrapper();
 XMLWrapper GetCohereXMLWrapper();
 XMLWrapper GetKimiK3XMLWrapper();
+XMLWrapper GetMuseXMLWrapper();
+
+/*!
+ * \brief Model-specific attribute escaping for parameter names, as each chat template renders
+ * them. XMLToolCallingConverter::EscapeAttrValue dispatches to these by format.
+ */
+/*! \brief Kimi-K3: & -> &amp; and " -> &quot;. */
+std::string EscapeKimiK3AttrValue(const std::string& value);
+/*!
+ * \brief Muse: the chat template's esc_attr. Break "<|" and media placeholders, turn line breaks
+ * into spaces, then XML-escape & " ' < >.
+ */
+std::string EscapeMuseAttrValue(const std::string& value);
 
 struct XMLKeySuffix {
   const char* prefix;

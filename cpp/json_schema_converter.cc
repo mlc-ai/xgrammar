@@ -3918,6 +3918,7 @@ const std::unordered_map<JSONFormat, XMLToolCallingConverter::XMLWrapper>
         {JSONFormat::kGlmXML, converter_ext::GetGLMXMLWrapper()},
         {JSONFormat::kCohereXML, converter_ext::GetCohereXMLWrapper()},
         {JSONFormat::kKimiK3XML, converter_ext::GetKimiK3XMLWrapper()},
+        {JSONFormat::kMuseXML, converter_ext::GetMuseXMLWrapper()},
 };
 
 XMLToolCallingConverter::XMLToolCallingConverter(
@@ -4221,6 +4222,18 @@ int32_t XMLToolCallingConverter::GenerateEnum(const EnumSpec& spec, const std::s
   return JSONSchemaConverter::GenerateEnum(spec, rule_name);
 }
 
+std::string XMLToolCallingConverter::EscapeAttrValue(const std::string& value) const {
+  // Escape a parameter name the way the model's chat template renders it inside the key wrapper.
+  switch (json_format_) {
+    case JSONFormat::kKimiK3XML:
+      return converter_ext::EscapeKimiK3AttrValue(value);
+    case JSONFormat::kMuseXML:
+      return converter_ext::EscapeMuseAttrValue(value);
+    default:
+      return value;
+  }
+}
+
 int32_t XMLToolCallingConverter::FormatPropertyKey(
     const std::string& key, const SchemaSpecPtr& schema
 ) {
@@ -4231,12 +4244,12 @@ int32_t XMLToolCallingConverter::FormatPropertyKey(
     if (json_format_ == JSONFormat::kKimiK3XML) {
       pinned_type = GetRenderedJSONType(schema);
     }
-    if (!IsAllowedString(EscapeAttrValue(key))) {
+    const std::string rendered_key = EscapeAttrValue(key);
+    if (!IsAllowedString(rendered_key)) {
       return Unsatisfiable();
     }
     return Sequence(
-        {ByteString(xml_wrapper_.key_wrapper_prefix + EscapeAttrValue(key)),
-         XMLKeySuffix(pinned_type)}
+        {ByteString(xml_wrapper_.key_wrapper_prefix + rendered_key), XMLKeySuffix(pinned_type)}
     );
   }
   return JSONSchemaConverter::FormatPropertyKey(key, schema);
@@ -4342,7 +4355,7 @@ std::optional<int32_t> XMLToolCallingConverter::GetCache(const std::string& key)
     return std::nullopt;
   }
   if ((json_format_ == JSONFormat::kQwenXML || json_format_ == JSONFormat::kDeepSeekXML ||
-       json_format_ == JSONFormat::kDeepSeekV41XML) &&
+       json_format_ == JSONFormat::kDeepSeekV41XML || json_format_ == JSONFormat::kMuseXML) &&
       nested_object_level_ == 0 && key == "{}") {
     // Unconstrained tool arguments are an XML parameter list, not one parameter's raw value.
     return rule_cache_manager_.GetCache(kObjectCacheKey, 0);
@@ -5182,6 +5195,7 @@ std::optional<JSONFormat> JSONFormatFromString(const std::string& format) {
       {"cohere_xml", JSONFormat::kCohereXML},
       {"kimi_k3_xml", JSONFormat::kKimiK3XML},
       {"gemma", JSONFormat::kGemma},
+      {"muse_xml", JSONFormat::kMuseXML},
   };
   auto it = kNameToFormat.find(format);
   if (it == kNameToFormat.end()) {
@@ -5237,7 +5251,8 @@ Grammar JSONSchemaToGrammar(
     case JSONFormat::kDeepSeekXML:
     case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
-    case JSONFormat::kKimiK3XML: {
+    case JSONFormat::kKimiK3XML:
+    case JSONFormat::kMuseXML: {
       XMLToolCallingConverter converter(
           indent,
           std::move(separators),
@@ -5359,7 +5374,8 @@ std::string JSONSchemaToEBNF(
     case JSONFormat::kDeepSeekXML:
     case JSONFormat::kDeepSeekV41XML:
     case JSONFormat::kGlmXML:
-    case JSONFormat::kKimiK3XML: {
+    case JSONFormat::kKimiK3XML:
+    case JSONFormat::kMuseXML: {
       XMLToolCallingConverter converter(
           indent,
           separators,
