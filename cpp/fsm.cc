@@ -1062,11 +1062,16 @@ FSMWithStartEnd FSMWithStartEnd::Plus() const {
 }
 
 FSMWithStartEnd FSMWithStartEnd::Optional() const {
+  // Skipping the child needs a fresh accepting start state. An epsilon edge from start_ to an end
+  // state would keep the outgoing edges of that end state reachable, so "(ab*)?" would accept "b".
+  // Making start_ itself accepting would accept strings that loop back to it, so "(a*b)?" would
+  // accept "a".
   FSM fsm = fsm_.Copy();
-  if (!ends_.empty()) {
-    fsm.AddEpsilonEdge(start_, ends_.front());
-  }
-  return FSMWithStartEnd(fsm, start_, ends_);
+  int new_start = fsm.AddState();
+  fsm.AddEpsilonEdge(new_start, start_);
+  FSMWithStartEnd result(fsm, new_start, ends_);
+  result.AddEndState(new_start);
+  return result;
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Not(int max_result_num_states) const {
