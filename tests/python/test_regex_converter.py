@@ -1,3 +1,4 @@
+import json
 import sys
 import time
 
@@ -131,6 +132,42 @@ def test_char_class():
 """
     assert grammar_str == expected_grammar
     assert _is_grammar_accept_string(grammar_str, instance)
+
+
+dash_after_class_escape_instances = [
+    (r"[\w-z]+", "a-z", True),
+    (r"[\w-z]", "`", False),
+    (r"[\w-.]+", "a.b-c", True),
+    (r"[\s-x]+", " -x", True),
+    (r"[\d-]+", "1-2", True),
+    (r"[\W-.]", ".", True),
+    (r"[\W-.]", "a", False),
+    (r"[\D-x]", "x", True),
+    (r"[\D-x]", "1", False),
+    (r"[\S-x]", " ", False),
+    (r"[^\w-.]", "!", True),
+    (r"[^\w-.]", "-", False),
+    (r"[\w--]", "-", True),
+    (r"[+-\d]", "5", True),
+    (r"[+-\d]", "-", True),
+    (r"[+-\d]", ",", False),
+    (r"[a-\w]", "b", True),
+    (r"[^-a]", "b", True),
+    (r"[^-a]", "-", False),
+    (r"[\w-\.]+@([\w-]+\.)+[\w-]{2,4}", "first.last@mail-host.com", True),
+]
+
+
+@pytest.mark.parametrize("regex, instance, accepted", dash_after_class_escape_instances)
+def test_dash_after_class_escape_is_literal(regex: str, instance: str, accepted: bool):
+    # A class escape like \w cannot be a range endpoint, so a "-" right before or after it is a
+    # literal "-".
+    grammar_str = _regex_to_ebnf(regex)
+    assert _is_grammar_accept_string(grammar_str, instance) == accepted
+    schema_grammar = xgr.Grammar.from_json_schema(
+        json.dumps({"type": "string", "pattern": "^" + regex + "$"})
+    )
+    assert _is_grammar_accept_string(schema_grammar, json.dumps(instance)) == accepted
 
 
 def test_boundary():
