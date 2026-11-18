@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "grammar_builder.h"
+#include "support/encoding.h"
 #include "support/utils.h"
 
 namespace xgrammar {
@@ -539,12 +540,21 @@ class JSONSchemaConverter {
   std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
 
-  // Trie over property names, for key patterns that exclude specific properties
   struct TrieNode {
     bool is_terminal = false;
-    std::map<uint8_t, TrieNode> children;
+    std::map<TCodepoint, TrieNode> children;
+    int state = -1;  // Assigned when lowering the trie, after all children have a state.
+    void Insert(const std::string& key);
   };
-  int32_t BuildTrieBody(const TrieNode& node, const std::string& rule_name);
+  static FSMWithStartEnd BuildKeyFSM(TrieNode&& root);
+  int32_t PropertyKeyCharacter(TCodepoint cp);
+  int32_t EmitFilteredString(
+      FSMWithStartEnd fsm,
+      const std::string& rule_name,
+      bool close_json_string,
+      bool share_continuations
+  );
+  std::unordered_map<int32_t, int32_t> key_character_rules_;
 
   // Reused grammar expression ids
   std::optional<int32_t> empty_expr_id_;

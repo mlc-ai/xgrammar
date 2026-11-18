@@ -2,6 +2,7 @@
 #include <xgrammar/xgrammar.h>
 
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -20,6 +21,15 @@ TEST(JSONTest, BuiltinGrammarAcceptsAllRFCWhitespace) {
   EXPECT_TRUE(MatchesEntireString(compiled, "{\r\"value\"\r:\r3\r}"));
   EXPECT_TRUE(MatchesEntireString(compiled, "{\r\n\"value\"\r\n:\r\n3\r\n}"));
   EXPECT_TRUE(MatchesEntireString(compiled, "{ \t\r\n\"value\"\n\r\t :\r 3\t\n}"));
+}
+
+TEST(JSONTest, RejectMalformedUTF8InSchemaPropertyNames) {
+  // Exercise the byte-oriented C++ API; Python strings already contain Unicode.
+  for (const char* bytes : {"\x80", "\xc0\x80", "\xe2\x82", "\xed\xa0\x80", "\xf4\x90\x80\x80"}) {
+    auto schema =
+        std::string(R"({"type":"object","properties":{")") + bytes + R"(":{"type":"integer"}}})";
+    EXPECT_THROW(Grammar::FromJSONSchema(schema), std::runtime_error);
+  }
 }
 
 TEST(JSONTest, JSONSchemaCarriageReturnWhitespaceModes) {

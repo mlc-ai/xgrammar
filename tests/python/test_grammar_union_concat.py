@@ -99,7 +99,10 @@ basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_a
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
 basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
-root_0 ::= (("{" [ \n\r\t]* "\"arg\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+root_0 ::= (("{" [ \n\r\t]* "\"" key_character key_character_1 key_character_2 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+key_character ::= (("a") | ("\\u0061"))
+key_character_1 ::= (("r") | ("\\u0072"))
+key_character_2 ::= (("g") | ("\\u0067"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (("0") | ([1-9] [0-9]*))
@@ -130,7 +133,10 @@ basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_a
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
 basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
-root_0 ::= (("{" [ \n\r\t]* "\"arg\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+root_0 ::= (("{" [ \n\r\t]* "\"" key_character key_character_1 key_character_2 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string [ \n\r\t]* "}") | ("{" [ \n\r\t]* "}"))
+key_character ::= (("a") | ("\\u0061"))
+key_character_1 ::= (("r") | ("\\u0072"))
+key_character_2 ::= (("g") | ("\\u0067"))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (("0") | ([1-9] [0-9]*))
@@ -157,6 +163,16 @@ root_2 ::= (([a-z] root_2) | ([a-z]))
     assert str(grammar_union) == expected_grammar_union
     grammar_concat = xgr.Grammar.concat(stag_grammar, start_grammar)
     assert str(grammar_concat) == expected_grammar_concat
+
+    assert _is_grammar_accept_string(grammar_union, "abc")
+    for key in ["arg", r"\u0061rg", r"a\u0072g", r"\u0061\u0072\u0067"]:
+        valid = f'start{{"{key}":"value"}}end'
+        invalid = f'start{{"{key}":1}}end'
+        assert _is_grammar_accept_string(grammar_union, valid)
+        assert not _is_grammar_accept_string(grammar_union, invalid)
+        assert _is_grammar_accept_string(grammar_concat, valid + "abc")
+        assert not _is_grammar_accept_string(grammar_concat, invalid + "abc")
+        assert not _is_grammar_accept_string(grammar_concat, valid)
 
 
 def test_grammar_union_concat_compiled_semantics():

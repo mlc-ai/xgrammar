@@ -20,6 +20,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
 #include <unordered_map>
@@ -33,6 +34,7 @@
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
 #include "regex_converter.h"
+#include "support/encoding.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
 
@@ -2204,28 +2206,120 @@ std::string JSONSchemaConverter::GetKeyPattern() const { return kBasicString; }
 
 int32_t JSONSchemaConverter::KeyPatternExpression() { return RuleRef(GetKeyPattern()); }
 
-int32_t JSONSchemaConverter::BuildTrieBody(const TrieNode& node, const std::string& rule_name) {
-  std::vector<int32_t> choices;
-  if (!node.is_terminal) {
-    choices.push_back(ByteString("\""));
+namespace {
+
+std::vector<TCodepoint> DecodePropertyName(const std::string& key) {
+  XGRAMMAR_CHECK(ValidUTF8PrefixLength(key) == key.size())
+      << "JSON property name contains invalid UTF-8";
+  std::vector<TCodepoint> result;
+  for (size_t offset = 0; offset < key.size();) {
+    auto [codepoint, length] = ParseNextUTF8(key.data() + offset);
+    result.push_back(codepoint);
+    offset += length;
+  }
+  return result;
+}
+
+std::string UnicodeEscape(int unit) {
+  static constexpr char digits[] = "0123456789abcdef";
+  std::string result = "\\u0000";
+  for (int i = 5; i >= 2; --i, unit >>= 4) result[i] = digits[unit & 15];
+  return result;
+}
+
+// Only the a-f digits in a Unicode escape are case insensitive.
+struct KeySpelling {
+  std::string bytes;
+  bool unicode_escape = false;
+  bool IsHexLetter(size_t i) const { return unicode_escape && bytes[i] >= 'a' && bytes[i] <= 'f'; }
+};
+
+std::vector<KeySpelling> KeySpellings(TCodepoint cp) {
+  std::vector<KeySpelling> result;
+  if (cp >= 0x20 && cp != '"' && cp != '\\') result.push_back({CharToUTF8(cp)});
+  static constexpr char controls[] = "\"\\/\b\f\n\r\t";
+  static constexpr char escaped[] = "\"\\/bfnrt";
+  for (size_t i = 0; i < sizeof(controls) - 1; ++i) {
+    if (cp == controls[i]) result.push_back({std::string("\\") + escaped[i]});
+  }
+  if (cp <= 0xffff) {
+    result.push_back({UnicodeEscape(cp), true});
+  } else {
+    int offset = cp - 0x10000;
+    result.push_back(
+        {UnicodeEscape(0xd800 + (offset >> 10)) + UnicodeEscape(0xdc00 + (offset & 0x3ff)), true}
+    );
+  }
+  return result;
+}
+
+void AddKeySpelling(
+    FSM* fsm,
+    int state,
+    int child,
+    const KeySpelling& spelling,
+    std::map<std::pair<int, uint8_t>, int>* prefixes
+) {
+  for (size_t i = 0; i < spelling.bytes.size(); ++i) {
+    uint8_t byte = spelling.bytes[i];
+    int next = child;
+    if (i + 1 < spelling.bytes.size()) {
+      auto [it, fresh] = prefixes->emplace(std::make_pair(state, byte), -1);
+      if (!fresh) {
+        state = it->second;
+        continue;
+      }
+      next = it->second = fsm->AddState();
+    }
+    fsm->AddEdge(state, next, byte, byte);
+    if (spelling.IsHexLetter(i)) {
+      int upper = byte - 'a' + 'A';
+      fsm->AddEdge(state, next, upper, upper);
+    }
+    state = next;
+  }
+}
+
+}  // namespace
+
+void JSONSchemaConverter::TrieNode::Insert(const std::string& key) {
+  // The schema parser already interpreted JSON escapes. Decode only the UTF-8.
+  TrieNode* node = this;
+  for (auto cp : DecodePropertyName(key)) node = &node->children[cp];
+  node->is_terminal = true;
+}
+
+FSMWithStartEnd JSONSchemaConverter::BuildKeyFSM(TrieNode&& root) {
+  std::vector<TrieNode*> nodes{&root};
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    for (auto& entry : nodes[i]->children) nodes.push_back(&entry.second);
   }
 
-  std::vector<CharacterClassElement> excluded = {
-      {0, 0x1f}, {'"', '"'}, {'\\', '\\'}, {'\r', '\r'}, {'\n', '\n'}
-  };
-  for (const auto& [character, child] : node.children) {
-    static_cast<void>(child);
-    excluded.push_back({character, character});
+  FSM fsm;
+  std::vector<int> ends;
+  std::map<std::pair<bool, std::map<TCodepoint, int>>, int> suffixes;
+  // Process children first so equal suffixes (e.g. field_1_name and field_2_name)
+  // reuse the same state. Literal and escaped spellings converge on that state.
+  for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
+    TrieNode& node = **it;
+    std::map<TCodepoint, int> children;
+    for (const auto& [cp, child] : node.children) children.emplace(cp, child.state);
+    auto [suffix, fresh] = suffixes.emplace(std::make_pair(node.is_terminal, children), -1);
+    if (fresh) {
+      int start = suffix->second = fsm.AddState();
+      if (node.is_terminal) ends.push_back(start);
+      std::map<std::pair<int, uint8_t>, int> prefixes;
+      for (auto [cp, child] : children) {
+        for (const auto& spelling : KeySpellings(cp)) {
+          AddKeySpelling(&fsm, start, child, spelling, &prefixes);
+        }
+      }
+    }
+    node.state = suffix->second;
+    // Release processed descendants bottom-up, even for a very long name.
+    node.children.clear();
   }
-  choices.push_back(Sequence({builder_.AddCharacterClass(excluded, true), RuleRef(kBasicStringSub)})
-  );
-  choices.push_back(Sequence({ByteString("\\"), RuleRef(kBasicEscape), RuleRef(kBasicStringSub)}));
-  for (const auto& [character, child] : node.children) {
-    choices.push_back(Sequence(
-        {ByteString(std::string(1, static_cast<char>(character))), BuildTrieBody(child, rule_name)}
-    ));
-  }
-  return Choice(choices);
+  return FSMWithStartEnd(fsm, root.state, std::move(ends), true);
 }
 
 int32_t JSONSchemaConverter::GetKeyPatternExcluding(
@@ -2234,34 +2328,17 @@ int32_t JSONSchemaConverter::GetKeyPatternExcluding(
   if (properties.empty()) {
     return KeyPatternExpression();
   }
-  if (!excludes_.empty()) {
-    std::vector<std::string> keys;
-    for (const auto& property : properties) {
-      auto encoded = picojson::value(property.name).serialize(false);
-      keys.push_back(encoded.substr(1, encoded.size() - 2));
-    }
-    return Sequence(
-        {ByteString("\""),
-         ExcludingString(kJSONStringBodyRegex, rule_name + "_addl_key", true, keys)}
-    );
-  }
-
-  // Build trie from property names
-  // TODO(linzhang): The trie only excludes the literal unescaped spelling of each property name.
   TrieNode root;
-  for (const auto& prop : properties) {
-    TrieNode* cur = &root;
-    for (unsigned char c : prop.name) {
-      cur = &cur->children[c];
-    }
-    cur->is_terminal = true;
-  }
-
-  int32_t key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_addl_key");
-  std::string key_rule_name = builder_.GetRule(key_rule_id).name;
-  builder_.UpdateRuleBody(
-      key_rule_id, Sequence({ByteString("\""), BuildTrieBody(root, key_rule_name)})
-  );
+  for (const auto& property : properties) root.Insert(property.name);
+  auto remaining = BuildKeyFSM(std::move(root)).Not();
+  XGRAMMAR_CHECK(remaining.IsOk());
+  auto valid = GrammarFSMBuilder::Regex(kJSONStringBodyRegex, false);
+  XGRAMMAR_CHECK(valid.IsOk());
+  auto other = FSMWithStartEnd::Intersect(std::move(valid).Unwrap(), std::move(remaining).Unwrap());
+  XGRAMMAR_CHECK(other.IsOk()) << "Cannot construct additional JSON key language";
+  auto key_rule_id = builder_.AddEmptyRuleWithHint(rule_name + "_addl_key");
+  auto body = EmitFilteredString(std::move(other).Unwrap(), rule_name + "_addl_key", true, true);
+  builder_.UpdateRuleBody(key_rule_id, Sequence({ByteString("\""), body}));
   builder_.UpdateLookaheadAssertion(
       key_rule_id,
       Sequence(
@@ -2441,12 +2518,7 @@ int32_t JSONSchemaConverter::ExcludingString(
   auto parsed = GrammarFSMBuilder::Regex(regex, false);
   XGRAMMAR_CHECK(parsed.IsOk()) << "Cannot build the FSM of " << regex << ": "
                                 << std::move(parsed).UnwrapErr().what();
-  auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, excludes_});
-  XGRAMMAR_CHECK(exclusion.has_value()) << "Invalid JSONSchemaFormat.excludes";
-  auto intersected = FSMWithStartEnd::Intersect(std::move(parsed).Unwrap(), *exclusion);
-  XGRAMMAR_CHECK(intersected.IsOk()) << "Cannot intersect JSONSchemaFormat.excludes: "
-                                     << std::move(intersected).UnwrapErr().what();
-  auto fsm = std::move(intersected).Unwrap();
+  auto fsm = std::move(parsed).Unwrap();
   if (!excluded_keys.empty()) {
     auto keys = TrieFSMBuilder::Build(excluded_keys, {});
     XGRAMMAR_CHECK(keys.has_value());
@@ -2455,6 +2527,23 @@ int32_t JSONSchemaConverter::ExcludingString(
     auto filtered = FSMWithStartEnd::Intersect(fsm, std::move(other_keys).Unwrap());
     XGRAMMAR_CHECK(filtered.IsOk());
     fsm = std::move(filtered).Unwrap();
+  }
+  return EmitFilteredString(std::move(fsm), rule_name, close_json_string, !excluded_keys.empty());
+}
+
+int32_t JSONSchemaConverter::EmitFilteredString(
+    FSMWithStartEnd fsm,
+    const std::string& rule_name,
+    bool close_json_string,
+    bool share_continuations
+) {
+  if (!excludes_.empty()) {
+    auto exclusion = GrammarFSMBuilder::TagDispatch({{}, false, excludes_});
+    XGRAMMAR_CHECK(exclusion.has_value()) << "Invalid JSONSchemaFormat.excludes";
+    auto intersected = FSMWithStartEnd::Intersect(fsm, *exclusion);
+    XGRAMMAR_CHECK(intersected.IsOk()) << "Cannot intersect JSONSchemaFormat.excludes: "
+                                       << std::move(intersected).UnwrapErr().what();
+    fsm = std::move(intersected).Unwrap();
   }
   // Do not emit paths that can never complete after exclusions. Otherwise a matcher
   // could accept a forbidden alternative's prefix and reach an all-rejected mask later.
@@ -2594,7 +2683,7 @@ int32_t JSONSchemaConverter::ExcludingString(
       bool single_ascii = codepoints.size() == 1 && codepoints[0].lower == codepoints[0].upper &&
                           codepoints[0].upper <= 0x7f;
       // Keep self-loops local for the compiler's speculative string-mask fast path.
-      if (!excluded_keys.empty() && !single_ascii && target != state) {
+      if (share_continuations && !single_ascii && target != state) {
         std::vector<int32_t> key{target};
         key.reserve(1 + codepoints.size() * 2);
         for (const auto& range : codepoints) {
@@ -2891,10 +2980,50 @@ int32_t JSONSchemaConverter::GenerateArray(const ArraySpec& spec, const std::str
 int32_t JSONSchemaConverter::FormatPropertyKey(
     const std::string& key, const SchemaSpecPtr& schema
 ) {
-  if (!IsAllowedLiteral(picojson::value(key))) {
-    return Unsatisfiable();
+  // A serialized name contains only bytes from the literal name or from JSON escapes.
+  // Most format control markers contain a byte (e.g. '<') absent from either set.
+  constexpr std::string_view escape_bytes = R"(\u0123456789abcdefABCDEF"/nrt)";
+  auto may_occur = [&](const std::string& marker) {
+    return std::all_of(marker.begin(), marker.end(), [&](char c) {
+      return escape_bytes.find(c) != std::string_view::npos || key.find(c) != std::string::npos;
+    });
+  };
+  if (std::any_of(excludes_.begin(), excludes_.end(), may_occur)) {
+    TrieNode root;
+    root.Insert(key);
+    return Sequence(
+        {ByteString("\""),
+         EmitFilteredString(BuildKeyFSM(std::move(root)), "property_key", true, false)}
+    );
   }
-  return ByteString(picojson::value(key).serialize());
+  std::vector<int32_t> elements{ByteString("\"")};
+  for (auto cp : DecodePropertyName(key)) {
+    elements.push_back(PropertyKeyCharacter(cp));
+  }
+  elements.push_back(ByteString("\""));
+  return Sequence(elements);
+}
+
+int32_t JSONSchemaConverter::PropertyKeyCharacter(TCodepoint cp) {
+  auto [it, inserted] = key_character_rules_.emplace(cp, -1);
+  if (inserted) {
+    std::vector<int32_t> choices;
+    for (const auto& spelling : KeySpellings(cp)) {
+      std::vector<int32_t> parts;
+      size_t begin = 0;
+      for (size_t i = 0; i < spelling.bytes.size(); ++i) {
+        if (!spelling.IsHexLetter(i)) continue;
+        if (i > begin) parts.push_back(ByteString(spelling.bytes.substr(begin, i - begin)));
+        int lower = spelling.bytes[i], upper = lower - 'a' + 'A';
+        parts.push_back(builder_.AddCharacterClass({{upper, upper}, {lower, lower}}));
+        begin = i + 1;
+      }
+      if (begin < spelling.bytes.size()) parts.push_back(ByteString(spelling.bytes.substr(begin)));
+      choices.push_back(Sequence(parts));
+    }
+    it->second = builder_.AddRuleWithHint("key_character", Choice(choices));
+  }
+  return RuleRef(it->second);
 }
 
 int32_t JSONSchemaConverter::FormatProperty(

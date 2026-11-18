@@ -43,17 +43,27 @@ expected_grammar_test_structural_tag_after_optimization = r"""basic_escape ::= (
 basic_string_sub ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub) | ("\\" basic_escape basic_string_sub)) (=([ \n\r\t]* [,}\]:]))
 basic_integer ::= (("0") | (basic_integer_1 [1-9] [0-9]*))
 basic_string ::= (("\"" basic_string_sub)) (=(root_part_0 [ \n\r\t]* "}"))
-root_0 ::= (("{" [ \n\r\t]* "\"arg1\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
-root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg2\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer)) (=([ \n\r\t]* "}"))
+root_0 ::= (("{" [ \n\r\t]* "\"" key_character key_character_1 key_character_2 key_character_3 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
+key_character ::= (("a") | ("\\u0061"))
+key_character_1 ::= (("r") | ("\\u0072"))
+key_character_2 ::= (("g") | ("\\u0067"))
+key_character_3 ::= (("1") | ("\\u0031")) (=("\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
+key_character_4 ::= (("2") | ("\\u0032")) (=("\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer))
+root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"" key_character key_character_1 key_character_2 key_character_4 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer)) (=([ \n\r\t]* "}"))
 basic_integer_1 ::= ("" | ("-")) (=([1-9] [0-9]*))
 basic_escape_1 ::= (([\"\\/bfnrt]) | ("u" [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9] [A-Fa-f0-9])) (=(basic_string_sub_1))
 basic_string_sub_1 ::= (("\"") | ([^\0-\x1f\"\\\r\n] basic_string_sub_1) | ("\\" basic_escape_1 basic_string_sub_1)) (=([ \n\r\t]* [,}\]:]))
 basic_number_6 ::= ((basic_number_1_1 basic_number_2_1 basic_number_3_1 basic_number_5_1)) (=(root_part_0_1 [ \n\r\t]* "}"))
 basic_string_1 ::= (("\"" basic_string_sub_1))
-root_1 ::= (("{" [ \n\r\t]* "\"arg3\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}")) (=("</function>"))
+root_1 ::= (("{" [ \n\r\t]* "\"" key_character_5 key_character_1_1 key_character_2_1 key_character_3_1 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}")) (=("</function>"))
+key_character_5 ::= (("a") | ("\\u0061"))
+key_character_1_1 ::= (("r") | ("\\u0072"))
+key_character_2_1 ::= (("g") | ("\\u0067"))
+key_character_3_1 ::= (("3") | ("\\u0033")) (=("\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}"))
 root_prop_1 ::= (("[" [ \n\r\t]* basic_string_1 root_prop_1_2 [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
 root_prop_1_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string_1)) (=(root_prop_1_1))
-root_part_0_1 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg4\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1)) (=([ \n\r\t]* "}"))
+key_character_4_1 ::= (("4") | ("\\u0034")) (=("\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1))
+root_part_0_1 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"" key_character_5 key_character_1_1 key_character_2_1 key_character_4_1 "\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1)) (=([ \n\r\t]* "}"))
 basic_number_1_1 ::= ("" | ("-")) (=(basic_number_2_1 basic_number_3_1 basic_number_5_1))
 basic_number_2_1 ::= (("0") | ([1-9] [0-9]*)) (=(basic_number_3_1 basic_number_5_1))
 basic_number_3_1 ::= ("" | ("." basic_number_3_3)) (=(basic_number_5_1))
@@ -87,8 +97,13 @@ basic_object ::= (("{" [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_a
 basic_number_digits ::= (([0-9]))
 basic_array_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any))
 basic_object_properties ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string [ \n\r\t]* ":" [ \n\r\t]* basic_any))
-root_0 ::= (("{" [ \n\r\t]* "\"arg1\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
-root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg2\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer))
+root_0 ::= (("{" [ \n\r\t]* "\"" key_character key_character_1 key_character_2 key_character_3 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_string root_part_0 [ \n\r\t]* "}"))
+key_character ::= (("a") | ("\\u0061"))
+key_character_1 ::= (("r") | ("\\u0072"))
+key_character_2 ::= (("g") | ("\\u0067"))
+key_character_3 ::= (("1") | ("\\u0031"))
+key_character_4 ::= (("2") | ("\\u0032"))
+root_part_0 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"" key_character key_character_1 key_character_2 key_character_4 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_integer))
 basic_integer_1 ::= ("" | ("-"))
 basic_number_1 ::= ("" | ("-"))
 basic_number_2 ::= (("0") | ([1-9] [0-9]*))
@@ -108,10 +123,15 @@ basic_object_1 ::= (("{" [ \n\r\t]* basic_string_1 [ \n\r\t]* ":" [ \n\r\t]* bas
 basic_number_digits_1 ::= (([0-9]))
 basic_array_items_1 ::= (([ \n\r\t]* "," [ \n\r\t]* basic_any_1))
 basic_object_properties_1 ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string_1 [ \n\r\t]* ":" [ \n\r\t]* basic_any_1))
-root_1 ::= (("{" [ \n\r\t]* "\"arg3\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}"))
+root_1 ::= (("{" [ \n\r\t]* "\"" key_character_5 key_character_1_1 key_character_2_1 key_character_3_1 "\"" [ \n\r\t]* ":" [ \n\r\t]* basic_number_6 root_part_0_1 [ \n\r\t]* "}"))
+key_character_5 ::= (("a") | ("\\u0061"))
+key_character_1_1 ::= (("r") | ("\\u0072"))
+key_character_2_1 ::= (("g") | ("\\u0067"))
+key_character_3_1 ::= (("3") | ("\\u0033"))
 root_prop_1 ::= (("[" [ \n\r\t]* basic_string_1 root_prop_1_items{0, -1} [ \n\r\t]* "]") | ("[" [ \n\r\t]* "]"))
 root_prop_1_items ::= (([ \n\r\t]* "," [ \n\r\t]* basic_string_1))
-root_part_0_1 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"arg4\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1))
+key_character_4_1 ::= (("4") | ("\\u0034"))
+root_part_0_1 ::= (([ \n\r\t]* "," [ \n\r\t]* "\"" key_character_5 key_character_1_1 key_character_2_1 key_character_4_1 "\"" [ \n\r\t]* ":" [ \n\r\t]* root_prop_1))
 basic_integer_1_1 ::= ("" | ("-"))
 basic_number_1_1 ::= ("" | ("-"))
 basic_number_2_1 ::= (("0") | ([1-9] [0-9]*))
@@ -183,6 +203,35 @@ def test_structural_tag_compiler():
     compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]))
     compiled_grammar = compiler.compile_structural_tag(tags, triggers)
     assert str(compiled_grammar.grammar) == expected_grammar_test_structural_tag_after_optimization
+
+
+@pytest.mark.parametrize("compile_directly", [False, True])
+@pytest.mark.parametrize(
+    "keys",
+    [("arg1", "arg2"), (r"\u0061rg1", r"a\u0072g2"), (r"arg\u0031", r"\u0061\u0072\u0067\u0032")],
+)
+def test_structural_tag_property_spellings(compile_directly, keys):
+    class Schema(BaseModel):
+        arg1: str
+        arg2: int
+
+    tags = [xgr.StructuralTagItem(begin="<function=f>", schema=Schema, end="</function>")]
+    triggers = ["<function="]
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
+    if compile_directly:
+        compiled = compiler.compile_structural_tag(tags, triggers)
+    else:
+        grammar = xgr.Grammar.from_structural_tag(tags, triggers)
+        compiled = compiler.compile_grammar(grammar)
+
+    for values, expected in [
+        (('"value"', "1"), True),
+        (("1", "1"), False),
+        (('"value"', '"bad"'), False),
+    ]:
+        text = f'<function=f>{{"{keys[0]}":{values[0]},"{keys[1]}":{values[1]}}}</function>'
+        matcher = xgr.GrammarMatcher(compiled)
+        assert (matcher.accept_string(text) and matcher.is_completed()) == expected
 
 
 @pytest.mark.hf_token_required
