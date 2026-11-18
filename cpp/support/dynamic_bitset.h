@@ -299,7 +299,7 @@ class DynamicBitset {
     return true;
   }
 
- private:
+  /*! \brief The index of the lowest set bit of a nonzero value. */
   static int LowestBit(uint32_t value) {
 #ifdef __GNUC__
     return __builtin_ctz(value);
@@ -312,6 +312,7 @@ class DynamicBitset {
 #endif  // __GNUC__
   }
 
+ private:
   static int PopCount(uint32_t value) {
 #ifdef __GNUC__
     return __builtin_popcount(value);

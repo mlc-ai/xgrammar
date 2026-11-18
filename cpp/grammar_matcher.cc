@@ -213,6 +213,33 @@ std::pair<bool, int> _IsSingleTokenBitmask(const DLTensor& bitmask, int vocab_si
   }
 }
 
+/*!
+ * \brief Set the logits of the tokens that one row of a bitmask rejects to minus_infinity.
+ * \details The mask is read one 32-bit word at a time. A fully rejected word becomes one
+ * contiguous fill, which the compiler can vectorize, and a mixed word visits only its rejected
+ * bits. Allowed logits are never written, so their bit patterns (NaN payloads, -0) are kept. Bits
+ * at or beyond vocab_size are padding and are ignored.
+ */
+template <typename T>
+void ApplyPackedMask(T* logits, const uint32_t* mask, int vocab_size, T minus_infinity) {
+  const int num_full_words = vocab_size / 32;
+  for (int word_index = 0; word_index < num_full_words; ++word_index) {
+    uint32_t rejected = ~mask[word_index];
+    if (rejected == 0) continue;
+    T* block = logits + word_index * 32;
+    if (rejected == ~uint32_t{0}) {
+      std::fill_n(block, 32, minus_infinity);
+      continue;
+    }
+    for (; rejected != 0; rejected &= rejected - 1) {
+      block[DynamicBitset::LowestBit(rejected)] = minus_infinity;
+    }
+  }
+  for (int i = num_full_words * 32; i < vocab_size; ++i) {
+    if (((mask[num_full_words] >> (i % 32)) & 1) == 0) logits[i] = minus_infinity;
+  }
+}
+
 void ApplyMask32Bits(
     DLTensor* logits,
     const DLTensor& bitmask,
@@ -230,20 +257,14 @@ void ApplyMask32Bits(
   if (indices.has_value()) {
     for (auto idx : indices.value()) {
       uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
-      DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
-      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = -std::numeric_limits<float>::infinity();
-      }
+      ApplyPackedMask(logits_ptr, data_ptr, vocab_size, -std::numeric_limits<float>::infinity());
     }
   } else {
     for (int idx = 0; idx < logits_shape.first; ++idx) {
       uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
-      DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
-      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = -std::numeric_limits<float>::infinity();
-      }
+      ApplyPackedMask(logits_ptr, data_ptr, vocab_size, -std::numeric_limits<float>::infinity());
     }
   }
 }
@@ -279,20 +300,14 @@ void ApplyMask16Bits(
   if (indices.has_value()) {
     for (auto idx : indices.value()) {
       uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
-      DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
-      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinity;
-      }
+      ApplyPackedMask(logits_ptr, data_ptr, vocab_size, kMinusInfinity);
     }
   } else {
     for (int idx = 0; idx < logits_shape.first; ++idx) {
       uint32_t* data_ptr = reinterpret_cast<uint32_t*>(bitmask.data) + idx * bitmask_stride0;
-      DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
-      for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinity;
-      }
+      ApplyPackedMask(logits_ptr, data_ptr, vocab_size, kMinusInfinity);
     }
   }
 }
