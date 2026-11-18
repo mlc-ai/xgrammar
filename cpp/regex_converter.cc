@@ -172,6 +172,13 @@ std::string RegexConverter::HandleCharEscape() {
       (current_[1] == 'x' && end_ - current_ < 4) || (current_[1] == 'c' && end_ - current_ < 3)) {
     RaiseError("Escape sequence is not finished.");
   }
+  // In a regex \x takes exactly two hex digits. ParseNextEscaped follows the EBNF rule instead and
+  // reads every hex digit that follows, so "\x41B" would become U+041B rather than "AB".
+  if (current_[1] == 'x' && HexCharToInt(current_[2]) != -1 && HexCharToInt(current_[3]) != -1) {
+    TCodepoint value = HexCharToInt(current_[2]) * 16 + HexCharToInt(current_[3]);
+    current_ += 4;
+    return EscapeString(value);
+  }
   auto [codepoint, len] = ParseNextEscaped(current_, CUSTOM_ESCAPE_MAP);
   if (codepoint != CharHandlingError::kInvalidEscape) {
     current_ += len;
