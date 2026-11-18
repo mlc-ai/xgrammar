@@ -702,7 +702,7 @@ class SchemaParser {
   std::string ComputeCacheKey(const picojson::value& schema);
 
   static void WarnUnsupportedKeywords(
-      const picojson::object& schema, const std::vector<std::string>& keywords, bool verbose = false
+      const picojson::object& schema, const std::vector<std::string>& keywords
   );
 
   Config config_;
@@ -786,11 +786,8 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
 }
 
 void SchemaParser::WarnUnsupportedKeywords(
-    const picojson::object& schema, const std::vector<std::string>& keywords, bool verbose
+    const picojson::object& schema, const std::vector<std::string>& keywords
 ) {
-  if (!verbose) {
-    return;
-  }
   for (const auto& keyword : keywords) {
     if (schema.find(keyword) != schema.end()) {
       XGRAMMAR_LOG(WARNING) << "Keyword " << keyword << " is not supported";
@@ -1213,7 +1210,7 @@ Result<NullSpec, SchemaError> SchemaParser::ParseNull(const picojson::object&) {
 }
 
 Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& schema) {
-  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "minContains", "maxContains"});
+  WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "maxContains"});
   ArraySpec spec;
 
   if (schema.count("prefixItems")) {
@@ -1287,6 +1284,8 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
           SchemaErrorType::kInvalidSchema, "minContains must be an integer"
       );
     }
+    XGRAMMAR_LOG(WARNING) << "minContains is only approximated as a minimum total array length; "
+                             "matching items are not counted";
     spec.min_items = std::max(spec.min_items, schema.at("minContains").get<int64_t>());
   }
   if (schema.count("maxItems")) {
