@@ -2875,6 +2875,92 @@ def test_string_pattern_with_length_still_ignores_the_bound(capfd):
     assert _is_grammar_accept_string(grammar, '"abcd"')
 
 
+# --- string patterns whose regex syntax is not supported (issue #1001) -------------------------
+#
+# A pattern that the regex engine compiling it cannot parse used to fail the whole schema, so one
+# such pattern in one tool broke a request with many tools. It is now ignored with a warning, like
+# the lookahead assertions the FSM engine already skips: the grammar only accepts more strings.
+
+_UNSUPPORTED_PATTERNS = [
+    pytest.param(r"(?<=a)b", id="lookbehind"),
+    pytest.param(r"(?<!a)b", id="negative-lookbehind"),
+    pytest.param(r"^(a)\1$", id="backreference"),
+    pytest.param(r"\bword\b", id="word-boundary"),
+    pytest.param(r"^\p{L}+$", id="unicode-property-class"),
+    pytest.param(r"(?s)a.b", id="dotall-flag"),
+    pytest.param(r"(?>ab)c", id="atomic-group"),
+]
+
+
+@pytest.mark.parametrize("json_format", ["json", "qwen_xml"])
+@pytest.mark.parametrize("pattern", _UNSUPPORTED_PATTERNS)
+def test_string_unsupported_pattern_is_ignored_with_a_warning(capfd, pattern, json_format):
+    schema = {
+        "type": "object",
+        "properties": {"k": {"type": "string", "pattern": pattern}},
+        "required": ["k"],
+    }
+    output = _compile_and_capture(capfd, schema, json_format=json_format)
+    assert f'pattern "{pattern}" is not supported' in output, output
+    assert "ignoring pattern" in output, output
+
+
+def test_string_lookahead_pattern_compiles_for_xml_tool_calls(capfd):
+    # The issue's example, from a real tool schema. The JSON converter's FSM engine already skips
+    # the lookahead; the XML tool-calling converter compiles patterns through the CFG parser,
+    # which rejected it and failed the whole schema.
+    schema = {
+        "type": "object",
+        "properties": {"path": {"type": "string", "pattern": r"^(?!\.\.?(?:\/|$))[^\s]+$"}},
+        "required": ["path"],
+    }
+    output = _compile_and_capture(capfd, schema, json_format="qwen_xml")
+    assert "is not supported" in output, output
+
+
+@pytest.mark.parametrize("pattern", _UNSUPPORTED_PATTERNS)
+def test_string_unsupported_pattern_compiles_as_a_plain_string(capfd, pattern):
+    grammar = xgr.Grammar.from_json_schema(json.dumps({"type": "string", "pattern": pattern}))
+    plain = xgr.Grammar.from_json_schema(json.dumps({"type": "string"}))
+    capfd.readouterr()
+    for instance in ['"abc"', '""', '"a \\"quoted\\" word"', "1"]:
+        assert _is_grammar_accept_string(grammar, instance) == _is_grammar_accept_string(
+            plain, instance
+        ), instance
+
+
+def test_string_unsupported_pattern_keeps_length_bounds(capfd):
+    # With the pattern ignored, the length-bounded branch applies again.
+    schema = {"type": "string", "pattern": r"(?<=a)b", "minLength": 2, "maxLength": 4}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    capfd.readouterr()
+    assert not _is_grammar_accept_string(grammar, '"a"')
+    assert _is_grammar_accept_string(grammar, '"abcd"')
+    assert not _is_grammar_accept_string(grammar, '"abcde"')
+
+
+def test_string_supported_pattern_is_still_enforced_next_to_an_unsupported_one(capfd):
+    # Ignoring is per pattern: a sibling property's supported pattern keeps constraining it.
+    schema = {
+        "type": "object",
+        "properties": {
+            "a": {"type": "string", "pattern": r"\bx"},
+            "b": {"type": "string", "pattern": "^[0-9]+$"},
+        },
+        "required": ["a", "b"],
+    }
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    capfd.readouterr()
+    assert _is_grammar_accept_string(grammar, '{"a": "anything", "b": "123"}')
+    assert not _is_grammar_accept_string(grammar, '{"a": "anything", "b": "x"}')
+
+
+def test_string_pattern_with_a_null_character_still_raises():
+    # Only unsupported regex syntax is relaxed; an invalid pattern is still an error.
+    with pytest.raises(RuntimeError, match="null characters"):
+        xgr.Grammar.from_json_schema(json.dumps({"type": "string", "pattern": "a\u0000b"}))
+
+
 def test_type_array():
     schema = {
         "type": ["integer", "string"],
