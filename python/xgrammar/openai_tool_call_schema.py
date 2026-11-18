@@ -96,7 +96,7 @@ class BuiltinToolParam(BaseModel):
     ``web_search_preview`` builtin may be emitted as ``browser.search`` by a
     Harmony-style model. Defaults to ``type`` when omitted.
     """
-    parameters: Optional[Dict[str, Any]] = None
+    parameters: Optional[Union[Dict[str, Any], StrictBool]] = None
     """Argument schema for the builtin tool. XGrammar-specific field.
 
     Hosted/server tool APIs often do not require users to provide this schema,

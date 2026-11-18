@@ -676,6 +676,23 @@ def test_function_with_false_parameters_is_unsatisfiable(model):
         xgr.Grammar.from_structural_tag(tag)
 
 
+@pytest.mark.parametrize("parameters", [True, False])
+def test_harmony_builtin_tool_boolean_schema(parameters):
+    tag = get_model_structural_tag(
+        "harmony",
+        tools=[{"type": "web_search_preview", "name": "browser.search", "parameters": parameters}],
+        tool_choice={"type": "web_search_preview"},
+        reasoning=False,
+    )
+    if parameters:
+        check_stag_with_instance(
+            tag, "<|channel|>commentary to=browser.search code<|message|>[1]<|call|>"
+        )
+    else:
+        with pytest.raises(RuntimeError, match="Schema 'false' cannot accept any value"):
+            xgr.Grammar.from_structural_tag(tag)
+
+
 def test_harmony_builtin_tool_instance():
     """Harmony builtin tools follow the browser sample shape from harmony examples."""
 
