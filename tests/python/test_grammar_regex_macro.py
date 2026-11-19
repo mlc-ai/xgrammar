@@ -480,5 +480,30 @@ def test_json_schema_pattern_properties():
     assert not _is_grammar_accept_string(grammar, '{"AB": 1}')
 
 
+@pytest.mark.parametrize(
+    "regex, accepted, rejected",
+    [
+        (r"(ab*)?", ["", "a", "ab", "abb"], ["b", "bb"]),
+        (r"(a*b)?", ["", "b", "ab", "aab"], ["a", "aa"]),
+        (r"(a+b)?", ["", "ab", "aab"], ["a", "aa", "b"]),
+        (r"(ab*|c)?", ["", "a", "abb", "c"], ["b", "cb"]),
+        (r"[0-9]+\.[0-9]+(-[a-z]+)?", ["1.2", "1.2-rc"], ["1.2rc", "1.2-"]),
+        (r"^[A-Z]+(_[0-9]+)?$", ["ABC", "ABC_1"], ["ABC1", "ABC_"]),
+    ],
+)
+def test_optional_group_does_not_expose_partial_paths(regex, accepted, rejected):
+    # Skipping an optional group must only skip it. It used to be an epsilon edge to an end state
+    # of the group, so whatever followed that end state stayed reachable without the group's
+    # prefix: in "(ab*)?", "b" could be matched without the "a".
+    macro_grammar = xgr.Grammar.from_ebnf(f"root ::= Regex({json.dumps(regex)})")
+    schema_grammar = xgr.Grammar.from_json_schema({"type": "string", "pattern": regex})
+    for text in accepted:
+        assert _is_grammar_accept_string(macro_grammar, text), (regex, text)
+        assert _is_grammar_accept_string(schema_grammar, json.dumps(text)), (regex, text)
+    for text in rejected:
+        assert not _is_grammar_accept_string(macro_grammar, text), (regex, text)
+        assert not _is_grammar_accept_string(schema_grammar, json.dumps(text)), (regex, text)
+
+
 if __name__ == "__main__":
     pytest.main(sys.argv)
