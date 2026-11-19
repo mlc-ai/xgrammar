@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "compiled_grammar_impl.h"
+#include "grammar_functor.h"
 #include "support/int_set.h"
 #include "support/json_parse.h"
 #include "support/json_serializer.h"
@@ -208,10 +209,52 @@ std::vector<std::optional<RepetitionFollowBytes>> FindCountedRepetitionBodies(co
   return result;
 }
 
+/*!
+ * \brief Find acyclic, prefix-free byte rules entered exclusively through counted repeat edges.
+ * Unlike the character-class optimization, this only proves acceptance within the body.
+ * Tokens that might exit into a parent remain available to the ordinary parser.
+ */
+std::vector<bool> FindRepeatInteriorBodies(const Grammar& grammar) {
+  std::vector<bool> eligible(grammar->NumRules(), false);
+  std::vector<bool> referenced(grammar->NumRules(), false);
+  for (int i = 0; i < grammar->NumRules(); ++i) {
+    const auto& rule = grammar->GetRule(i);
+    // Match the lowering pass's grammar-wide restrictions. The original character-class
+    // optimization has its own eligibility analysis and is unchanged.
+    if (rule.max_chars >= 0 || rule.is_lazy) {
+      return std::vector<bool>(grammar->NumRules(), false);
+    }
+    const auto& fsm = grammar->per_rule_fsms[i];
+    eligible[i] = i != grammar->GetRootRuleId() && IsFiniteTerminalRepeatBody(grammar, i) &&
+                  fsm.has_value() && IsDeterministicPrefixFreeByteDAG(fsm->GetFsm());
+  }
+  for (int i = 0; i < grammar->NumRules(); ++i) {
+    if (const auto* stop = grammar->GetSuffixStopInfo(i)) {
+      for (int ref : {stop->body_rule_id, stop->marker_rule_id}) {
+        if (ref >= 0) eligible[ref] = false;
+      }
+    }
+    const auto& fsm = grammar->per_rule_fsms[i];
+    if (!fsm.has_value()) continue;
+    std::unordered_set<int> reachable;
+    fsm->GetFsm().GetReachableStates(&reachable);
+    for (int state : reachable) {
+      for (const auto& edge : fsm->GetFsm().GetFsm().GetEdges(state)) {
+        if (edge.IsRuleRef()) eligible[edge.GetRefRuleId()] = false;
+        if (edge.IsRepeatRef()) {
+          referenced[grammar->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex()).RuleId()] = true;
+        }
+      }
+    }
+  }
+  for (int i = 0; i < grammar->NumRules(); ++i) eligible[i] = eligible[i] && referenced[i];
+  return eligible;
+}
+
 /*! \brief How the body state of a counted repetition decides a token. */
 struct RepetitionTokenClass {
   enum Kind {
-    // Legal exactly when the budget left covers `num_repetitions`.
+    // Has an interior accepting path when the budget covers `num_repetitions`.
     kBudget,
     // Leaves the repetition on its last byte: legal exactly when the budget left covers
     // `num_repetitions` and they complete the lower bound.
@@ -226,22 +269,27 @@ struct RepetitionTokenClass {
 };
 
 /*!
- * \brief Classify `token` in the start state of a counted-repetition body rule whose FSM is `fsm`.
+ * \brief Classify `token` from a state in an acyclic, prefix-free repetition body.
+ * Count completed bodies and reserve one repetition for an unfinished body. Acyclicity ensures
+ * an unfinished body cannot return to its start state. Interior classification proves acceptance;
+ * rejection and exits are used only by the stronger character-class analysis below.
  *
- * A token stays inside the class until its first byte outside it. It cannot leave earlier because
- * no follow byte starts a codepoint of the class (FindCountedRepetitionBodies), and it cannot
- * leave inside a codepoint. So it is decided by the repetition bounds alone when it ends inside the
- * class, or when it leaves on its last byte and every reference accepts that byte. It is rejected
- * when the byte it stops at can neither continue the codepoint nor follow the repetition, or when
- * it needs more repetitions than any reference allows.
+ * For that analysis, a token stays inside the class until its first byte outside it. It cannot
+ * leave earlier because no follow byte starts a codepoint of the class
+ * (FindCountedRepetitionBodies), and it cannot leave inside a codepoint. So it is decided by the
+ * repetition bounds alone when it ends inside the class, or when it leaves on its last byte and
+ * every reference accepts that byte. It is rejected when the byte it stops at can neither continue
+ * the codepoint nor follow the repetition, or when it needs more repetitions than any reference
+ * allows.
  */
 RepetitionTokenClass ClassifyRepetitionToken(
     const CompactFSMWithStartEnd& fsm,
     const RepetitionFollowBytes& follow_bytes,
-    const std::string& token
+    const std::string& token,
+    int initial_state
 ) {
   int32_t num_repetitions = 0;
-  int state = fsm.GetStart();
+  int state = initial_state;
   for (size_t i = 0; i < token.size(); ++i) {
     const auto byte = static_cast<uint8_t>(token[i]);
     const int next_state = NextStateOnByte(fsm.GetFsm(), state, byte);
@@ -264,7 +312,7 @@ RepetitionTokenClass ClassifyRepetitionToken(
       }
     }
   }
-  // A token ending inside a codepoint uses one more repetition to complete it.
+  // A token ending inside a body (including a partial codepoint) needs one more repetition.
   if (state != fsm.GetStart()) {
     ++num_repetitions;
   }
@@ -284,33 +332,46 @@ void PopulateRepeatInteriorBitsets(
   using StoreType = AdaptiveTokenMask::StoreType;
   const auto& sorted_vocab = tokenizer_info.GetSortedDecodedVocab();
   const auto counted_repetition_bodies = FindCountedRepetitionBodies(grammar);
+  const auto interior_bodies = FindRepeatInteriorBodies(grammar);
   for (auto& [state, mask] : *cache) {
+    mask.repeat_residual_indices.clear();
     mask.repeat_interior_char_counts.clear();
     mask.repeat_interior_bitsets.clear();
     mask.repeat_exit_tokens.clear();
-    if (state.rule_id < 0 || !counted_repetition_bodies[state.rule_id].has_value()) {
+    if (state.rule_id < 0 || (!counted_repetition_bodies[state.rule_id].has_value() &&
+                              !interior_bodies[state.rule_id])) {
       continue;
     }
     const auto& fsm = grammar->per_rule_fsms[state.rule_id]->GetFsm();
-    if (state.element_id != fsm.GetStart()) {
+    const bool exclusive =
+        counted_repetition_bodies[state.rule_id].has_value() && state.element_id == fsm.GetStart();
+    // The original character-class path applies only at the body start. Partial states
+    // must satisfy the interior analysis too, including its exclusion of lazy grammars.
+    if ((!exclusive && !interior_bodies[state.rule_id]) || fsm.IsEndState(state.element_id)) {
       continue;
     }
     // Bucket the budget-decided tokens by the repetitions they consume, keeping the
     // sorted-vocabulary order.
     std::map<int32_t, std::vector<int32_t>> tokens_by_repetitions;
     std::vector<int32_t> decided_indices;
-    for (int32_t index = 0; index < static_cast<int32_t>(sorted_vocab.size()); ++index) {
+    const auto num_candidates = exclusive ? sorted_vocab.size() : mask.uncertain_indices.size();
+    for (size_t i = 0; i < num_candidates; ++i) {
+      const int32_t index = exclusive ? static_cast<int32_t>(i) : mask.uncertain_indices[i];
       const auto token_class = ClassifyRepetitionToken(
-          fsm, *counted_repetition_bodies[state.rule_id], sorted_vocab[index].second
+          fsm,
+          exclusive ? *counted_repetition_bodies[state.rule_id]
+                    : RepetitionFollowBytes{ByteSet(), ByteSet(), INT32_MAX},
+          sorted_vocab[index].second,
+          state.element_id
       );
       if (token_class.kind == RepetitionTokenClass::kBudget) {
         tokens_by_repetitions[token_class.num_repetitions].push_back(index);
-      } else if (token_class.kind == RepetitionTokenClass::kExit) {
+      } else if (exclusive && token_class.kind == RepetitionTokenClass::kExit) {
         mask.repeat_exit_tokens.emplace_back(
             token_class.num_repetitions, sorted_vocab[index].first
         );
         decided_indices.push_back(index);
-      } else if (token_class.kind == RepetitionTokenClass::kRejected) {
+      } else if (exclusive && token_class.kind == RepetitionTokenClass::kRejected) {
         decided_indices.push_back(index);
       }
     }
@@ -329,7 +390,12 @@ void PopulateRepeatInteriorBitsets(
       mask.repeat_interior_char_counts.push_back(num_repetitions);
       mask.repeat_interior_bitsets.push_back(std::move(cumulative));
     }
+    // Interior acceptance is sufficient, not necessary: a token exceeding this count may
+    // still be accepted by leaving the repetition. Keep its original replay classification.
     std::sort(decided_indices.begin(), decided_indices.end());
+    mask.repeat_residual_indices = mask.uncertain_indices;
+    IntsetDifference(&mask.repeat_residual_indices, decided_indices);
+    if (!exclusive) continue;
 
     // Take the decided tokens out of every static class: the matcher accepts the budget and exit
     // tokens that fit the repetition bounds, and nothing else of them. A kRejected mask would

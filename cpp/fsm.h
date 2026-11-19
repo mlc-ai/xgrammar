@@ -11,11 +11,13 @@
 #include <xgrammar/object.h>
 
 #include <algorithm>
+#include <bitset>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -740,6 +742,50 @@ class FSMWithStartEndBase {
   /*! \brief Whether this FSM is a deterministic finite automaton. */
   bool is_dfa_ = false;
 };
+
+/*!
+ * \brief Whether an acyclic byte FSM has unambiguous, nonempty repetition boundaries.
+ * Accepting states must have no outgoing edges: no accepted word is a prefix of another.
+ * Every reachable state must be able to reach an accepting state.
+ * Rule, token, and epsilon edges are deliberately excluded.
+ */
+template <typename FSMType>
+bool IsDeterministicPrefixFreeByteDAG(const FSMWithStartEndBase<FSMType>& fsm) {
+  if (fsm.IsEndState(fsm.GetStart())) return false;
+  std::unordered_set<int> reachable;
+  fsm.GetReachableStates(&reachable);
+  std::unordered_map<int, int> incoming;
+  for (int state : reachable) {
+    incoming.try_emplace(state, 0);
+    // In a finite DAG, excluding non-accepting leaves ensures every path can complete a body.
+    if (!fsm.IsEndState(state) && fsm.GetFsm().GetEdges(state).size() == 0) return false;
+    std::bitset<256> seen;
+    for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+      if (!edge.IsCharRange() || edge.max > 255 || fsm.IsEndState(state)) return false;
+      ++incoming[edge.target];
+      for (int byte = edge.min; byte <= edge.max; ++byte) {
+        if (seen[byte]) return false;
+        seen.set(byte);
+      }
+    }
+  }
+  // The interior classifier uses the start state as a repetition boundary. A cycle can
+  // return there without completing a body, so keep all cyclic bodies on the parser path.
+  std::vector<int> ready;
+  for (const auto& [state, count] : incoming) {
+    if (count == 0) ready.push_back(state);
+  }
+  size_t visited = 0;
+  while (!ready.empty()) {
+    const int state = ready.back();
+    ready.pop_back();
+    ++visited;
+    for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
+      if (--incoming[edge.target] == 0) ready.push_back(edge.target);
+    }
+  }
+  return visited == reachable.size();
+}
 
 /*!
  * \brief FSMWithStartEnd represents a FSM with start and end states.

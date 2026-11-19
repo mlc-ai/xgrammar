@@ -1983,7 +1983,12 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
 
   // Lazy insertion can rehash the cache. Pointers to immutable entries remain valid;
   // unordered_map iterators do not. Entries are never erased during this grammar's lifetime.
-  std::vector<std::pair<ParserState, const AdaptiveTokenMask*>> latest_states_with_masks;
+  struct StateMask {
+    ParserState state;
+    const AdaptiveTokenMask* mask;
+    const std::vector<int32_t>* uncertain_indices;
+  };
+  std::vector<StateMask> latest_states_with_masks;
 
   for (const auto& state : latest_states) {
     const AdaptiveTokenMask* adaptive_token_mask_pointer =
@@ -1996,7 +2001,9 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         continue;
       }
     }
-    latest_states_with_masks.emplace_back(state, adaptive_token_mask_pointer);
+    latest_states_with_masks.push_back(
+        {state, adaptive_token_mask_pointer, &adaptive_token_mask.uncertain_indices}
+    );
     if (adaptive_token_mask.store_type == StoreType::kAcceptedBitset) {
       tmp_accepted_bitset_ |= adaptive_token_mask.accepted_bitset;
     } else if (adaptive_token_mask.store_type == StoreType::kAccepted) {
@@ -2004,18 +2011,17 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
         tmp_accepted_bitset_.Set(sorted_decoded_vocab[idx].first, true);
       }
     }
-    // In the body state of a counted repetition of a character class, most tokens are legal
-    // exactly when the budget left in the repetition state that predicted this body state covers
-    // the repetitions they consume, and a token that leaves the repetition also needs them to
+    // In a deterministic counted-repetition body, interior tokens are legal when the parent
+    // budget covers the repetitions they consume. The stronger character-class classification
+    // also decides tokens that exit the repetition; these need to
     // complete its lower bound (see PopulateRepeatInteriorBitsets). The compiled mask is shared by
     // every repeat count, so the count is read from the parse history here and the matching bitset
     // is accepted in one operation instead of replaying every such token.
     if (!adaptive_token_mask.repeat_interior_bitsets.empty() ||
         !adaptive_token_mask.repeat_exit_tokens.empty()) {
-      // PopulateRepeatInteriorBitsets only fills the bitsets of body rules that are entered
-      // through repeat edges alone, and none when character budgets are enforced. The mask lists
-      // none of these tokens as accepted, so without a repetition parent this state would
-      // silently reject all of them.
+      // PopulateRepeatInteriorBitsets only fills the bitsets of body rules entered through
+      // repeat edges alone, and none when character budgets are enforced. A repetition parent
+      // is required to determine the remaining budget.
       XGRAMMAR_CHECK(
           !has_char_budget_rules_ && state.rule_start_pos != ParserState::kNoPrevInputPos
       ) << "The counted-repetition fast path does not apply to this state";
@@ -2045,19 +2051,25 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
           }
         }
       }
-      // The tokens that do not fit are rejected by this state without further work.
+      // Tokens that do not fit retain their ordinary classification. Only the stronger
+      // character-class analysis removes them from replay and proves their rejection.
       XGRAMMAR_CHECK(on_repeat) << "A counted-repetition body state has no repetition parent";
       const auto& char_counts = adaptive_token_mask.repeat_interior_char_counts;
       const auto it = std::upper_bound(char_counts.begin(), char_counts.end(), remaining);
       if (it != char_counts.begin()) {
         const size_t index = static_cast<size_t>(it - char_counts.begin()) - 1;
         tmp_accepted_bitset_ |= adaptive_token_mask.repeat_interior_bitsets[index];
+        if (it == char_counts.end()) {
+          latest_states_with_masks.back().uncertain_indices =
+              &adaptive_token_mask.repeat_residual_indices;
+        }
       }
     }
   }
 
   const auto& token_char_counts = tokenizer_info_.ImplPtr()->GetTokenCharCounts();
-  for (const auto& [state, adaptive_token_mask_pointer] : latest_states_with_masks) {
+  for (const auto& [state, adaptive_token_mask_pointer, replay_indices] :
+       latest_states_with_masks) {
     const auto& adaptive_token_mask = *adaptive_token_mask_pointer;
 
     // For each ParserState, we will check every uncertain token and put them into the accepted or
@@ -2090,7 +2102,7 @@ void GrammarMatcher::Impl::FillBitmaskForStates(
                          << adaptive_token_mask.Print(tokenizer_info_);
     }
     int last_rejected_uncertain_range = 0;
-    const auto& uncertain_indices = adaptive_token_mask.uncertain_indices;
+    const auto& uncertain_indices = *replay_indices;
     for (auto token_it = uncertain_indices.begin(); token_it != uncertain_indices.end();) {
       const auto cur_token_idx = *token_it++;
       // Check if the current token is already accepted. If it is, we can skip it.
