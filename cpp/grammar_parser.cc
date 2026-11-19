@@ -1392,10 +1392,9 @@ int32_t EBNFParser::ParseExcludeToken() {
   if (!args.named_arguments.empty()) {
     ReportParseError("ExcludeToken() does not accept named arguments", delta_element);
   }
-  if (args.arguments.empty()) {
-    ReportParseError("ExcludeToken() requires at least one integer argument", delta_element);
-  }
 
+  // An empty list excludes nothing, so ExcludeToken() matches any token. The printer emits this
+  // form for an empty exclude set, e.g. from AnyTokensFormat without exclude_tokens.
   std::vector<int32_t> token_ids;
   for (const auto& arg : args.arguments) {
     auto int_node = std::get_if<MacroIR::IntegerNode>(arg.get());
