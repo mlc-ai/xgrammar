@@ -432,6 +432,14 @@ class RepetitionNormalizer {
 };
 
 /*!
+ * \brief Whether a rule is an unannotated, finite choice of literal/character-class sequences.
+ * Shared by repetition lowering and token-cache analysis. Macros, references, nested repetition,
+ * and nullable alternatives retain their existing handling. The caller must additionally check
+ * that the body's byte FSM is deterministic and prefix-free.
+ */
+bool IsFiniteTerminalRepeatBody(const Grammar& grammar, int32_t rule_id);
+
+/*!
  * \brief Expand kRepeat grammar expressions using HandleRepetitionRange logic.
  * Transforms repetition structures into explicit sequences and choices.
  */

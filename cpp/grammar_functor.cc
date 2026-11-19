@@ -1207,9 +1207,9 @@ class AllowEmptyRuleAnalyzerImpl : public GrammarVisitor<std::vector<int32_t>> {
 
       for (auto seq_id : grammar_expr) {
         auto seq_expr = base_grammar_->GetGrammarExpr(seq_id);
-        if (std::all_of(seq_expr.begin(), seq_expr.end(), [&](int32_t i) {
-              return base_grammar_->GetGrammarExpr(i).type == GrammarExprType::kCharacterClassStar;
-            })) {
+        // Seed zero-minimum repeats as well as stars before propagating nullability
+        // through rule references. Their bodies need not themselves be nullable.
+        if (SeqExprIsEpsilon(seq_expr, {})) {
           empty_rule_id_set->insert(i);
           break;
         }
@@ -2167,6 +2167,30 @@ class RegularGrammarFSMBuilder {
   std::string error_;
 };
 
+bool IsFiniteTerminalRepeatBody(const Grammar& grammar, int32_t rule_id) {
+  using ExprType = Grammar::Impl::GrammarExprType;
+  const auto& rule = grammar->GetRule(rule_id);
+  if (rule.max_tokens >= 0 || rule.max_chars >= 0 || rule.lookahead_assertion_id != -1 ||
+      !rule.capture_name.empty() || rule.is_lazy || rule.temperature.has_value() ||
+      grammar->GetSuffixStopInfo(rule_id) != nullptr) {
+    return false;
+  }
+  const auto body = grammar->GetGrammarExpr(rule.body_expr_id);
+  if (body.type != ExprType::kChoices || body.size() == 0) return false;
+  for (int choice_id : body) {
+    const auto choice = grammar->GetGrammarExpr(choice_id);
+    if (choice.type != ExprType::kSequence || choice.size() == 0) return false;
+    for (int element_id : choice) {
+      const auto element = grammar->GetGrammarExpr(element_id);
+      if (element.type != ExprType::kCharacterClass &&
+          (element.type != ExprType::kByteString || element.size() == 0)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 class RepetitionRangeExpanderImpl : public GrammarMutator {
  public:
   using GrammarMutator::Apply;
@@ -2318,6 +2342,8 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * the byte after the repetition.
    */
   std::map<std::vector<int32_t>, int32_t> counted_body_rule_ids_;
+  // Private copies keep ordinary references to the original body out of the repeat cache.
+  std::unordered_map<int32_t, int32_t> regular_repeat_body_rule_ids_;
 };
 
 /****************** Repetition range helpers ******************/
@@ -2419,9 +2445,9 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   // A length-bounded JSON string body - a repetition of a negative character class - is kept as
   // one counted repeat edge when the byte after it is one the class excludes: the matcher then
   // decides most tokens in the body from the repetition bounds alone
-  // (PopulateRepeatInteriorBitsets). Anywhere else the counted edge would be slower than the
-  // expansion below, which keeps a separate mask per position; that includes grammars with
-  // character budgets, where the matcher never takes the fast path. In grammars with lazy rules
+  // (PopulateRepeatInteriorBitsets). This stronger classification also proves rejection and
+  // single-byte exits. The general interior-only optimization below does not need a delimiter.
+  // Character budgets disable both fast paths. In grammars with lazy rules
   // a repetition with a lower bound or without an upper bound keeps the expansion too: the lazy
   // body flattener flattens that expansion but not a counted edge.
   const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
@@ -2435,6 +2461,24 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
           excluded || (repeated_expr[i] <= *follow_byte_ && *follow_byte_ <= repeated_expr[i + 1]);
     }
     counted = excluded;
+  }
+  // Both lowering and cache analysis use the same finite terminal-body restriction.
+  if (!counted && upper >= 0 && !HasCharBudgetRules() && !HasLazyRules() &&
+      IsFiniteTerminalRepeatBody(base_grammar_, rule_id)) {
+    const auto fsm = GrammarFSMBuilder::Choices(ref_rule_body, base_grammar_);
+    if (fsm.has_value() && IsDeterministicPrefixFreeByteDAG(*fsm)) {
+      // A private wrapper preserves the repeat-edge invariant even in a surrounding choice.
+      auto [body, inserted] = regular_repeat_body_rule_ids_.try_emplace(rule_id, -1);
+      if (inserted) {
+        const int body_expr = VisitExpr(ref_rule.body_expr_id);
+        body->second = builder_->AddRuleWithHint(cur_rule_name + "_repeat", body_expr);
+      }
+      const int repeat = builder_->AddRepeat(body->second, lower, upper);
+      const int wrapper = builder_->AddRuleWithHint(
+          cur_rule_name + "_counted", builder_->AddChoices({builder_->AddSequence({repeat})})
+      );
+      return builder_->AddRuleRef(wrapper);
+    }
   }
   counted_repetition_ = counted;
 

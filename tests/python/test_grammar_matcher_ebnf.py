@@ -827,12 +827,12 @@ def test_repeat_ref_range():
 
 
 def test_repeat_ref_boundary():
-    """Test that {128} does NOT activate RepeatRef, but {129} does."""
+    """Deterministic bodies use counted edges on both sides of the legacy threshold."""
     g128 = xgr.Grammar.from_ebnf('root ::= "a"{128}')
     tokenizer_info = xgr.TokenizerInfo([])
     compiler = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False)
     fsm128 = _print_grammar_fsms(compiler.compile_grammar(g128).grammar)
-    assert "Repeat(" not in fsm128
+    assert "Repeat(" in fsm128
 
     assert _is_grammar_accept_string(g128, "a" * 128)
     assert not _is_grammar_accept_string(g128, "a" * 127)

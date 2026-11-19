@@ -11,6 +11,7 @@ at the bound.
 
 from __future__ import annotations
 
+import itertools
 import json
 
 import pytest
@@ -358,13 +359,13 @@ def test_deserialize_rejects_a_mask_for_an_unknown_rule() -> None:
         xgr.CompiledGrammar.deserialize_json(json.dumps(serialized), tokenizer_info)
 
 
-def test_nested_repetition_keeps_the_expanded_repetition() -> None:
-    """The byte after the outer repetition does not follow the inner one, so the inner one is not
-    turned into a counted edge that the matcher cannot take the fast path for."""
+def test_nested_repetition_masks_match_replay() -> None:
+    """An interior fast path must preserve exits through an enclosing repetition."""
     tokenizer_info = xgr.TokenizerInfo(list(EXIT_VOCAB))
     grammar = 'root ::= "<" s{0,2} "\\""\ns ::= [^"]{2,3}'
     compiled = xgr.GrammarCompiler(tokenizer_info).compile_grammar(grammar)
-    assert "{2, 3}" not in str(compiled.grammar)
+    for prefix in ["<", "<a", "<aa", "<aaa", "<aaaa", "<aaaaaa"]:
+        _assert_mask_matches_replay(compiled, tokenizer_info, prefix)
 
 
 @pytest.mark.parametrize(
@@ -403,3 +404,146 @@ def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
     assert "{0, 3}" not in str(compiled.grammar)
     for consumed in range(4):
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
+
+
+@pytest.mark.parametrize(
+    "body,words",
+    [
+        ('[^<] | "<" [^|]', ["a", "<x", "中"]),
+        ('"ab" | "cd"', ["ab", "cd"]),
+        ("[a-c] [0-2]", ["a0", "c2"]),
+        ('"中" | "文"', ["中", "文"]),
+        ("[a-z]", ["a", "z"]),
+        # These bodies have ambiguous repetition boundaries and must retain parser handling.
+        ('"a" | "ab"', ["a", "ab"]),
+        ('"" | "ab"', ["", "ab"]),
+    ],
+)
+@pytest.mark.parametrize("lower,upper", [(0, 2), (1, 3), (2, 2)])
+@pytest.mark.parametrize("suffix", ["", "<|", "ab"])
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_regular_repetition_masks_match_explicit_expansion(
+    body, words, lower, upper, suffix, dynamic
+):
+    """Compare bounded repeats with an independent expansion, including exits and partial UTF-8."""
+    vocab = list(
+        dict.fromkeys(
+            [
+                b"a",
+                b"b",
+                b"ab",
+                b"cd",
+                b"a0",
+                b"c2",
+                b"<",
+                b"|",
+                b"<x",
+                b"<|",
+                b"ab<|",
+                b"\xe4",
+                b"\xb8",
+                b"\xad",
+                b"\xb8\xad",
+                "中".encode(),
+                "文".encode(),
+                b"x",
+                b"!",
+            ]
+            + [(a + b).encode() for a in words for b in words]
+        )
+    )
+    info = xgr.TokenizerInfo(vocab + [b"<eos>"], stop_token_ids=[len(vocab)])
+    compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic)
+    ending = json.dumps(suffix)
+    candidate = compiler.compile_grammar(
+        f"root ::= unit{{{lower},{upper}}} {ending}\nunit ::= {body}"
+    )
+    choices = [" ".join(["unit"] * count + [ending]) for count in range(lower, upper + 1)]
+    reference = compiler.compile_grammar("root ::= " + " | ".join(choices) + "\nunit ::= " + body)
+    prefixes = {b""}
+    for count in range(lower, upper + 1):
+        for sequence in itertools.product(words, repeat=count):
+            text = ("".join(sequence) + suffix).encode()
+            prefixes.update(text[:i] for i in range(len(text) + 1))
+    restored = xgr.CompiledGrammar.deserialize_json(candidate.serialize_json(), info)
+    for prefix in prefixes:
+        # Stop tokens remain available after completion, so use the default termination mode.
+        expected = xgr.GrammarMatcher(reference)
+        actual = xgr.GrammarMatcher(restored)
+        assert expected.accept_string(prefix)
+        assert actual.accept_string(prefix)
+        assert _allowed_token_ids(actual, info) == _allowed_token_ids(expected, info), prefix
+        fork = actual.fork()
+        before = _allowed_token_ids(actual, info)
+        for token_id in before:
+            if token_id == len(vocab):
+                continue
+            assert fork.accept_token(token_id)
+            fork.rollback(1)
+            assert _allowed_token_ids(fork, info) == before
+            break
+
+
+def test_regular_repeat_draft_tree_matches_expansion():
+    import torch
+
+    info = xgr.TokenizerInfo(["a", "<x", "<|", "aa", "中"])
+    compiler = xgr.GrammarCompiler(info)
+    body = 'unit ::= [^<] | "<" [^|]'
+    bounded = compiler.compile_grammar('root ::= unit{1,3} "<|"\n' + body)
+    expanded = compiler.compile_grammar(
+        'root ::= unit "<|" | unit unit "<|" | unit unit unit "<|"\n' + body
+    )
+    children = torch.tensor([1, 3, -1, -1], dtype=torch.int64)
+    siblings = torch.tensor([-1, 2, -1, -1], dtype=torch.int64)
+    tokens = torch.tensor([0, 1, 2, 3], dtype=torch.int64)
+    masks = []
+    for compiled in [bounded, expanded]:
+        matcher = xgr.GrammarMatcher(compiled)
+        before = _allowed_token_ids(matcher, info)
+        mask = xgr.allocate_token_bitmask(4, info.vocab_size)
+        assert matcher.traverse_draft_tree(children, siblings, tokens, mask)
+        assert _allowed_token_ids(matcher, info) == before
+        masks.append(mask)
+    assert torch.equal(*masks)
+
+
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_repeat_residual_replay_switches_at_interior_budget(dynamic):
+    """Cross the largest cached token's budget, retaining tokens that exit the repetition."""
+    vocab = ["a", "aa", "aaaa", "ab", "b", "abab", "aab", "<eos>"]
+    info = xgr.TokenizerInfo(vocab, stop_token_ids=[7])
+    compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic)
+    bounded = compiler.compile_grammar('root ::= unit{1,6} "ab"\nunit ::= "a" | "b"')
+    reference = compiler.compile_grammar(
+        "root ::= "
+        + " | ".join(" ".join(["unit"] * i + ['"ab"']) for i in range(1, 7))
+        + '\nunit ::= "a" | "b"'
+    )
+    for prefix in ["a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]:
+        actual = xgr.GrammarMatcher(bounded)
+        expected = xgr.GrammarMatcher(reference)
+        assert actual.accept_string(prefix)
+        assert expected.accept_string(prefix)
+        assert _allowed_token_ids(actual, info) == _allowed_token_ids(expected, info)
+        _assert_mask_matches_replay(bounded, info, prefix)
+
+
+@pytest.mark.parametrize("dynamic", [False, True])
+@pytest.mark.parametrize("bounds", ["1,300", "300"])
+def test_cyclic_repeat_body_keeps_parser_boundary_checks(dynamic, bounds):
+    """Returning to a body's start via a loop does not complete a repetition."""
+    info = xgr.TokenizerInfo(["a", "b", "ba", "baa", "bb", "ab"])
+    compiled = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic).compile_lark(
+        f"start: /(?:a*b){{{bounds}}}/i"
+    )
+    restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), info)
+    for grammar in [compiled, restored]:
+        for prefix in ["b" * 298, "b" * 299, "b" * 299 + "a"]:
+            _assert_mask_matches_replay(grammar, info, prefix)
+        matcher = xgr.GrammarMatcher(grammar)
+        assert matcher.accept_string("b" * 299)
+        allowed = _allowed_token_ids(matcher, info)
+        assert 1 in allowed
+        assert 2 not in allowed  # "ba" would start a 301st repetition.
+        assert 3 not in allowed

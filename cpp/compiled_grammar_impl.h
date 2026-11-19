@@ -64,22 +64,25 @@ struct AdaptiveTokenMask {
   std::vector<int32_t> uncertain_indices;
 
   /*!
-   * \brief Fast path for the body state of a counted repetition of a single character class.
+   * \brief Fast acceptance for an acyclic, deterministic, prefix-free counted-repetition body.
    *
-   * `repeat_interior_bitsets[i]` holds every token whose legality in this state is decided by the
-   * repetition budget alone, and that consumes at most `repeat_interior_char_counts[i]`
-   * repetitions; the counts are strictly increasing. Such a token stays inside the class, possibly
-   * ending inside a codepoint. It is legal exactly when the repetition budget left in the parent
-   * state covers it. That budget is not part of the compiled state, so the matcher reads it from
-   * the parse history and picks the matching bitset; the mask itself stays count-independent.
+   * `repeat_interior_bitsets[i]` holds tokens with an accepting path inside the repeated body
+   * that consumes at most `repeat_interior_char_counts[i]`
+   * repetitions; the counts are strictly increasing. Such a token stays inside the repeated body,
+   * possibly ending inside a repetition or codepoint. This path is legal when the repetition
+   * budget left in the parent state covers it. That budget is not part of the compiled state, so
+   * the matcher reads it from the parse history and picks the matching bitset; the mask itself
+   * stays count-independent.
    *
    * `repeat_exit_tokens` lists (repetitions consumed, token id) for every token that leaves the
    * repetition on its last byte. Such a token is legal exactly when the repetitions it consumes
    * fit the budget and, with those before it, reach the lower bound of the repetition.
    *
-   * These tokens are removed from the mask's own accepted and uncertain classes, and the mask
-   * lists its accepted tokens explicitly, so a token that does not fit is rejected by this state.
-   * Only body rules found by the eligibility analysis in PopulateRepeatInteriorBitsets get them.
+   * For the general interior fast path these bitsets only prove acceptance: tokens that do not
+   * fit retain their ordinary classification, since they may exit through the parent instead.
+   * The stronger single-character-class path with disjoint following bytes also proves rejection
+   * and removes its decided tokens from the original classes. Eligibility is determined by
+   * PopulateRepeatInteriorBitsets.
    *
    * This is derived data: it is deliberately not part of the serialized form (see
    * XGRAMMAR_MEMBER_TABLE below) and is recomputed by PopulateRepeatInteriorBitsets whenever a
@@ -87,6 +90,9 @@ struct AdaptiveTokenMask {
    * here, so a runtime that does not recompute them must not load it: the serialization version
    * was bumped for this.
    */
+  // Uncertain tokens not covered by the largest interior bitset. When the parent budget
+  // covers that bitset, only this list needs replay; otherwise use uncertain_indices.
+  std::vector<int32_t> repeat_residual_indices;
   std::vector<int32_t> repeat_interior_char_counts;
   std::vector<DynamicBitset> repeat_interior_bitsets;
   std::vector<std::pair<int32_t, int32_t>> repeat_exit_tokens;
@@ -114,8 +120,8 @@ struct AdaptiveTokenMask {
   friend std::size_t MemorySize(const AdaptiveTokenMask& mask) {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
            MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
-           MemorySize(mask.repeat_interior_char_counts) + MemorySize(mask.repeat_interior_bitsets) +
-           MemorySize(mask.repeat_exit_tokens);
+           MemorySize(mask.repeat_residual_indices) + MemorySize(mask.repeat_interior_char_counts) +
+           MemorySize(mask.repeat_interior_bitsets) + MemorySize(mask.repeat_exit_tokens);
   }
 };
 
