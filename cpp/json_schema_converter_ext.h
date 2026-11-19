@@ -111,6 +111,12 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
   int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
 
+  std::unordered_map<int32_t, int32_t> glm_formatted_value_rules_;
+
+  int32_t FormatGLMValue(
+      const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name
+  );
+
   // Override format hooks
   int32_t FormatPropertyKey(const std::string& key, const SchemaSpecPtr& schema) override;
   int32_t FormatProperty(
