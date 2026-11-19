@@ -622,6 +622,7 @@ def test_empty_enum_rejected():
             [10, 15, 20],
             [5, 6],
         ),
+        ({"type": "integer", "minimum": 0, "multipleOf": 2}, [0, 2, 4], [-1, 1, 3]),
     ],
 )
 def test_integer_multiple_of(
@@ -631,6 +632,75 @@ def test_integer_multiple_of(
         check_schema_with_instance(schema, instance, is_accepted=True)
     for instance in rejected_instances:
         check_schema_with_instance(schema, instance, is_accepted=False)
+
+
+@pytest.mark.parametrize(
+    "bounds, multiple_of, accepted_instances, rejected_instances",
+    [
+        ({"minimum": 0}, 7, [0, 7, 7 * 10**30], [-7, 8]),
+        ({"maximum": 100}, 7, [-7 * 10**30, 0, 98], [8, 105]),
+        ({"minimum": 0, "maximum": 10**9}, 7, [0, 7, 999999994], [-7, 8, 10**9]),
+        ({"minimum": -15}, 7, [-14, -7, 0, 7], [-21, -13, 8]),
+        ({"maximum": -5}, 7, [-21, -14, -7], [-8, -5, 0]),
+        ({"exclusiveMinimum": 7}, 7, [14, 21], [0, 7, 15]),
+        ({"exclusiveMaximum": -7}, 7, [-21, -14], [-8, -7, 0]),
+        (
+            {"minimum": 0, "exclusiveMinimum": 7, "maximum": 100000, "exclusiveMaximum": 99999},
+            7,
+            [14, 21, 99995],
+            [0, 7, 15, 99999, 100002],
+        ),
+        ({"minimum": 2**63 - 1}, 2, [2**63, 10**30], [2**63 - 1, 2**63 + 1]),
+        ({"maximum": -(2**63)}, 2, [-(2**63), -(2**63) - 2], [-(2**63) - 1, 0]),
+        (
+            {"minimum": -(2**63), "maximum": 2**63 - 1},
+            1024,
+            [-(2**63), 0, 2**63 - 1024],
+            [-(2**63) - 1024, -1, 1, 2**63 - 1, 2**63],
+        ),
+        ({"minimum": 0}, 1024, [0, 1024, 1024 * 10**20], [-1024, 1, 1023, 1025]),
+        (
+            {"minimum": -(10**9), "maximum": 10**9},
+            1,
+            [-(10**9), 0, 10**9],
+            [-(10**9) - 1, 10**9 + 1],
+        ),
+    ],
+)
+def test_integer_multiple_of_with_bounds(
+    bounds: Dict[str, int],
+    multiple_of: int,
+    accepted_instances: List[int],
+    rejected_instances: List[int],
+):
+    schema = {"type": "integer", "multipleOf": multiple_of, **bounds}
+    grammar = xgr.Grammar.from_json_schema(json.dumps(schema))
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
+    compiled = compiler.compile_grammar(grammar)
+    for instances, expected in ((accepted_instances, True), (rejected_instances, False)):
+        for instance in instances:
+            matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+            accepted = matcher.accept_string(str(instance)) and matcher.is_completed()
+            assert accepted == expected, (schema, instance)
+    for invalid_integer in ("-0", "00", "+7", "7.0", "7e0"):
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert not (matcher.accept_string(invalid_integer) and matcher.is_completed())
+
+
+def test_integer_multiple_of_bounded_token_mask():
+    schema = {"type": "integer", "minimum": 99, "maximum": 100000, "multipleOf": 1024}
+    # Exercise EBNF round-tripping as well as the direct schema-conversion path.
+    grammar = xgr.Grammar.from_ebnf(str(xgr.Grammar.from_json_schema(json.dumps(schema))))
+    tokenizer = xgr.TokenizerInfo([str(digit) for digit in range(10)])
+    compiled = xgr.GrammarCompiler(tokenizer).compile_grammar(grammar)
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_string("10")
+    bitmask = xgr.allocate_token_bitmask(1, tokenizer.vocab_size)
+    matcher.fill_next_token_bitmask(bitmask)
+    allowed = [digit for digit in range(10) if (int(bitmask[0, 0]) >> digit) & 1]
+    assert allowed == [2]
+    assert not matcher.accept_string("0")
+    assert matcher.accept_string("24") and matcher.is_completed()
 
 
 @pytest.mark.parametrize(
@@ -659,12 +729,6 @@ def test_integer_multiple_of(
             "multipleOf for type:integer must be > 0 and <= 1024; ignoring multipleOf",
             [1, 2],
             [],
-        ),
-        (
-            {"type": "integer", "minimum": 0, "multipleOf": 2},
-            "range + multipleOf combination not yet supported; ignoring multipleOf",
-            [1, 3],
-            [-1],
         ),
     ],
 )
