@@ -127,6 +127,9 @@ MODEL_CONFIGS = [
     ("gemma_4", "google/gemma-4-E2B-it", False, {"enable_thinking": False}),
     ("gemma_4", "google/gemma-4-31B-it", True, {"enable_thinking": True}),
     ("gemma_4", "google/gemma-4-31B-it", False, {"enable_thinking": False}),
+    ("muse", "meta-models/Muse-Spark-Open-816B-A42B", True, {}),
+    ("muse", "meta-models/Muse-Spark-Open-816B-A42B", False, {}),
+    ("muse", "meta-models/Muse-Spark-Open-816B-A42B", "auto", {}),
 ]
 
 # Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
@@ -137,6 +140,8 @@ SKIP_EMPTY_REASONING = {
     "moonshotai/Kimi-K3",
     "google/gemma-4-E2B-it",
     "google/gemma-4-31B-it",
+    # The template renders no to=self message for empty reasoning.
+    "meta-models/Muse-Spark-Open-816B-A42B",
 }
 
 # Templates that pre-render an empty thought block in the generation prompt when thinking
@@ -184,6 +189,8 @@ EOS_SUFFIXES = {
     "exaone": ["[|endofturn|]"],
     # <|tool_response> is the halt signal the template appends after a tool call.
     "gemma_4": ["<turn|>", "<|tool_response>"],
+    # <|eot|> is a stop token; the structural tag ends before it.
+    "muse": ["<|eot|>"],
 }
 
 
@@ -803,3 +810,115 @@ def test_mimo_official_tokenizer_masks(model_id, revision, reasoning, policy, sc
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
+
+
+_MUSE_SPARK = ("meta-models/Muse-Spark-Open-816B-A42B", "4c0e167c8b7a18e1dd5ca76763ecb5d53c6a9601")
+_MUSE_EOM, _MUSE_EOT, _MUSE_START, _MUSE_MESSAGE = 200007, 200008, 200022, 200023
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("token_markers", [False, True])
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "ref", "unconstrained"])
+def test_muse_official_tokenizer_masks(token_markers, reasoning, policy, schema_kind):
+    """Replay actual template completions, including tokens crossing ATEM tag boundaries."""
+    model_id, revision = _MUSE_SPARK
+    tokenizer = load_tokenizer(model_id, revision=revision)
+    # <|eot|> ends the turn; the tokenizer's own EOS is <|end_of_text|>.
+    info = xgr.TokenizerInfo.from_huggingface(
+        tokenizer, vocab_size=len(tokenizer), stop_token_ids=[_MUSE_EOT]
+    )
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert len(tokenizer) == 201818
+    for text, token_id in [
+        ("<|eom|>", _MUSE_EOM),
+        ("<|eot|>", _MUSE_EOT),
+        ("<|start|>", _MUSE_START),
+        ("<|message|>", _MUSE_MESSAGE),
+    ]:
+        assert tokenizer.encode(text, add_special_tokens=False) == [token_id]
+
+    arguments = {
+        "query": '\n北京 &amp; "quoted"\n',
+        "limit": 2,
+        "data": {"items": [True, None, "é"]},
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "limit": {"type": "integer", "minimum": 1},
+            "data": {
+                "type": "object",
+                "properties": {"items": {"type": "array"}},
+                "required": ["items"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["query", "limit", "data"],
+        "additionalProperties": False,
+    }
+    if schema_kind == "union":
+        schema["properties"]["limit"] = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+        arguments["limit"] = None
+    elif schema_kind == "ref":
+        schema["$defs"] = {"Limit": schema["properties"]["limit"]}
+        schema["properties"]["limit"] = {"$ref": "#/$defs/Limit"}
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": "",
+                "parameters": schema,
+                "strict": schema_kind != "unconstrained",
+            },
+        }
+        for name in ("search", "web.find")
+    ]
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    tag = get_model_structural_tag(
+        "muse", tools=tools, reasoning=reasoning, tool_choice=choice, token_markers=token_markers
+    )
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_structural_tag(tag))
+    # The template renders content next to tool calls as a to=commentary message.
+    message = {
+        "role": "assistant",
+        "content": "Searching.",
+        "tool_calls": [
+            {"type": "function", "function": {"name": name, "arguments": arguments}}
+            for name in (["search"] if policy == "forced" else ["search", "web.find"])
+        ],
+    }
+    if reasoning:
+        message["reasoning_content"] = "Plan."
+    kwargs = {"tools": tools, "tokenize": False}
+    prompt = tokenizer.apply_chat_template([USER_MSG], add_generation_prompt=True, **kwargs)
+    full = tokenizer.apply_chat_template([USER_MSG, message], **kwargs)
+    assert prompt.endswith("<|start|>assistant")
+    assert full.startswith(prompt)
+    output = full[len(prompt) :]
+    assert " to=commentary<|message|>Searching.<|eom|>" in output
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    assert token_ids[-1] == _MUSE_EOT
+
+    def allowed(bitmask, token_id):
+        return bool((int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1)
+
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    calls_done = 0
+    for index, token_id in enumerate(token_ids):
+        matcher.fill_next_token_bitmask(bitmask)
+        # The turn may stop only right after a complete tool call.
+        call_complete = tokenizer.decode(token_ids[:index]).endswith("</atem:function_calls>")
+        assert allowed(bitmask, _MUSE_EOT) == call_complete, (index, token_id)
+        if call_complete:
+            calls_done += 1
+            # Another call may follow unless the tool choice forces exactly one.
+            assert allowed(bitmask, _MUSE_EOM) == (policy != "forced")
+        assert allowed(bitmask, token_id), (index, token_id, tokenizer.decode([token_id]))
+        assert matcher.accept_token(token_id), (index, token_id)
+    assert calls_done == len(message["tool_calls"])
+    assert matcher.is_terminated()

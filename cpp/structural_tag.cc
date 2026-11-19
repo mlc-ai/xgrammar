@@ -568,11 +568,11 @@ Result<JSONSchemaFormat, ISTError> StructuralTagParser::ParseJSONSchemaFormat(
       if (style != "json" && style != "qwen_xml" && style != "minimax_xml" &&
           style != "minimax_m3_xml" && style != "deepseek_xml" && style != "glm_xml" &&
           style != "cohere_xml" && style != "kimi_k3_xml" && style != "deepseek_v4_1_xml" &&
-          style != "gemma") {
+          style != "gemma" && style != "muse_xml") {
         return ResultErr<ISTError>(
             "style must be \"json\", \"qwen_xml\", \"minimax_xml\", \"minimax_m3_xml\", "
             "\"deepseek_xml\", \"glm_xml\", \"cohere_xml\", \"kimi_k3_xml\", "
-            "\"deepseek_v4_1_xml\", or \"gemma\""
+            "\"deepseek_v4_1_xml\", \"gemma\", or \"muse_xml\""
         );
       }
     }

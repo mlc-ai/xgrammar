@@ -152,7 +152,7 @@ Matches content that conforms to a JSON Schema.
 | Field | Type | Default |
 | --- | --- | --- |
 | `json_schema` | `object` | (required) |
-| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` \| `"gemma"` | `"json"` |
+| `style` | `"json"` \| `"qwen_xml"` \| `"minimax_xml"` \| `"minimax_m3_xml"` \| `"deepseek_xml"` \| `"deepseek_v4_1_xml"` \| `"glm_xml"` \| `"cohere_xml"` \| `"kimi_k3_xml"` \| `"gemma"` \| `"muse_xml"` | `"json"` |
 | `any_order` | `bool` | `false` |
 | `excludes` | `string[]` | `[]` |
 
@@ -170,6 +170,7 @@ Matches content that conforms to a JSON Schema.
 - `"cohere_xml"`: Cohere-style XML values, such as `<cofl:value name="name" type="raw">value</cofl:value>`
 - `"kimi_k3_xml"`: Kimi-K3 argument format, such as `<|open|>argument key="name" type="string"<|sep|>value<|close|>argument<|sep|>`. The `type` attribute is fixed to the type each declared property is rendered with (`integer` and `number` schemas both render as `number`); keys with no declared schema accept any type name.
 - `"gemma"`: Gemma 4 tool-call arguments, such as `{location:<|"|>Paris<|"|>,days:3}`. Object keys are unquoted and strings are delimited by the `<|"|>` token with no escape sequences, at every nesting level. String `pattern` and `format` constraints and `patternProperties` / `propertyNames` key patterns are intersected with "does not contain `<|"|>`" where the regex engine supports the pattern; length constraints on string values are dropped as under `excludes` below. A `patternProperties` key pattern whose language contains `:` cannot round-trip because keys are unquoted.
+- `"muse_xml"`: Muse ATEM parameters, such as `<atem:parameter name="name">value</atem:parameter>`. String values are raw text; other values are JSON. Parameter names are escaped as the Muse chat template's `esc_attr` does: `<|` becomes `< |`, line breaks become spaces, then `&`, `"`, `'`, `<` and `>` become XML entities.
 
 `any_order` relaxes object property ordering (see [below](#property-ordering-with-any-order)). It
 works with every `style`.
