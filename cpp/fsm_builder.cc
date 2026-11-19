@@ -497,6 +497,25 @@ Result<RegexEscapeItem> ParseRegexEscape(const std::string& regex, size_t* pos, 
       *pos += 2;
       return single(high_digit * 16 + low_digit);
     }
+    case 'U': {
+      // \UXXXXXXXX: eight hexadecimal digits, as the EBNF regex converter reads it.
+      if (*pos + 7 >= regex.size()) {
+        return ResultErr("\\U must be followed by eight hexadecimal digits in regex");
+      }
+      uint32_t codepoint = 0;
+      for (size_t i = *pos; i < *pos + 8; ++i) {
+        int digit = HexCharToInt(regex[i]);
+        if (digit < 0) {
+          return ResultErr("\\U must be followed by eight hexadecimal digits in regex");
+        }
+        codepoint = codepoint * 16 + digit;
+      }
+      if (codepoint > kMaxCodepoint) {
+        return ResultErr("\\U escape is beyond the Unicode range in regex");
+      }
+      *pos += 8;
+      return single(codepoint);
+    }
     case 'u': {
       if (*pos < regex.size() && regex[*pos] == '{') {
         size_t close = regex.find('}', *pos + 1);
