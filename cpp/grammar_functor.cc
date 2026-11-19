@@ -2399,10 +2399,10 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   const auto& ref_rule_body = base_grammar_->GetGrammarExpr(ref_rule.body_expr_id);
   // Keep the reference to budgeted, suffix/stop, lazy, and temperature rules: replacing it with
   // the rule's content would erase the rule that the runtime semantics apply to.
-  if (ref_rule.max_tokens < 0 && ref_rule.max_chars < 0 &&
-      base_grammar_->GetSuffixStopInfo(rule_id) == nullptr && !ref_rule.is_lazy &&
-      !ref_rule.temperature.has_value() &&
-      ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
+  const bool plain_rule = ref_rule.max_tokens < 0 && ref_rule.max_chars < 0 &&
+                          base_grammar_->GetSuffixStopInfo(rule_id) == nullptr &&
+                          !ref_rule.is_lazy && !ref_rule.temperature.has_value();
+  if (plain_rule && ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices &&
       ref_rule_body.size() == 1) {
     const auto& ref_choice = base_grammar_->GetGrammarExpr(ref_rule_body[0]);
     if (ref_choice.size() == 1) {
@@ -2435,6 +2435,18 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
           excluded || (repeated_expr[i] <= *follow_byte_ && *follow_byte_ <= repeated_expr[i + 1]);
     }
     counted = excluded;
+  }
+  // So is a repetition of a rule matching one item through deterministic byte transitions, such
+  // as a JSON string character with its escapes, when the byte after it cannot start an item.
+  if (!counted && plain_rule && repeated_expr.type == GrammarBuilder::GrammarExprType::kRuleRef &&
+      (ref_rule_body.type == GrammarBuilder::GrammarExprType::kChoices ||
+       ref_rule_body.type == GrammarBuilder::GrammarExprType::kRegex) &&
+      follow_byte_.has_value() && !HasCharBudgetRules() &&
+      ((lower == 0 && upper != -1) || !HasLazyRules()) && ref_rule.lookahead_assertion_id == -1 &&
+      ref_rule.capture_name.empty()) {
+    auto item_fsm = GrammarFSMBuilder::Choices(ref_rule_body, base_grammar_);
+    const auto first_bytes = item_fsm ? SingleItemFirstBytes(item_fsm->ToCompact()) : std::nullopt;
+    counted = first_bytes.has_value() && !(*first_bytes)[*follow_byte_];
   }
   counted_repetition_ = counted;
 
@@ -2477,14 +2489,19 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
   // repeat edge, so the token data of PopulateRepeatInteriorBitsets is built once.
   if (counted) {
     const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
-    std::vector<int32_t> body_key(repeated_expr.begin(), repeated_expr.end());
+    std::vector<int32_t> body_key{static_cast<int32_t>(repeated_expr.type)};
+    body_key.insert(body_key.end(), repeated_expr.begin(), repeated_expr.end());
     body_key.push_back(*follow_byte_);
     auto [it, inserted] = counted_body_rule_ids_.try_emplace(std::move(body_key), -1);
     if (inserted) {
-      it->second = builder_->AddRuleWithHint(
-          cur_rule_name + "_repeat",
-          builder_->AddChoices({builder_->AddSequence({grammar_expr_id})})
-      );
+      // A single-item rule is copied, not referenced: a reference would leave the fast path. The
+      // copy visits sequences, which clear counted_repetition_.
+      const int32_t body_expr_id =
+          repeated_expr.type == GrammarBuilder::GrammarExprType::kRuleRef
+              ? VisitExpr(base_grammar_->GetRule(repeated_expr[0]).body_expr_id)
+              : builder_->AddChoices({builder_->AddSequence({grammar_expr_id})});
+      counted_repetition_ = true;
+      it->second = builder_->AddRuleWithHint(cur_rule_name + "_repeat", body_expr_id);
     }
     return builder_->AddRepeat(
         it->second,
