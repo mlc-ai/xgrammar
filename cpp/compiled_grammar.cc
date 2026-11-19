@@ -345,7 +345,9 @@ void PopulateRepeatInteriorBitsets(
     const auto& fsm = grammar->per_rule_fsms[state.rule_id]->GetFsm();
     const bool exclusive =
         counted_repetition_bodies[state.rule_id].has_value() && state.element_id == fsm.GetStart();
-    if (fsm.IsEndState(state.element_id)) {
+    // The original character-class path applies only at the body start. Partial states
+    // must satisfy the interior analysis too, including its exclusion of lazy grammars.
+    if ((!exclusive && !interior_bodies[state.rule_id]) || fsm.IsEndState(state.element_id)) {
       continue;
     }
     // Bucket the budget-decided tokens by the repetitions they consume, keeping the

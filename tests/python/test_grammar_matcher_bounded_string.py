@@ -395,6 +395,44 @@ def test_lazy_rule_elsewhere_keeps_the_counted_repetition() -> None:
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
 
 
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_lazy_grammar_repeat_with_partial_utf8(dynamic):
+    """Partial codepoints retain parser handling when a lazy rule disables interior caching."""
+    info = xgr.TokenizerInfo(
+        [
+            b'"',
+            b",",
+            b"a",
+            b"aa",
+            b'a"',
+            b"\xe4",
+            b"\xb8",
+            b"\xad",
+            b"\xb8\xad",
+            b'\xb8\xad"',
+            b"\xb8\xada",
+            b"\xe4\xb8",
+            "中".encode(),
+        ]
+    )
+    compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic)
+    counted = compiler.compile_grammar('root ::= "\\"" [^"]{0,3} "\\"" t\nt[lazy] ::= ","')
+    expanded = compiler.compile_grammar(
+        'root ::= "\\"" u "\\"" t\n' 'u ::= "" | [^"] | [^"] [^"] | [^"] [^"] [^"]\nt[lazy] ::= ","'
+    )
+    restored = xgr.CompiledGrammar.deserialize_json(counted.serialize_json(), info)
+    for consumed in range(3):
+        for fragment in [b"\xe4", b"\xe4\xb8", "中".encode()]:
+            prefix = b'"' + b"a" * consumed + fragment
+            expected = xgr.GrammarMatcher(expanded)
+            assert expected.accept_string(prefix)
+            for compiled in [counted, restored]:
+                actual = xgr.GrammarMatcher(compiled)
+                assert actual.accept_string(prefix)
+                assert _allowed_token_ids(actual, info) == _allowed_token_ids(expected, info)
+                _assert_mask_matches_replay(compiled, info, prefix)
+
+
 def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
     """With a character budget anywhere the matcher never uses the counted fast path, so the
     repetition is expanded as before instead of becoming a counted edge on the slow path."""
@@ -419,11 +457,12 @@ def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
         ('"" | "ab"', ["", "ab"]),
     ],
 )
+@pytest.mark.parametrize("offset", [0, 128])
 @pytest.mark.parametrize("lower,upper", [(0, 2), (1, 3), (2, 2)])
 @pytest.mark.parametrize("suffix", ["", "<|", "ab"])
 @pytest.mark.parametrize("dynamic", [False, True])
 def test_regular_repetition_masks_match_explicit_expansion(
-    body, words, lower, upper, suffix, dynamic
+    body, words, lower, upper, suffix, dynamic, offset
 ):
     """Compare bounded repeats with an independent expansion, including exits and partial UTF-8."""
     vocab = list(
@@ -456,14 +495,16 @@ def test_regular_repetition_masks_match_explicit_expansion(
     compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic)
     ending = json.dumps(suffix)
     candidate = compiler.compile_grammar(
-        f"root ::= unit{{{lower},{upper}}} {ending}\nunit ::= {body}"
+        f"root ::= unit{{{lower + offset},{upper + offset}}} {ending}\nunit ::= {body}"
     )
-    choices = [" ".join(["unit"] * count + [ending]) for count in range(lower, upper + 1)]
+    choices = [
+        " ".join(["unit"] * count + [ending]) for count in range(lower + offset, upper + offset + 1)
+    ]
     reference = compiler.compile_grammar("root ::= " + " | ".join(choices) + "\nunit ::= " + body)
     prefixes = {b""}
     for count in range(lower, upper + 1):
         for sequence in itertools.product(words, repeat=count):
-            text = ("".join(sequence) + suffix).encode()
+            text = (words[0] * offset + "".join(sequence) + suffix).encode()
             prefixes.update(text[:i] for i in range(len(text) + 1))
     restored = xgr.CompiledGrammar.deserialize_json(candidate.serialize_json(), info)
     for prefix in prefixes:
@@ -490,9 +531,12 @@ def test_regular_repeat_draft_tree_matches_expansion():
     info = xgr.TokenizerInfo(["a", "<x", "<|", "aa", "中"])
     compiler = xgr.GrammarCompiler(info)
     body = 'unit ::= [^<] | "<" [^|]'
-    bounded = compiler.compile_grammar('root ::= unit{1,3} "<|"\n' + body)
+    bounded = compiler.compile_grammar('root ::= unit{1,129} "<|"\n' + body)
     expanded = compiler.compile_grammar(
-        'root ::= unit "<|" | unit unit "<|" | unit unit unit "<|"\n' + body
+        "root ::= "
+        + " | ".join(" ".join(["unit"] * n + ['"<|"']) for n in range(1, 130))
+        + "\n"
+        + body
     )
     children = torch.tensor([1, 3, -1, -1], dtype=torch.int64)
     siblings = torch.tensor([-1, 2, -1, -1], dtype=torch.int64)
@@ -500,6 +544,7 @@ def test_regular_repeat_draft_tree_matches_expansion():
     masks = []
     for compiled in [bounded, expanded]:
         matcher = xgr.GrammarMatcher(compiled)
+        assert matcher.accept_string("a" * 126)
         before = _allowed_token_ids(matcher, info)
         mask = xgr.allocate_token_bitmask(4, info.vocab_size)
         assert matcher.traverse_draft_tree(children, siblings, tokens, mask)
@@ -514,13 +559,13 @@ def test_repeat_residual_replay_switches_at_interior_budget(dynamic):
     vocab = ["a", "aa", "aaaa", "ab", "b", "abab", "aab", "<eos>"]
     info = xgr.TokenizerInfo(vocab, stop_token_ids=[7])
     compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic)
-    bounded = compiler.compile_grammar('root ::= unit{1,6} "ab"\nunit ::= "a" | "b"')
+    bounded = compiler.compile_grammar('root ::= unit{1,130} "ab"\nunit ::= "a" | "b"')
     reference = compiler.compile_grammar(
         "root ::= "
-        + " | ".join(" ".join(["unit"] * i + ['"ab"']) for i in range(1, 7))
+        + " | ".join(" ".join(["unit"] * i + ['"ab"']) for i in range(1, 131))
         + '\nunit ::= "a" | "b"'
     )
-    for prefix in ["a", "aa", "aaa", "aaaa", "aaaaa", "aaaaaa", "aaaaaaa"]:
+    for prefix in ["a" * n for n in range(123, 132)]:
         actual = xgr.GrammarMatcher(bounded)
         expected = xgr.GrammarMatcher(reference)
         assert actual.accept_string(prefix)
@@ -547,3 +592,40 @@ def test_cyclic_repeat_body_keeps_parser_boundary_checks(dynamic, bounds):
         assert 1 in allowed
         assert 2 not in allowed  # "ba" would start a 301st repetition.
         assert 3 not in allowed
+
+
+@pytest.mark.parametrize("dynamic", [False, True])
+def test_large_zero_minimum_repeat_matches_expansion(dynamic):
+    """A nullable counted wrapper must allow both immediate exit and the full repeat budget."""
+    info = xgr.TokenizerInfo(["a", "b", "ab", "!", "a!", "a" * 129, "a" * 130])
+    compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic)
+    bounded = compiler.compile_grammar('root ::= unit{0,129} "!"\nunit ::= "a" | "b"')
+    reference = compiler.compile_grammar(
+        "root ::= "
+        + " | ".join(" ".join(["unit"] * n + ['"!"']) for n in range(130))
+        + '\nunit ::= "a" | "b"'
+    )
+    for prefix in ["", "a", "a" * 128, "a" * 129]:
+        expected = xgr.GrammarMatcher(reference)
+        actual = xgr.GrammarMatcher(bounded)
+        assert expected.accept_string(prefix) and actual.accept_string(prefix)
+        assert _allowed_token_ids(actual, info) == _allowed_token_ids(expected, info)
+        _assert_mask_matches_replay(bounded, info, prefix)
+
+
+@pytest.mark.parametrize("dynamic", [False, True])
+@pytest.mark.parametrize("empty_class", ["[]", r"[^\u0000-\U0010ffff]"])
+def test_repeat_body_with_dead_end_keeps_expansion(dynamic, empty_class):
+    """A branch that cannot complete a body must not qualify for interior acceptance."""
+    info = xgr.TokenizerInfo(["a", "b", "ba", "bb", "!", "b!", "a!"])
+    compiler = xgr.GrammarCompiler(info, enable_dynamic_compilation=dynamic)
+    body = f'\nunit ::= "a" {empty_class} | "b"'
+    bounded = compiler.compile_grammar('root ::= unit{129} "!"' + body)
+    reference = compiler.compile_grammar("root ::= " + " ".join(["unit"] * 129 + ['"!"']) + body)
+    assert "_counted" not in str(bounded.grammar)
+    for prefix in ["", "b", "b" * 128, "b" * 129]:
+        actual = xgr.GrammarMatcher(bounded)
+        expected = xgr.GrammarMatcher(reference)
+        assert actual.accept_string(prefix) and expected.accept_string(prefix)
+        assert _allowed_token_ids(actual, info) == _allowed_token_ids(expected, info)
+        _assert_mask_matches_replay(bounded, info, prefix)

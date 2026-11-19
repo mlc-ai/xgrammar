@@ -746,6 +746,7 @@ class FSMWithStartEndBase {
 /*!
  * \brief Whether an acyclic byte FSM has unambiguous, nonempty repetition boundaries.
  * Accepting states must have no outgoing edges: no accepted word is a prefix of another.
+ * Every reachable state must be able to reach an accepting state.
  * Rule, token, and epsilon edges are deliberately excluded.
  */
 template <typename FSMType>
@@ -756,6 +757,8 @@ bool IsDeterministicPrefixFreeByteDAG(const FSMWithStartEndBase<FSMType>& fsm) {
   std::unordered_map<int, int> incoming;
   for (int state : reachable) {
     incoming.try_emplace(state, 0);
+    // In a finite DAG, excluding non-accepting leaves ensures every path can complete a body.
+    if (!fsm.IsEndState(state) && fsm.GetFsm().GetEdges(state).size() == 0) return false;
     std::bitset<256> seen;
     for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
       if (!edge.IsCharRange() || edge.max > 255 || fsm.IsEndState(state)) return false;

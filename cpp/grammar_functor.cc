@@ -2197,6 +2197,8 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
   using GrammarMutator::GrammarMutator;
 
  private:
+  static constexpr int64_t kUnzipThreshold = 128;
+
   int32_t VisitRepeat(const GrammarExpr& grammar_expr) final {
     int32_t ref_rule_id = grammar_expr[0];
     int64_t lower = grammar_expr[1];
@@ -2462,8 +2464,10 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
     }
     counted = excluded;
   }
+  // Keep the existing expansion policy for small bounds: per-position masks avoid repeat
+  // bookkeeping and interior-bitset storage for short literals and fixed-width fields.
   // Both lowering and cache analysis use the same finite terminal-body restriction.
-  if (!counted && upper >= 0 && !HasCharBudgetRules() && !HasLazyRules() &&
+  if (!counted && upper > kUnzipThreshold && !HasCharBudgetRules() && !HasLazyRules() &&
       IsFiniteTerminalRepeatBody(base_grammar_, rule_id)) {
     const auto fsm = GrammarFSMBuilder::Choices(ref_rule_body, base_grammar_);
     if (fsm.has_value() && IsDeterministicPrefixFreeByteDAG(*fsm)) {
@@ -2509,7 +2513,6 @@ int32_t RepetitionRangeExpanderImpl::ExpandRepetitionRange(
     int64_t upper,
     bool counted
 ) {
-  static const int64_t kUnzipThreshold = 128;
   XGRAMMAR_CHECK(lower >= 0 && (upper == -1 || upper >= lower))
       << "Invalid repetition range {" << lower << ", " << upper << "}";
 
