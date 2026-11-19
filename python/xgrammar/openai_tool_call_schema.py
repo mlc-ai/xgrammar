@@ -13,7 +13,7 @@ different flat tool and tool_choice shapes; see the class docstrings below.
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # ============================================================
 # tools: list[FunctionToolParam]
@@ -103,6 +103,13 @@ class BuiltinToolParam(BaseModel):
     but XGrammar and serving engines need it to constrain the arguments emitted
     by the model.
     """
+
+    @field_validator("type")
+    @classmethod
+    def validate_builtin_type(cls, value: str) -> str:
+        if value == "function":
+            raise ValueError("The 'function' type requires a function tool definition.")
+        return value
 
 
 ToolParam = Union[FunctionToolParam, BuiltinToolParam]
