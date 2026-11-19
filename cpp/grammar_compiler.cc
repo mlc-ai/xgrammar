@@ -1029,6 +1029,18 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
   }
 }
 
+const std::vector<int32_t>& CompiledGrammar::Impl::GetEndOnTokens(const std::string& marker) {
+  std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
+  auto [it, inserted] = end_on_tokens.try_emplace(marker);
+  if (inserted) {
+    const auto& vocab = tokenizer_info.GetSortedDecodedVocab();
+    for (int32_t i = 0; i < static_cast<int32_t>(vocab.size()); ++i) {
+      if (vocab[i].second.find(marker) != std::string::npos) it->second.push_back(i);
+    }
+  }
+  return it->second;
+}
+
 const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const ParserState& state) {
   if (!enable_dynamic_compilation) {
     auto iterator = adaptive_token_mask_cache.find(state);

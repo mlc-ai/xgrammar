@@ -415,8 +415,9 @@ test_string_format_length_schema_input_str_accepted = {
         True,
     ),
     (
+        # A fully consumed XML delimiter commits a free string, including before minLength.
         '<parameter=name></parameter><parameter=contact_info>{"phone": "12345", "email": "test@test.com"}</parameter>',
-        False,
+        True,
     ),
     (
         '<parameter=name>ABC</parameter><parameter=contact_info>{"phone": "1234", "email": "test@test.com"}</parameter>',
@@ -830,7 +831,7 @@ minimax_test_string_format_length_schema_input_str_accepted = (
     ),
     (
         '<parameter name="name"></parameter><parameter name="contact_info">{"phone": "12345", "email": "test@test.com"}</parameter>',
-        False,
+        True,
     ),
     (
         '<parameter name="name">ABC</parameter><parameter name="contact_info">{"phone": "1234", "email": "test@test.com"}</parameter>',
@@ -3799,7 +3800,7 @@ def test_deepseek_mixed_enum_and_string_whitespace(any_order, style, parameter_t
         ),
         (
             {"type": "string", "minLength": 1},
-            [("reason", "true", True), ("reason", "false", False), ("", "true", False)],
+            [("reason", "true", True), ("reason", "false", False), ("", "true", True)],
         ),
         (
             {"enum": ["a", "b"]},

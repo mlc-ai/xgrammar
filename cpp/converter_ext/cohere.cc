@@ -350,7 +350,11 @@ int32_t CohereXMLToolCallingConverter::FormatCohereParamSuffix(
 
   auto options = GetCohereCompositeOptions(schema);
   if (!options.has_value()) {
-    return FormatCohereSuffixWithType(GetCohereTypePattern(schema), value_rule_id);
+    return CommitXMLStringBoundary(
+        FormatCohereSuffixWithType(GetCohereTypePattern(schema), value_rule_id),
+        schema,
+        value_rule_name
+    );
   }
 
   std::vector<int32_t> choices;

@@ -99,6 +99,62 @@ void EarleyParser::RecordCaptureEvent(const ParserState& state, bool marker_pres
   );
 }
 
+void EarleyParser::CompleteEndOn(const ParserState& state) {
+  const int32_t boundary_id =
+      end_on_boundary_for_context_[DecodeEndOnContext(state.end_on_context)];
+  const auto& boundary = end_on_boundaries_[boundary_id];
+  std::vector<ParserState> pending{state};
+  std::unordered_set<int64_t> visited;
+  while (!pending.empty()) {
+    auto current = pending.back();
+    pending.pop_back();
+    // Completion fans out to every saved parent at this rule origin. Parent budgets and
+    // temperature come from those saved states, not from the completed child variant.
+    const int64_t key = (static_cast<int64_t>(current.rule_id) << 32) |
+                        static_cast<uint32_t>(current.rule_start_pos);
+    if (!visited.insert(key).second) continue;
+    if (current.rule_id == boundary.rule_id) {
+      if (!capture_tracking_ || tmp_completed_end_on_owners_.insert(key).second) {
+        Complete(current);
+      }
+      continue;
+    }
+    if (current.rule_start_pos < 0) continue;
+    for (const auto& [ref_id, parent] : rule_id_to_completable_states_[current.rule_start_pos]) {
+      if (ref_id == current.rule_id && parent.end_on_context != -1 &&
+          end_on_boundary_for_context_[DecodeEndOnContext(parent.end_on_context)] == boundary_id) {
+        auto completed_parent = parent;
+        // Preserve completion while walking through helpers to the boundary owner.
+        completed_parent.end_on_context = state.end_on_context;
+        pending.push_back(std::move(completed_parent));
+      }
+    }
+  }
+}
+
+void EarleyParser::ProcessStateQueue(bool debug_print) {
+  do {
+    while (!tmp_process_state_queue_.empty()) {
+      const auto state = tmp_process_state_queue_.front();
+      tmp_process_state_queue_.pop();
+      auto [scanable, completable] = Predict(state, debug_print);
+      if (completable) {
+        Complete(state, debug_print);
+      }
+      if (scanable) {
+        tmp_states_to_be_added_.push_back(state);
+      }
+    }
+    for (const auto& state : tmp_end_on_completions_) {
+      CompleteEndOn(state);
+    }
+    tmp_end_on_completions_.clear();
+    // Forced completion can resume callers, including recursive occurrences of the same
+    // boundary. Process those states through the same FIFO and owner-completion policy.
+  } while (!tmp_process_state_queue_.empty());
+  tmp_completed_end_on_owners_.clear();
+}
+
 int32_t EarleyParser::ResolveActiveTemperatureRule(int32_t rule_id, int32_t inherited_rule_id)
     const {
   return grammar_->GetRule(rule_id).temperature.has_value() ? rule_id : inherited_rule_id;
@@ -149,10 +205,18 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
 
   // Check all the possible parent states.
   const auto& parent_states_map = rule_id_to_completable_states_[state.rule_start_pos];
-  for (const auto& [ref_id, parent_state] : parent_states_map) {
-    if (ref_id != state.rule_id) {
-      continue;
+  for (const auto& [ref_id, saved_parent_state] : parent_states_map) {
+    if (ref_id != state.rule_id) continue;
+    std::optional<ParserState> adjusted_parent;
+    if (saved_parent_state.end_on_context != state.end_on_context &&
+        saved_parent_state.end_on_context != -1 && state.end_on_context != -1 &&
+        end_on_boundary_for_context_[DecodeEndOnContext(saved_parent_state.end_on_context)] ==
+            end_on_boundary_for_context_[DecodeEndOnContext(state.end_on_context)]) {
+      adjusted_parent = saved_parent_state;
+      // Preserve pending completion when returning to a recursive occurrence of the same owner.
+      adjusted_parent->end_on_context = state.end_on_context;
     }
+    const auto& parent_state = adjusted_parent.has_value() ? *adjusted_parent : saved_parent_state;
     XGRAMMAR_DCHECK(
         parent_state.rule_id == -1 || grammar_->per_rule_fsms[parent_state.rule_id].has_value()
     );
@@ -175,7 +239,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.end_on_context
         });
         continue;
       }
@@ -198,7 +263,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.end_on_context
         });
       }
       // If the repeat count is less than the max repeat count, we can continue to
@@ -232,7 +298,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             0,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.end_on_context
         });
       }
       if (new_count < info.Upper()) {
@@ -246,7 +313,8 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
             new_count,
             0,
             parent_state.active_temperature_rule_id,
-            parent_state.char_budget_deadline
+            parent_state.char_budget_deadline,
+            parent_state.end_on_context
         });
       }
       break;
@@ -260,6 +328,31 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
 std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
     const ParserState& state, bool debug_print
 ) {
+  if (EndOnMatched(state.end_on_context)) {
+    if (!capture_tracking_) {
+      CompleteEndOn(state);
+      return {false, false};
+    }
+    const auto& boundary =
+        end_on_boundaries_[end_on_boundary_for_context_[DecodeEndOnContext(state.end_on_context)]];
+    const bool existing_occurrence =
+        state.rule_start_pos < static_cast<int32_t>(rule_id_to_completable_states_.size() - 1);
+    // Existing rules can be interrupted. Rules first entered in this zero-byte closure may
+    // only finish naturally, including recursive occurrences of the boundary's own rule.
+    if (existing_occurrence) {
+      tmp_end_on_completions_.push_back(state);
+    }
+    const auto flags = GetFsmStateFlags(state.rule_id, state.element_id);
+    if (flags & kFsmStateNonTerminal) {
+      ExpandNextRuleRefElementOnFSM(state, debug_print, true);
+    }
+    if ((flags & kFsmStateEnd) && state.rule_id == boundary.rule_id) {
+      tmp_completed_end_on_owners_.insert(
+          (static_cast<int64_t>(state.rule_id) << 32) | static_cast<uint32_t>(state.rule_start_pos)
+      );
+    }
+    return {false, flags & kFsmStateEnd};
+  }
   // Check if the rule has a corresponding FSM.
   if (state.rule_id != -1) {
     XGRAMMAR_DCHECK(grammar_->per_rule_fsms[state.rule_id].has_value());
@@ -296,7 +389,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.end_on_context
         });
       }
       return std::make_pair(true, false);
@@ -319,7 +413,8 @@ std::pair</* scanable */ bool, /* completable */ bool> EarleyParser::Predict(
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.end_on_context
         });
       }
       return std::make_pair(false, false);
@@ -398,12 +493,28 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
     char_count_history_.push_back(GetCurrentCharIndex() + StartsUTF8Codepoint(ch));
   }
   const auto& latest_states = scanable_state_history_[scanable_state_history_.size() - 1];
-  // Scan all the scanable states.
-  for (const auto& state : latest_states) {
-    if (skip_expired_states_ && IsExpiredState(state)) {
-      continue;
+  // Keep grammars without XML boundaries on the original scanning path.
+  if (end_on_boundaries_.empty()) {
+    for (const auto& state : latest_states) {
+      if (skip_expired_states_ && IsExpiredState(state)) continue;
+      Scan(state, ch);
     }
-    Scan(state, ch);
+  } else {
+    for (const auto& state : latest_states) {
+      if (skip_expired_states_ && IsExpiredState(state)) continue;
+      if (state.end_on_context < 0) {
+        Scan(state, ch);
+      } else {
+        const auto next_context = AdvanceEndOnContext(state.end_on_context, ch);
+        if (next_context == state.end_on_context) {
+          Scan(state, ch);
+          continue;
+        }
+        auto adjusted_state = state;
+        adjusted_state.end_on_context = next_context;
+        Scan(adjusted_state, ch);
+      }
+    }
   }
 
   // Check if the character is accepted.
@@ -419,17 +530,7 @@ bool EarleyParser::Advance(const uint8_t ch, bool debug_print) {
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
-  while (!tmp_process_state_queue_.empty()) {
-    const auto state = std::move(tmp_process_state_queue_.front());
-    tmp_process_state_queue_.pop();
-    auto [scanable, completable] = Predict(state, debug_print);
-    if (completable) {
-      Complete(state, debug_print);
-    }
-    if (scanable) {
-      tmp_states_to_be_added_.push_back(state);
-    }
-  }
+  ProcessStateQueue(debug_print);
 
   // Check if the grammar is completed, and add the scannable states to the history.
   if (!tmp_completed_lazy_occurrences_.empty()) {
@@ -487,6 +588,37 @@ EarleyParser::EarleyParser(const Grammar& grammar, std::optional<ParserState> in
       break;
     }
   }
+  // Leaf mask caches intentionally retain the original byte language. The matcher
+  // rechecks only tokens that can complete a marker in their concrete parent context.
+  if (!initial_state.has_value()) {
+    for (int32_t i = 0; i < grammar_->NumRules(); ++i) {
+      const auto* info = grammar_->GetSuffixStopInfo(i);
+      if (info == nullptr || info->end_on.empty()) continue;
+      if (end_on_context_for_rule_.empty()) {
+        end_on_context_for_rule_.assign(grammar_->NumRules(), -1);
+      }
+      EndOnBoundary boundary{
+          i,
+          static_cast<int32_t>(end_on_boundary_for_context_.size()),
+          info->end_on,
+          std::vector<int32_t>(info->end_on.size(), 0)
+      };
+      for (size_t pos = 1; pos < boundary.marker.size(); ++pos) {
+        int32_t matched = boundary.failure[pos - 1];
+        while (matched && boundary.marker[matched] != boundary.marker[pos]) {
+          matched = boundary.failure[matched - 1];
+        }
+        boundary.failure[pos] = matched + (boundary.marker[matched] == boundary.marker[pos]);
+      }
+      end_on_context_for_rule_[i] = boundary.context_base;
+      end_on_boundary_for_context_.insert(
+          end_on_boundary_for_context_.end(),
+          boundary.marker.size() + 1,
+          static_cast<int32_t>(end_on_boundaries_.size())
+      );
+      end_on_boundaries_.push_back(std::move(boundary));
+    }
+  }
   for (int32_t rule_id : grammar_->allow_empty_rule_ids) {
     rule_is_nullable_[rule_id] = true;
   }
@@ -517,6 +649,9 @@ uint8_t EarleyParser::InitializeFsmStateFlags(int32_t rule_id, int32_t state_id)
   for (const auto& edge : edges) {
     if (edge.IsCharRange() || edge.IsToken() || edge.IsExcludeToken()) {
       flags |= kFsmStateScanable;
+      if (edge.IsToken() || edge.IsExcludeToken()) {
+        flags |= kFsmStateHasTokenEdge;
+      }
       if (edge.IsExcludeToken()) {
         flags |= kFsmStateHasExcludeToken;
       }
@@ -540,7 +675,8 @@ ParserState EarleyParser::RootInitialState() const {
       0,
       0,
       ResolveActiveTemperatureRule(root_rule_id, -1),
-      CharDeadlineForRule(root_rule_id, -1)
+      CharDeadlineForRule(root_rule_id, -1),
+      EnterEndOnRule(root_rule_id, -1)
   );
 }
 
@@ -554,17 +690,7 @@ void EarleyParser::PushStateAndExpand(const ParserState& state) {
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
-  while (!tmp_process_state_queue_.empty()) {
-    const auto state = tmp_process_state_queue_.front();
-    tmp_process_state_queue_.pop();
-    auto [scanable, completable] = Predict(state);
-    if (completable) {
-      Complete(state);
-    }
-    if (scanable) {
-      tmp_states_to_be_added_.push_back(state);
-    }
-  }
+  ProcessStateQueue();
   if (!tmp_completed_lazy_occurrences_.empty()) {
     RemoveCommittedLazyStates();
   }
@@ -620,7 +746,8 @@ void EarleyParser::ExpandNextRuleRefElement(
   if (state.element_id != grammar_expr.size() - 1 ||
       sub_grammar_expr->type == GrammarExprType::kRepeat ||
       (state.rule_start_pos == rule_id_to_completable_states_.size() - 1) ||
-      RuleNeedsCaptureEvent(state.rule_id) || RuleNeedsCaptureEvent(ref_rule_id)) {
+      RuleNeedsCaptureEvent(state.rule_id) || RuleNeedsCaptureEvent(ref_rule_id) ||
+      RuleHasEndOn(state.rule_id) || RuleHasEndOn(ref_rule_id)) {
     // It's not the right recursion, or it's the root rule.
     rule_id_to_completable_states_.PushBackInLatestRow(std::make_pair(ref_rule_id, state));
   } else {
@@ -664,7 +791,8 @@ void EarleyParser::ExpandNextRuleRefElement(
         0,
         0,
         state.active_temperature_rule_id,
-        state.char_budget_deadline
+        state.char_budget_deadline,
+        state.end_on_context
     });
   }
 
@@ -688,11 +816,14 @@ void EarleyParser::ExpandNextRuleRefElement(
       0,
       0,
       ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
-      CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
+      CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
+      EnterEndOnRule(ref_rule_id, state.end_on_context)
   });
 }
 
-void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool debug_print) {
+void EarleyParser::ExpandNextRuleRefElementOnFSM(
+    const ParserState& state, bool debug_print, bool zero_width_only
+) {
   XGRAMMAR_DCHECK(state.rule_id != -1 && grammar_->per_rule_fsms[state.rule_id].has_value());
   const auto& fsm = grammar_->per_rule_fsms[state.rule_id].value();
 
@@ -709,7 +840,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           state.active_temperature_rule_id,
-          state.char_budget_deadline
+          state.char_budget_deadline,
+          state.end_on_context
       });
       continue;
     }
@@ -739,7 +871,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
             0,
             0,
             state.active_temperature_rule_id,
-            state.char_budget_deadline
+            state.char_budget_deadline,
+            state.end_on_context
         });
       }
       if (state.repeat_count >= repeat_info.Upper()) {
@@ -755,9 +888,11 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                          << ref_rule_id << ": " << grammar_->GetRule(ref_rule_id).name << ".";
     }
     const uint8_t target_flags = GetFsmStateFlags(state.rule_id, target);
-    if (!is_repeat && !(target_flags & kFsmStateHasEdges) && (target_flags & kFsmStateEnd) &&
+    if (!zero_width_only && !is_repeat && !(target_flags & kFsmStateHasEdges) &&
+        (target_flags & kFsmStateEnd) &&
         state.rule_start_pos != static_cast<int32_t>(rule_id_to_completable_states_.size() - 1) &&
-        !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id)) {
+        !RuleNeedsCaptureEvent(state.rule_id) && !RuleNeedsCaptureEvent(ref_rule_id) &&
+        !RuleHasEndOn(state.rule_id) && !RuleHasEndOn(ref_rule_id)) {
       // It's a right recursion. We can optimize it. The optimization elides the completion of
       // the parent rule, so it is disabled when either rule produces capture-history events.
       // If it's the right recursion, we need to add the ancestors of the parent state.
@@ -802,7 +937,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  state.repeat_count,
                  0,
                  state.active_temperature_rule_id,
-                 state.char_budget_deadline
+                 state.char_budget_deadline,
+                 state.end_on_context
              }}
         );
       } else {
@@ -819,7 +955,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
                  0,
                  0,
                  state.active_temperature_rule_id,
-                 state.char_budget_deadline
+                 state.char_budget_deadline,
+                 state.end_on_context
              }}
         );
       }
@@ -837,7 +974,8 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
           0,
           0,
           state.active_temperature_rule_id,
-          state.char_budget_deadline
+          state.char_budget_deadline,
+          state.end_on_context
       });
     }
 
@@ -861,7 +999,10 @@ void EarleyParser::ExpandNextRuleRefElementOnFSM(const ParserState& state, bool 
         0,
         0,
         ResolveActiveTemperatureRule(ref_rule_id, state.active_temperature_rule_id),
-        CharDeadlineForRule(ref_rule_id, state.char_budget_deadline)
+        CharDeadlineForRule(ref_rule_id, state.char_budget_deadline),
+        // Fresh children retain the zero-width mode, including nested boundary owners.
+        // They may complete naturally, but cannot scan or be forced at their new origin.
+        zero_width_only ? state.end_on_context : EnterEndOnRule(ref_rule_id, state.end_on_context)
     });
   }
 }
@@ -1221,17 +1362,7 @@ bool EarleyParser::AdvanceAtomicToken(
   if (capture_tracking_) {
     capture_event_history_.PushBack(std::vector<CaptureEvent>());
   }
-  while (!tmp_process_state_queue_.empty()) {
-    const auto state = std::move(tmp_process_state_queue_.front());
-    tmp_process_state_queue_.pop();
-    auto [scanable, completable] = Predict(state, debug_print);
-    if (completable) {
-      Complete(state, debug_print);
-    }
-    if (scanable) {
-      tmp_states_to_be_added_.push_back(state);
-    }
-  }
+  ProcessStateQueue(debug_print);
   if (!tmp_completed_lazy_occurrences_.empty()) {
     RemoveCommittedLazyStates();
   }

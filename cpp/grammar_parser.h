@@ -74,6 +74,7 @@ class EBNFLexer {
     int32_t capture_hidden_marker_rule_id = -1;
     // Capture name for the bytes matched by a suffix/stop marker.
     std::string stop_capture_name = {};
+    std::string end_on = {};
     // Whether the identifier is a rule name carrying the [lazy] attribute, e.g. r[lazy] ::= ...
     bool is_lazy = false;
     // The sampling temperature attached to a rule-definition identifier via name[temperature=T].

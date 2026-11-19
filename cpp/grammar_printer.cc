@@ -57,6 +57,9 @@ std::string GrammarPrinter::PrintRule(const Rule& rule, const SuffixStopInfo* su
     if (suffix_stop_info != nullptr && !suffix_stop_info->stop_capture_name.empty()) {
       append_attribute("stop_capture=\"" + suffix_stop_info->stop_capture_name + "\"");
     }
+    if (suffix_stop_info != nullptr && !suffix_stop_info->end_on.empty()) {
+      append_attribute("end_on=\"" + suffix_stop_info->end_on + "\"");
+    }
     if (rule.is_lazy) {
       append_attribute("lazy");
     }

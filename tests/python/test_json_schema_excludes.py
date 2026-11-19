@@ -99,6 +99,7 @@ def test_excludes_drop_length_constraints(style, schema, capfd):
         assert _is_grammar_accept_string(unbounded, string_instance(value, style))
         assert _is_grammar_accept_string(bounded, string_instance(value, style)) == (
             schema.get("minLength", 0) <= len(value) <= schema.get("maxLength", 10**9)
+            or (style != "json" and "maxLength" not in schema)
         )
     for value in ("bc", "acbz", "a" * 20 + "bc"):
         assert not _is_grammar_accept_string(unbounded, string_instance(value, style))
@@ -397,7 +398,8 @@ def test_excludes_preserve_unicode_pattern_and_json_escaping(style):
     for grammar in (baseline, filtered):
         assert _is_grammar_accept_string(grammar, string_instance('你"好', style))
         assert _is_grammar_accept_string(grammar, string_instance("你好", style))
-        assert not _is_grammar_accept_string(grammar, string_instance("你", style))
+        # XML commits on its full marker; JSON still requires a complete pattern match.
+        assert _is_grammar_accept_string(grammar, string_instance("你", style)) == (style != "json")
 
 
 @pytest.mark.parametrize("style", ["json", "kimi_k3_xml"])

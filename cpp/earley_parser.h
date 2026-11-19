@@ -11,7 +11,6 @@
 #include <limits>
 #include <optional>
 #include <ostream>
-#include <queue>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -54,7 +53,8 @@ struct ParserState {
       const int32_t& repeat_count = 0,
       const int32_t& partial_codepoint = 0,
       const int32_t& active_temperature_rule_id = -1,
-      const int32_t& char_budget_deadline = -1
+      const int32_t& char_budget_deadline = -1,
+      const int32_t& end_on_context = -1
   )
       : rule_id(rule_id),
         sequence_id(sequence_id),
@@ -65,7 +65,8 @@ struct ParserState {
         repeat_count(repeat_count),
         partial_codepoint(partial_codepoint),
         active_temperature_rule_id(active_temperature_rule_id),
-        char_budget_deadline(char_budget_deadline) {}
+        char_budget_deadline(char_budget_deadline),
+        end_on_context(end_on_context) {}
 
   /*!
    * \brief A rule_start_pos value of kNoPrevInputPos means this ParserState is the root of the
@@ -109,6 +110,10 @@ struct ParserState {
    * character budget expires; -1 means unlimited. Stored as an absolute input position. */
   int32_t char_budget_deadline = -1;
 
+  /*! \brief Byte-boundary context: -1 is inactive, nonnegative is a delimiter prefix,
+   * and the bitwise complement of a completed context is pending completion. */
+  int32_t end_on_context = -1;
+
   /*!
    * \brief Lexicographic order over all fields. It is only used to sort the states for
    * deterministic serialization, and is not needed during parsing.
@@ -127,7 +132,10 @@ struct ParserState {
     if (active_temperature_rule_id != other.active_temperature_rule_id) {
       return active_temperature_rule_id < other.active_temperature_rule_id;
     }
-    return char_budget_deadline < other.char_budget_deadline;
+    if (char_budget_deadline != other.char_budget_deadline) {
+      return char_budget_deadline < other.char_budget_deadline;
+    }
+    return end_on_context < other.end_on_context;
   }
 
   friend std::ostream& operator<<(std::ostream& os, const ParserState& state) {
@@ -172,7 +180,8 @@ XGRAMMAR_MEMBER_ARRAY(
     &ParserState::repeat_count,
     &ParserState::partial_codepoint,
     &ParserState::active_temperature_rule_id,
-    &ParserState::char_budget_deadline
+    &ParserState::char_budget_deadline,
+    &ParserState::end_on_context
 );
 
 /*!
@@ -212,7 +221,8 @@ class StateEqualForParsing {
            lhs.partial_codepoint == rhs.partial_codepoint &&
            lhs.budget_deadline == rhs.budget_deadline &&
            lhs.active_temperature_rule_id == rhs.active_temperature_rule_id &&
-           lhs.char_budget_deadline == rhs.char_budget_deadline;
+           lhs.char_budget_deadline == rhs.char_budget_deadline &&
+           lhs.end_on_context == rhs.end_on_context;
   }
 };
 
@@ -223,6 +233,8 @@ class StateEqualForParsing {
 class StateHashForParsing {
  public:
   size_t operator()(const ParserState& state) const {
+    // Boundary contexts participate in equality but may share a hash; ordinary grammars
+    // retain the original hash without paying for the optional discriminator.
     return HashCombine(
         state.rule_id,
         state.sequence_id,
@@ -354,8 +366,34 @@ class EarleyParser {
    */
   std::vector<ParserState> tmp_states_to_be_added_;
 
-  /*! \brief It's the processing queue of the earley parser. */
-  std::queue<ParserState> tmp_process_state_queue_;
+  // Every consumer copies front() before popping, so processing may enqueue and reallocate.
+  // Retain the scratch capacity between bytes rather than cycling deque allocation blocks.
+  class StateQueue {
+   public:
+    bool empty() const { return states_.empty(); }
+    ParserState& front() { return states_[head_]; }
+    void push(const ParserState& state) {
+      // A long epsilon chain can keep a small frontier nonempty indefinitely. Compact only
+      // when growth is imminent, so retained capacity tracks the frontier, not processed states.
+      if (states_.size() == states_.capacity() && head_ > states_.size() / 2) {
+        std::move(states_.begin() + head_, states_.end(), states_.begin());
+        states_.resize(states_.size() - head_);
+        head_ = 0;
+      }
+      states_.push_back(state);
+    }
+    void pop() {
+      if (++head_ == states_.size()) {
+        states_.clear();
+        head_ = 0;
+      }
+    }
+
+   private:
+    std::vector<ParserState> states_;
+    size_t head_ = 0;
+  };
+  StateQueue tmp_process_state_queue_;
 
   /*! \brief The class is used to check if a state has been added into the queue. */
   RepeatDetector tmp_states_visited_in_queue_;
@@ -370,6 +408,7 @@ class EarleyParser {
     kFsmStateEnd = 1 << 3,
     kFsmStateHasEdges = 1 << 4,
     kFsmStateHasExcludeToken = 1 << 5,
+    kFsmStateHasTokenEdge = 1 << 6,
   };
 
   /*! \brief Lazily-computed FSM state properties, indexed by rule id and state id. */
@@ -563,6 +602,45 @@ class EarleyParser {
   /*! \brief The initial state expanded from the root rule of the grammar. */
   ParserState RootInitialState() const;
 
+  struct EndOnBoundary {
+    int32_t rule_id;
+    int32_t context_base;
+    std::string marker;
+    std::vector<int32_t> failure;
+  };
+  std::vector<EndOnBoundary> end_on_boundaries_;
+  std::vector<int32_t> end_on_boundary_for_context_;
+  std::vector<int32_t> end_on_context_for_rule_;
+
+  int32_t EnterEndOnRule(int32_t rule_id, int32_t inherited) const {
+    return RuleHasEndOn(rule_id) ? end_on_context_for_rule_[rule_id] : inherited;
+  }
+  int32_t AdvanceEndOnContext(int32_t context, uint8_t byte) const {
+    const auto& boundary = end_on_boundaries_[end_on_boundary_for_context_[context]];
+    int32_t matched = context - boundary.context_base;
+    while (matched && static_cast<uint8_t>(boundary.marker[matched]) != byte) {
+      matched = boundary.failure[matched - 1];
+    }
+    matched += static_cast<uint8_t>(boundary.marker[matched]) == byte;
+    const int32_t next_context = boundary.context_base + matched;
+    // Markers are nonempty, so a completed context is at least 1 and its complement is <= -2.
+    return matched == static_cast<int32_t>(boundary.marker.size()) ? ~next_context : next_context;
+  }
+  static bool EndOnMatched(int32_t context) { return context < -1; }
+  static int32_t DecodeEndOnContext(int32_t context) {
+    return EndOnMatched(context) ? ~context : context;
+  }
+  void CompleteEndOn(const ParserState& state);
+  // Only populated while closing a boundary in a grammar with captures. Natural completion
+  // uses the ordinary FIFO first; forced completion must not overtake nullable captures.
+  std::vector<ParserState> tmp_end_on_completions_;
+  std::unordered_set<int64_t> tmp_completed_end_on_owners_;
+  void ProcessStateQueue(bool debug_print = false);
+  bool RuleHasEndOn(int32_t rule_id) const {
+    return !end_on_context_for_rule_.empty() && rule_id >= 0 &&
+           end_on_context_for_rule_[rule_id] >= 0;
+  }
+
   /*! \brief Resolve the active temperature rule when entering a rule. */
   int32_t ResolveActiveTemperatureRule(int32_t rule_id, int32_t inherited_rule_id) const;
 
@@ -588,8 +666,12 @@ class EarleyParser {
    * \brief Expand the rule, used for RuleRef and kTagDispatch.
    * \param state The state to be expanded, and it's should be on the FSM.
    * \param debug_print Whether to print the debug information.
+   * \param zero_width_only Preserve the completed boundary while expanding its zero-byte
+   * closure; newly entered rules may finish naturally but may not scan input or be forced.
    */
-  void ExpandNextRuleRefElementOnFSM(const ParserState& state, bool debug_print = false);
+  void ExpandNextRuleRefElementOnFSM(
+      const ParserState& state, bool debug_print = false, bool zero_width_only = false
+  );
 
   /*!
    * \brief Advance the parser to the next state, with the sub sequence is kCharacterClass.
@@ -672,6 +754,10 @@ class EarleyParser {
    * \param state The state to be enqueued.
    */
   void EnqueueWithoutProcessing(const ParserState& state) {
+    if (EndOnMatched(state.end_on_context)) {
+      Enqueue(state);
+      return;
+    }
     if (!IsStateVisitedInQueue(state)) {
       tmp_states_visited_in_queue_.Insert(state);
       tmp_states_to_be_added_.push_back(state);

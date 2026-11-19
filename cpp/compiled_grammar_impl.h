@@ -168,6 +168,10 @@ class CompiledGrammar::Impl {
   /*! \brief Get an existing token mask or generate and cache it on demand. */
   const AdaptiveTokenMask& GetAdaptiveTokenMask(const ParserState& state);
 
+  /*! \brief Derived vocabulary index for tokens containing a complete byte boundary. */
+  std::unordered_map<std::string, std::vector<int32_t>> end_on_tokens;
+  const std::vector<int32_t>& GetEndOnTokens(const std::string& marker);
+
   /*! \brief Generate every token mask before serialization. */
   void MaterializeAdaptiveTokenMaskCache();
 
