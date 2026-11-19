@@ -995,7 +995,8 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       return grammar;
     }
     BuildRuleLookaheadInfo();
-    for (int i = 0; i < static_cast<int>(grammar->NumRules()); ++i) {
+    const int num_rules = static_cast<int>(grammar->NumRules());
+    for (int i = 0; i < num_rules; ++i) {
       auto rule = grammar->GetRule(i);
       if (i == grammar->GetRootRuleId()) {
         continue;
@@ -1008,6 +1009,29 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
       if (look_head_assertion_id != -1) {
         builder_->UpdateLookaheadAssertion(i, look_head_assertion_id);
         builder_->UpdateLookaheadExact(i);
+      }
+    }
+    // Follow each chain of CanInheritLookahead rules up to a rule with a lookahead. A rule is
+    // walked at most once: chains that end without one, or loop, stay marked.
+    std::vector<bool> walked(num_rules, false);
+    std::vector<int32_t> chain;
+    for (int i = 0; i < num_rules; ++i) {
+      chain.clear();
+      int32_t rule_id = i;
+      while (!walked[rule_id] && builder_->GetRule(rule_id).lookahead_assertion_id == -1 &&
+             CanInheritLookahead(rule_id)) {
+        walked[rule_id] = true;
+        chain.push_back(rule_id);
+        rule_id = rule_lookahead_infos_[rule_id].last_occurrence_rule_id;
+      }
+      const int32_t lookahead_id = builder_->GetRule(rule_id).lookahead_assertion_id;
+      const bool is_exact = builder_->GetRule(rule_id).is_exact_lookahead;
+      if (rule_id == grammar->GetRootRuleId() || lookahead_id == -1) {
+        continue;
+      }
+      for (int32_t inheriting_rule_id : chain) {
+        builder_->UpdateLookaheadAssertion(inheriting_rule_id, lookahead_id);
+        builder_->UpdateLookaheadExact(inheriting_rule_id, is_exact);
       }
     }
     return builder_->Get(grammar->GetRootRuleId());
@@ -1028,15 +1052,34 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
  private:
   struct RuleLookaheadInfo {
     bool is_triggered_by_dispatch = false;
-    bool appears_as_last_in_other_rule = false;
+    bool is_repeated = false;
     int non_last_occurrence_count = 0;
+    int last_occurrence_count = 0;
+    int32_t last_occurrence_rule_id = -1;
     std::vector<int32_t> suffix_after_first_occurrence;
   };
 
   bool CanUseDerivedLookahead(int32_t rule_id) const {
     const auto& info = rule_lookahead_infos_[rule_id];
-    return !info.is_triggered_by_dispatch && !info.appears_as_last_in_other_rule &&
+    return !info.is_triggered_by_dispatch && info.last_occurrence_count == 0 &&
            info.non_last_occurrence_count == 1;
+  }
+
+  /*! \brief Whether the rule is referenced once, at the end of another rule without attributes. */
+  bool CanInheritLookahead(int32_t rule_id) const {
+    const auto& info = rule_lookahead_infos_[rule_id];
+    if (rule_id == base_grammar_->GetRootRuleId() || info.is_triggered_by_dispatch ||
+        info.is_repeated || info.non_last_occurrence_count != 0 ||
+        info.last_occurrence_count != 1) {
+      return false;
+    }
+    for (int32_t id : {rule_id, info.last_occurrence_rule_id}) {
+      if (base_grammar_->GetRule(id).HasRuleAttributes() ||
+          base_grammar_->GetSuffixStopInfo(id) != nullptr) {
+        return false;
+      }
+    }
+    return true;
   }
 
   void BuildRuleLookaheadInfo() {
@@ -1071,10 +1114,18 @@ class LookaheadAssertionAnalyzerImpl : public GrammarMutator {
         }
         auto last_element = base_grammar_->GetGrammarExpr(sequence_expr.end()[-1]);
         if (last_element.type == GrammarExprType::kRuleRef && i != last_element[0]) {
-          rule_lookahead_infos_[last_element[0]].appears_as_last_in_other_rule = true;
+          auto& info = rule_lookahead_infos_[last_element[0]];
+          ++info.last_occurrence_count;
+          info.last_occurrence_rule_id = i;
+        }
+        if (last_element.type == GrammarExprType::kRepeat) {
+          rule_lookahead_infos_[last_element[0]].is_repeated = true;
         }
         for (int j = 0; j < sequence_expr.size() - 1; ++j) {
           auto element_expr = base_grammar_->GetGrammarExpr(sequence_expr[j]);
+          if (element_expr.type == GrammarExprType::kRepeat) {
+            rule_lookahead_infos_[element_expr[0]].is_repeated = true;
+          }
           if (element_expr.type != GrammarExprType::kRuleRef) {
             continue;
           }
