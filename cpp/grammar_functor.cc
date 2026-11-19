@@ -2318,6 +2318,25 @@ class RepetitionRangeExpanderImpl : public GrammarMutator {
    * the byte after the repetition.
    */
   std::map<std::vector<int32_t>, int32_t> counted_body_rule_ids_;
+  /*!
+   * \brief The body rule of each counted repetition of a byte-unit rule (see
+   * HandleRepetitionRange), keyed on the content of the unit and the byte after the repetition.
+   */
+  std::map<std::vector<int64_t>, int32_t> counted_unit_rule_ids_;
+
+  /*! \brief Append the content of `expr` of the base grammar to `key`, children included. */
+  void AppendExprContent(const GrammarExpr& expr, std::vector<int64_t>* key) const {
+    key->push_back(static_cast<int64_t>(expr.type));
+    key->push_back(expr.size());
+    if (expr.type == GrammarBuilder::GrammarExprType::kSequence ||
+        expr.type == GrammarBuilder::GrammarExprType::kChoices) {
+      for (int32_t child : expr) {
+        AppendExprContent(base_grammar_->GetGrammarExpr(child), key);
+      }
+    } else {
+      key->insert(key->end(), expr.begin(), expr.end());
+    }
+  }
 };
 
 /****************** Repetition range helpers ******************/
@@ -2425,6 +2444,42 @@ int32_t RepetitionRangeExpanderImpl::HandleRepetitionRange(
   // a repetition with a lower bound or without an upper bound keeps the expansion too: the lazy
   // body flattener flattens that expansion but not a counted edge.
   const auto repeated_expr = builder_->GetGrammarExpr(grammar_expr_id);
+  const bool counting_allowed = follow_byte_.has_value() && *follow_byte_ < 0x80 &&
+                                !HasCharBudgetRules() &&
+                                ((lower == 0 && upper != -1) || !HasLazyRules());
+
+  // The body of a length-bounded JSON string also spells out its escapes: a choice of a negative
+  // character class and byte sequences such as `"\\" ["\\/bfnrt]`, one rule that the repetition
+  // refers to. Such a rule matches exactly one unit per repetition and is counted like a single
+  // class when the byte after the repetition cannot start a unit: a token that stays inside the
+  // repetition is then decided from the bounds too, and only the tokens that leave it or stop
+  // inside a unit, such as one ending in a lone backslash, go through the parser.
+  if (counting_allowed && repeated_expr.type == GrammarBuilder::GrammarExprType::kRuleRef &&
+      ref_rule.max_tokens < 0 && ref_rule.max_chars < 0 &&
+      base_grammar_->GetSuffixStopInfo(rule_id) == nullptr && !ref_rule.is_lazy &&
+      !ref_rule.temperature.has_value() && ref_rule.lookahead_assertion_id == -1 &&
+      ref_rule.capture_name.empty() && base_grammar_->IsByteUnitExpr(ref_rule_body) &&
+      base_grammar_->ByteUnitExprHasNegativeClass(ref_rule_body) &&
+      !base_grammar_->ByteUnitExprCanStartWith(ref_rule_body, *follow_byte_)) {
+    std::vector<int64_t> unit_key;
+    AppendExprContent(ref_rule_body, &unit_key);
+    unit_key.push_back(*follow_byte_);
+    auto [it, inserted] = counted_unit_rule_ids_.try_emplace(std::move(unit_key), -1);
+    if (inserted) {
+      const auto follow_byte = follow_byte_;
+      follow_byte_ = std::nullopt;
+      const int32_t body_expr_id = VisitExpr(ref_rule.body_expr_id);
+      follow_byte_ = follow_byte;
+      it->second = builder_->AddRuleWithHint(cur_rule_name + "_repeat", body_expr_id);
+    }
+    counted_repetition_ = true;
+    return builder_->AddRepeat(
+        it->second,
+        static_cast<int32_t>(lower),
+        upper == -1 ? INT32_MAX : static_cast<int32_t>(upper)
+    );
+  }
+
   bool counted = false;
   if (repeated_expr.type == GrammarBuilder::GrammarExprType::kCharacterClass &&
       repeated_expr[0] != 0 && follow_byte_.has_value() && *follow_byte_ < 0x80 &&

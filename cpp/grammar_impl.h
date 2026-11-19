@@ -284,6 +284,93 @@ class Grammar::Impl {
     return grammar_expr[0] != 0;
   }
 
+  /*!
+   * \brief Whether the expr is built only from character classes and byte strings, combined by
+   * sequences and choices. Such an expr matches a finite set of byte strings without entering
+   * another rule, so a rule with this body is one indivisible unit of the text it repeats.
+   */
+  bool IsByteUnitExpr(const GrammarExpr& grammar_expr) const {
+    switch (grammar_expr.type) {
+      case GrammarExprType::kCharacterClass:
+        return true;
+      case GrammarExprType::kByteString:
+        return grammar_expr.size() > 0;
+      case GrammarExprType::kSequence:
+      case GrammarExprType::kChoices:
+        if (grammar_expr.size() == 0) {
+          return false;
+        }
+        for (int32_t child : grammar_expr) {
+          if (!IsByteUnitExpr(GetGrammarExpr(child))) {
+            return false;
+          }
+        }
+        return true;
+      default:
+        return false;
+    }
+  }
+
+  /*!
+   * \brief Whether a match of the byte-unit expr (IsByteUnitExpr) can start with the ASCII byte.
+   */
+  bool ByteUnitExprCanStartWith(const GrammarExpr& grammar_expr, uint8_t byte) const {
+    XGRAMMAR_DCHECK(byte < 0x80) << "Only ASCII bytes are supported";
+    switch (grammar_expr.type) {
+      case GrammarExprType::kCharacterClass: {
+        bool in_ranges = false;
+        for (int i = 1; i + 1 < grammar_expr.size(); i += 2) {
+          in_ranges = in_ranges || (grammar_expr[i] <= byte && byte <= grammar_expr[i + 1]);
+        }
+        return (grammar_expr[0] != 0) != in_ranges;
+      }
+      case GrammarExprType::kByteString:
+        return static_cast<uint8_t>(grammar_expr[0]) == byte;
+      case GrammarExprType::kSequence:
+        // No element of a byte-unit expr matches the empty string, so a match starts with a match
+        // of the first element.
+        return ByteUnitExprCanStartWith(GetGrammarExpr(grammar_expr[0]), byte);
+      case GrammarExprType::kChoices:
+        for (int32_t child : grammar_expr) {
+          if (ByteUnitExprCanStartWith(GetGrammarExpr(child), byte)) {
+            return true;
+          }
+        }
+        return false;
+      default:
+        XGRAMMAR_LOG(FATAL) << "Not a byte-unit expr";
+        XGRAMMAR_UNREACHABLE();
+    }
+  }
+
+  /*!
+   * \brief Whether one alternative of the byte-unit expr is a negative character class, i.e. the
+   * expr repeats like the body of a string: any character but a few, plus spelled-out exceptions.
+   */
+  bool ByteUnitExprHasNegativeClass(const GrammarExpr& grammar_expr) const {
+    const auto unwrap = [this](GrammarExpr expr) {
+      while ((expr.type == GrammarExprType::kChoices || expr.type == GrammarExprType::kSequence) &&
+             expr.size() == 1) {
+        expr = GetGrammarExpr(expr[0]);
+      }
+      return expr;
+    };
+    const auto expr = unwrap(grammar_expr);
+    if (expr.type == GrammarExprType::kCharacterClass) {
+      return expr[0] != 0;
+    }
+    if (expr.type != GrammarExprType::kChoices) {
+      return false;
+    }
+    for (int32_t child : expr) {
+      const auto alternative = unwrap(GetGrammarExpr(child));
+      if (alternative.type == GrammarExprType::kCharacterClass && alternative[0] != 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /*! \brief Get the chunk list of the substring grammar expr. */
   std::vector<std::string> GetSubstringChunks(const GrammarExpr& grammar_expr) const {
     XGRAMMAR_DCHECK(grammar_expr.type == GrammarExprType::kSubstring)

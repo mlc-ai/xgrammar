@@ -2801,6 +2801,29 @@ def test_min_max_length():
     check_schema_with_instance(schema, instance_rejected, is_accepted=False, any_whitespace=True)
 
 
+def test_min_max_length_allows_escapes():
+    # A length bound must not change WHICH characters a string may contain. The
+    # length-bounded path used a class with no escape alternative, so \", \\, \n
+    # and \uXXXX were unrepresentable and a model needing one could not close the
+    # string -- it kept emitting until it hit the token limit.
+    schema = {"type": "string", "maxLength": 10}
+
+    check_schema_with_instance(schema, r'"ab\ncd"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"say \"hi\""', any_whitespace=True)
+    check_schema_with_instance(schema, r'"back\\sl"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"a\u0062c"', any_whitespace=True)
+    check_schema_with_instance(schema, '"a\u00e9b"', any_whitespace=True)
+
+    # An unescaped control character is still invalid JSON.
+    check_schema_with_instance(schema, '"ab\ncd"', is_accepted=False, any_whitespace=True)
+
+    # The bound still bites: one escape is one character.
+    check_schema_with_instance(schema, r'"\n\n\n\n\n\n\n\n\n\n"', any_whitespace=True)
+    check_schema_with_instance(
+        schema, r'"\n\n\n\n\n\n\n\n\n\n\n"', is_accepted=False, any_whitespace=True
+    )
+
+
 # --- pattern/format combined with minLength/maxLength (issue #749) ----------------------------
 #
 # GenerateString takes exactly one branch, so a pattern or a built-in format shadows the
@@ -2873,6 +2896,34 @@ def test_string_pattern_with_length_still_ignores_the_bound(capfd):
     capfd.readouterr()
     assert str(grammar) == str(xgr.Grammar.from_json_schema(json.dumps(unbounded)))
     assert _is_grammar_accept_string(grammar, '"abcd"')
+
+
+def test_min_max_length_counts_surrogate_pair_as_one_character():
+    # U+1F600 is ONE code point, so it costs one repetition however it is spelled.
+    schema = {"type": "string", "maxLength": 1}
+
+    check_schema_with_instance(schema, r'"\ud83d\ude00"', any_whitespace=True)
+    check_schema_with_instance(schema, '"\U0001f600"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"\uD83D\uDE00"', any_whitespace=True)
+
+    # Two of them exceed the bound.
+    check_schema_with_instance(
+        schema, r'"\ud83d\ude00\ud83d\ude00"', is_accepted=False, any_whitespace=True
+    )
+
+
+def test_min_max_length_rejects_lone_surrogate():
+    # A lone surrogate does not decode to valid UTF-8, so it is not a character
+    # the bound could count.
+    schema = {"type": "string", "maxLength": 4}
+
+    check_schema_with_instance(schema, r'"\ud800"', is_accepted=False, any_whitespace=True)
+    check_schema_with_instance(schema, r'"\udc00"', is_accepted=False, any_whitespace=True)
+    # Wrong order is not a pair either.
+    check_schema_with_instance(schema, r'"\ude00\ud83d"', is_accepted=False, any_whitespace=True)
+    # Non-surrogate \uXXXX is unaffected.
+    check_schema_with_instance(schema, r'"\ud7ff"', any_whitespace=True)
+    check_schema_with_instance(schema, r'"\ue000"', any_whitespace=True)
 
 
 def test_type_array():
