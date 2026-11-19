@@ -2179,6 +2179,100 @@ def test_object_error_handle():
     )
 
 
+def test_closed_object_required_not_in_properties():
+    """Regression test for #1029: a closed object whose required key is not a declared
+    property is unsatisfiable. Do not raise when the object is only closed by strict_mode
+    (no additionalProperties keyword), or when patternProperties might match the key.
+    """
+
+    def compile_from_schema(schema, strict_mode=True):
+        xgr.Grammar.from_json_schema(
+            json.dumps(schema),
+            any_whitespace=True,
+            indent=None,
+            separators=None,
+            strict_mode=strict_mode,
+        )
+
+    issue_schema = {
+        "type": "object",
+        "properties": {"a": {"type": "boolean"}},
+        "required": ["missing"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(Exception) as e:
+        compile_from_schema(issue_schema, strict_mode=False)
+    assert (
+        "required property 'missing' is not in properties, but additional properties aren't allowed"
+        in str(e.value)
+    )
+
+    unevaluated_schema = {
+        "type": "object",
+        "properties": {"a": {"type": "boolean"}},
+        "required": ["missing"],
+        "unevaluatedProperties": False,
+    }
+    with pytest.raises(Exception) as e:
+        compile_from_schema(unevaluated_schema, strict_mode=False)
+    assert (
+        "required property 'missing' is not in properties, but additional properties aren't allowed"
+        in str(e.value)
+    )
+
+    # First missing key in the schema's required array order, not hash order.
+    with pytest.raises(Exception) as e:
+        compile_from_schema(
+            {
+                "type": "object",
+                "properties": {"a": {"type": "boolean"}},
+                "required": ["z_missing", "a_missing"],
+                "additionalProperties": False,
+            },
+            strict_mode=False,
+        )
+    assert (
+        "required property 'z_missing' is not in properties, but additional properties aren't allowed"
+        in str(e.value)
+    )
+
+    # strict_mode=True closes the object by default, but without an explicit
+    # additionalProperties/unevaluatedProperties keyword this must still compile.
+    compile_from_schema(
+        {"type": "object", "properties": {"a": {"type": "boolean"}}, "required": ["missing"]},
+        strict_mode=True,
+    )
+
+    # patternProperties might match the required key; do not reject.
+    compile_from_schema(
+        {
+            "type": "object",
+            "properties": {"a": {"type": "boolean"}},
+            "required": ["missing"],
+            "patternProperties": {"^missing$": {"type": "boolean"}},
+            "additionalProperties": False,
+        },
+        strict_mode=False,
+    )
+
+    # Satisfiable: the required key is a declared property.
+    satisfiable = {
+        "type": "object",
+        "properties": {"a": {"type": "boolean"}},
+        "required": ["a"],
+        "additionalProperties": False,
+    }
+    check_schema_with_instance(
+        satisfiable, {"a": False}, is_accepted=True, any_whitespace=False, strict_mode=False
+    )
+    check_schema_with_instance(
+        satisfiable, {}, is_accepted=False, any_whitespace=False, strict_mode=False
+    )
+    check_schema_with_instance(
+        satisfiable, {"b": False}, is_accepted=False, any_whitespace=False, strict_mode=False
+    )
+
+
 def test_additional_properties_type_enforcement():
     """Regression test for #208: additionalProperties: true must still
     enforce declared types for defined (non-required) properties."""
