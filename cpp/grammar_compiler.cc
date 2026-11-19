@@ -47,7 +47,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
       const std::unordered_map<int32_t, DynamicBitset>&
           tag_dispatch_rule_id_to_second_slicing_bitset,
       const TokenizerInfo& tokenizer_info,
-      std::optional<RuleLevelCache>& rule_level_cache
+      std::optional<RuleLevelCache>& rule_level_cache,
+      bool enable_direct_masks = false
   )
       : EarleyParser(grammar, init_state),
         init_rule_id_(init_state.rule_id),
@@ -55,7 +56,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
         tag_dispatch_rule_id_to_second_slicing_bitset_(tag_dispatch_rule_id_to_second_slicing_bitset
         ),
         tokenizer_info_(tokenizer_info),
-        rule_level_cache_(rule_level_cache) {}
+        rule_level_cache_(rule_level_cache),
+        enable_direct_masks_(enable_direct_masks) {}
   /*!
    * \brief Get the adaptive token mask for the given ParserState.
    * \param is_root_rule Whether to consider the parent rule. If false, there will be
@@ -112,6 +114,18 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
    */
   const std::vector<int32_t>& GetTokenEdgeAcceptedIndices();
 
+  /*!
+   * \brief Direct mask builders. Each proves a narrow structural property of the start state and
+   * classifies the vocabulary without the general parser scan. They return std::nullopt when the
+   * state is not eligible, in which case the generic builder is used unchanged.
+   */
+  /*! \brief A trie of single-byte edges (literals, property names) ending at selective boundaries.
+   */
+  std::optional<AdaptiveTokenMask> GetDeterministicBytePathDirectMask(bool is_root_rule) const;
+
+  /*! \brief A small deterministic ASCII-only FSM, including loops and fixed-width patterns. */
+  std::optional<AdaptiveTokenMask> GetASCIIFSMDirectMask(bool is_root_rule) const;
+
   // The id of the initial rule.
   int32_t init_rule_id_;
 
@@ -132,6 +146,8 @@ class GrammarMatcherForTokenMaskCache : public EarleyParser {
   const TokenizerInfo& tokenizer_info_;
 
   std::optional<RuleLevelCache> rule_level_cache_;
+  // Direct masks are used by JIT only; eager compilation keeps the general builder.
+  bool enable_direct_masks_;
 
   // Temporary data for GetAdaptiveTokenMask.
   std::vector<int32_t> tmp_accepted_indices_;
@@ -812,6 +828,266 @@ const std::vector<int32_t>& GrammarMatcherForTokenMaskCache::GetTokenEdgeAccepte
   return tmp_token_edge_accepted_;
 }
 
+std::optional<AdaptiveTokenMask>
+GrammarMatcherForTokenMaskCache::GetDeterministicBytePathDirectMask(bool is_root_rule) const {
+  if (!enable_direct_masks_ || has_char_budget_rules_ || is_root_rule ||
+      initial_state_.sub_element_id != 0 || initial_state_.partial_codepoint != 0 ||
+      grammar_->GetRule(init_rule_id_).is_lazy ||
+      grammar_->GetRule(init_rule_id_).lookahead_assertion_id != -1) {
+    return std::nullopt;
+  }
+
+  const auto& rule_fsm = grammar_->per_rule_fsms[init_rule_id_]->GetFsm();
+  const auto& fsm = rule_fsm.GetFsm();
+  struct PendingPath {
+    int32_t state;
+    std::string bytes;
+  };
+  std::vector<PendingPath> pending{{initial_state_.element_id, {}}};
+  std::vector<std::string> accepted_prefixes;
+  std::vector<std::string> boundary_prefixes;
+  constexpr size_t kMaxDirectPaths = 32768;
+  constexpr size_t kMaxDirectPathBytes = 256;
+  constexpr size_t kMinBoundaryPrefixBytes = 2;
+  size_t visited_paths = 0;
+  while (!pending.empty()) {
+    PendingPath path = std::move(pending.back());
+    pending.pop_back();
+    if (++visited_paths > kMaxDirectPaths) {
+      return std::nullopt;
+    }
+    if (rule_fsm.IsEndState(path.state)) {
+      // A token ending here is accepted locally. Longer tokens depend on either the outgoing path
+      // or parent completion; keep only a selective boundary range for runtime classification.
+      if (path.bytes.size() < kMinBoundaryPrefixBytes) {
+        return std::nullopt;
+      }
+      boundary_prefixes.push_back(std::move(path.bytes));
+      continue;
+    }
+    if (path.bytes.size() >= kMaxDirectPathBytes) {
+      return std::nullopt;
+    }
+
+    const auto& edges = fsm.GetEdges(path.state);
+    std::bitset<256> seen_bytes;
+    bool deterministic_byte_edges = edges.size() != 0;
+    for (const auto& edge : edges) {
+      if (!edge.IsCharRange() || edge.min != edge.max || seen_bytes[edge.min]) {
+        deterministic_byte_edges = false;
+        break;
+      }
+      seen_bytes[edge.min] = true;
+    }
+    if (!deterministic_byte_edges) {
+      // The rejected linear experiment admitted a one-byte boundary (commonly an opening quote)
+      // before a broad string state, making a large part of the vocabulary uncertain. A two-byte
+      // boundary remains selective while covering property-name tries followed by rule refs.
+      if (path.bytes.size() < kMinBoundaryPrefixBytes) {
+        return std::nullopt;
+      }
+      boundary_prefixes.push_back(std::move(path.bytes));
+      continue;
+    }
+    for (const auto& edge : edges) {
+      std::string next_bytes = path.bytes;
+      next_bytes.push_back(static_cast<char>(edge.min));
+      accepted_prefixes.push_back(next_bytes);
+      pending.push_back(PendingPath{edge.target, std::move(next_bytes)});
+    }
+  }
+  if (boundary_prefixes.empty() ||
+      std::any_of(boundary_prefixes.begin(), boundary_prefixes.end(), [](const auto& prefix) {
+        return prefix.empty();
+      })) {
+    return std::nullopt;
+  }
+
+  const auto& sorted_vocab = tokenizer_info_.GetSortedDecodedVocab();
+  std::vector<int32_t> accepted_indices;
+  std::vector<int32_t> uncertain_indices;
+
+  // A token ending at any visited byte prefix is accepted locally. Equal decoded strings can
+  // have multiple token ids, so collect the full equal range for every distinct prefix.
+  std::sort(accepted_prefixes.begin(), accepted_prefixes.end());
+  accepted_prefixes.erase(
+      std::unique(accepted_prefixes.begin(), accepted_prefixes.end()), accepted_prefixes.end()
+  );
+  for (const auto& prefix : accepted_prefixes) {
+    auto first = std::lower_bound(
+        sorted_vocab.begin(),
+        sorted_vocab.end(),
+        prefix,
+        [](const auto& token, const std::string& value) { return token.second < value; }
+    );
+    for (auto it = first; it != sorted_vocab.end() && it->second == prefix; ++it) {
+      accepted_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
+    }
+  }
+  std::sort(accepted_indices.begin(), accepted_indices.end());
+  accepted_indices.erase(
+      std::unique(accepted_indices.begin(), accepted_indices.end()), accepted_indices.end()
+  );
+
+  // A token crossing a boundary depends on the remainder of this rule and, when the rule
+  // completes, its parent parser states. Preserve that exact distinction by leaving only these
+  // lexicographic prefix ranges for the runtime continuation check. Remove descendant boundaries
+  // because their token ranges are already covered by the shortest ancestor.
+  std::sort(boundary_prefixes.begin(), boundary_prefixes.end());
+  boundary_prefixes.erase(
+      std::unique(boundary_prefixes.begin(), boundary_prefixes.end()), boundary_prefixes.end()
+  );
+  std::vector<std::string> minimal_boundaries;
+  for (auto& prefix : boundary_prefixes) {
+    if (!minimal_boundaries.empty() && prefix.size() >= minimal_boundaries.back().size() &&
+        prefix.compare(0, minimal_boundaries.back().size(), minimal_boundaries.back()) == 0) {
+      continue;
+    }
+    minimal_boundaries.push_back(std::move(prefix));
+  }
+  for (const auto& prefix : minimal_boundaries) {
+    auto first = std::lower_bound(
+        sorted_vocab.begin(),
+        sorted_vocab.end(),
+        prefix,
+        [](const auto& token, const std::string& value) { return token.second < value; }
+    );
+    for (auto it = first; it != sorted_vocab.end(); ++it) {
+      const auto& token = it->second;
+      if (token.size() < prefix.size() || token.compare(0, prefix.size(), prefix) != 0) {
+        break;
+      }
+      if (token.size() > prefix.size()) {
+        uncertain_indices.push_back(static_cast<int32_t>(it - sorted_vocab.begin()));
+      }
+    }
+  }
+  std::sort(uncertain_indices.begin(), uncertain_indices.end());
+  uncertain_indices.erase(
+      std::unique(uncertain_indices.begin(), uncertain_indices.end()), uncertain_indices.end()
+  );
+
+  return AdaptiveTokenMask(
+      tokenizer_info_.GetVocabSize(), sorted_vocab, accepted_indices, uncertain_indices
+  );
+}
+
+// Adapted from rc3's deterministic byte-loop builder. Main's FSM character ranges can
+// describe Unicode codepoints, so this experiment proves the reachable graph is ASCII-only.
+// It covers paths, loops and fixed-width ASCII strings without adding a byte-mode grammar API.
+std::optional<AdaptiveTokenMask> GrammarMatcherForTokenMaskCache::GetASCIIFSMDirectMask(
+    bool is_root_rule
+) const {
+  const auto& rule = grammar_->GetRule(init_rule_id_);
+  if (!enable_direct_masks_ || is_root_rule || has_char_budget_rules_ ||
+      initial_state_.sub_element_id != 0 || initial_state_.partial_codepoint != 0 || rule.is_lazy ||
+      rule.max_tokens != -1 || rule.max_chars != -1 || !rule.capture_name.empty() ||
+      rule.lookahead_assertion_id != -1) {
+    return std::nullopt;
+  }
+  const auto& rule_fsm = grammar_->per_rule_fsms[init_rule_id_]->GetFsm();
+  const auto& fsm = rule_fsm.GetFsm();
+  struct LocalState {
+    int32_t global_state;
+    std::array<int32_t, 128> transitions;
+    bool is_end;
+  };
+  constexpr size_t kMaxDirectStates = 256;
+  std::vector<LocalState> states;
+  std::unordered_map<int32_t, int32_t> ids;
+  const auto add_state = [&](int32_t global) -> int32_t {
+    auto found = ids.find(global);
+    if (found != ids.end()) return found->second;
+    if (states.size() == kMaxDirectStates) return -1;
+    const int32_t id = static_cast<int32_t>(states.size());
+    LocalState local{global, {}, rule_fsm.IsEndState(global)};
+    local.transitions.fill(-1);
+    states.push_back(std::move(local));
+    ids.emplace(global, id);
+    return id;
+  };
+  add_state(initial_state_.element_id);
+  for (size_t id = 0; id < states.size(); ++id) {
+    std::array<int32_t, 128> transitions;
+    transitions.fill(-1);
+    for (const auto& edge : fsm.GetEdges(states[id].global_state)) {
+      // Non-ASCII, rule calls, repetition, captures, epsilon and token edges use the parser.
+      if (!edge.IsCharRange() || edge.min < 0 || edge.max >= 128) return std::nullopt;
+      const int32_t target = add_state(edge.target);
+      if (target == -1) return std::nullopt;
+      for (int32_t byte = edge.min; byte <= edge.max; ++byte) {
+        if (transitions[byte] != -1 && transitions[byte] != target) return std::nullopt;
+        transitions[byte] = target;
+      }
+    }
+    states[id].transitions = transitions;
+  }
+  // Accept a token ending within the local graph only if completion remains possible.
+  std::vector<uint8_t> can_finish(states.size(), 0);
+  for (size_t id = 0; id < states.size(); ++id) can_finish[id] = states[id].is_end;
+  bool changed = true;
+  while (changed) {
+    changed = false;
+    for (size_t id = 0; id < states.size(); ++id) {
+      if (can_finish[id]) continue;
+      for (int32_t next : states[id].transitions) {
+        if (next != -1 && can_finish[next]) {
+          can_finish[id] = 1;
+          changed = true;
+          break;
+        }
+      }
+    }
+  }
+  if (std::find(can_finish.begin(), can_finish.end(), 0) != can_finish.end()) {
+    return std::nullopt;
+  }
+  const auto& vocab = tokenizer_info_.GetSortedDecodedVocab();
+  const auto& lcps = tokenizer_info_.ImplPtr()->GetSortedVocabLCPWithPrevious();
+  const auto& subtree_end = tokenizer_info_.GetTrieSubtreeNodesRange();
+  std::vector<int32_t> accepted, uncertain;
+  std::vector<int32_t> history{0};
+  std::vector<uint8_t> ended{static_cast<uint8_t>(states[0].is_end)};
+  int32_t rejected_end = 0;
+  int32_t previous = -1;
+  for (int32_t index = 0; index < static_cast<int32_t>(vocab.size()); ++index) {
+    if (index < rejected_end) continue;
+    const auto& token = vocab[index].second;
+    int32_t common = 0;
+    if (previous != -1) {
+      if (index == previous + 1) {
+        common = lcps[index];
+      } else {
+        const auto& last = vocab[previous].second;
+        common = static_cast<int32_t>(
+            std::mismatch(token.begin(), token.end(), last.begin(), last.end()).first -
+            token.begin()
+        );
+      }
+      common = std::min(common, static_cast<int32_t>(history.size()) - 1);
+    }
+    history.resize(common + 1);
+    ended.resize(common + 1);
+    int32_t matched = common;
+    for (; matched < static_cast<int32_t>(token.size()); ++matched) {
+      const uint8_t byte = static_cast<uint8_t>(token[matched]);
+      const int32_t next = byte < 128 ? states[history.back()].transitions[byte] : -1;
+      if (next == -1) break;
+      history.push_back(next);
+      ended.push_back(ended.back() || states[next].is_end);
+    }
+    previous = index;
+    if (!token.empty() && matched == static_cast<int32_t>(token.size())) {
+      accepted.push_back(index);
+    } else if (matched > 0 && ended.back()) {
+      uncertain.push_back(index);
+    } else {
+      rejected_end = subtree_end[index];
+    }
+  }
+  return AdaptiveTokenMask(tokenizer_info_.GetVocabSize(), vocab, accepted, uncertain);
+}
+
 AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_root_rule) {
   tmp_accepted_indices_.clear();
   tmp_rejected_indices_.clear();
@@ -870,6 +1146,14 @@ AdaptiveTokenMask GrammarMatcherForTokenMaskCache::GetAdaptiveTokenMask(bool is_
       AdaptCacheWithLookahead(&crossing_cache.value(), is_root_rule);
       return std::move(crossing_cache.value());
     }
+  }
+
+  if (auto direct_mask = GetDeterministicBytePathDirectMask(is_root_rule)) {
+    return std::move(*direct_mask);
+  }
+
+  if (auto direct_mask = GetASCIIFSMDirectMask(is_root_rule)) {
+    return std::move(*direct_mask);
   }
 
   std::bitset<256> first_character_mask;
@@ -1060,7 +1344,8 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
                             cache_state,
                             tag_dispatch_rule_id_to_second_slicing_bitset,
                             tokenizer_info,
-                            retained_rule_level_cache
+                            retained_rule_level_cache,
+                            /*enable_direct_masks=*/true
   )
                             .GetAdaptiveTokenMask(state.rule_id == grammar->GetRootRuleId());
   // Apply the same repetition classification as eager compilation before publishing the mask.
