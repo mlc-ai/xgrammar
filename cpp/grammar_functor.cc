@@ -806,9 +806,7 @@ class RuleInlinerImpl : public InPlaceGrammarRewriter {
     // capture-relevant rule would eliminate its completion events, so its capture or hidden span
     // would never be recorded. Inlining a lazy rule would erase its committed-shortest semantics.
     // Inlining a temperature rule would erase the rule its sampling temperature applies to.
-    if (rule.max_tokens >= 0 || rule.max_chars >= 0 || !rule.capture_name.empty() ||
-        (*grammar_)->GetSuffixStopInfo(rule_id) != nullptr || rule.is_lazy ||
-        rule.temperature.has_value()) {
+    if (rule.HasRuleAttributes() || (*grammar_)->GetSuffixStopInfo(rule_id) != nullptr) {
       can_rule_be_inlined_[rule_id] = false;
       return false;
     }

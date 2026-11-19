@@ -52,6 +52,22 @@ def _make_flat_json_workload(size: int) -> Workload:
     )
 
 
+def _make_optional_json_workload(size: int) -> Workload:
+    names = [f"field_{i:05d}" for i in range(size)]
+    schema = {
+        "type": "object",
+        "properties": {name: {"type": "string"} for name in names},
+        "additionalProperties": False,
+    }
+    instance = {names[0]: "the quick brown fox jumps over the lazy dog " * 4, names[-1]: "x"}
+    return Workload(
+        name=f"optional_json_{size}",
+        compile_kind="json",
+        source=json.dumps(schema, separators=(",", ":")),
+        valid_input=json.dumps(instance, separators=(",", ":")),
+    )
+
+
 def _make_dense_patterns(size: int) -> List[str]:
     return ["@" + hashlib.sha1(f"dispatch-{i}".encode()).hexdigest()[:15] for i in range(size)]
 
@@ -99,6 +115,8 @@ def _get_workload(name: str) -> Workload:
         return _make_flat_json_workload(20_000)
     if name == "flat_json_50000":
         return _make_flat_json_workload(50_000)
+    if name == "optional_json_1000":
+        return _make_optional_json_workload(1_000)
     if name == "ac_dense_4000":
         return _make_dispatch_workload(name, _make_dense_patterns(4_000))
     if name == "ac_dense_unique_4000":
@@ -170,6 +188,7 @@ def glm_tokenizer_info(glm_tokenizer):
     [
         "flat_json_20000",
         "flat_json_50000",
+        "optional_json_1000",
         "ac_dense_4000",
         "ac_dense_unique_4000",
         "ac_shared_prefix_4000",
