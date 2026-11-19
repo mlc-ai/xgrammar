@@ -1819,10 +1819,11 @@ tags_with_separator_stag_grammar = [
         0,
         _get_tags_with_separator_format(at_least_one=False, stop_after_first=False),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
@@ -1832,10 +1833,11 @@ root ::= ((tags_with_separator))
         1,
         _get_tags_with_separator_format(at_least_one=True, stop_after_first=False),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
@@ -1845,10 +1847,11 @@ root ::= ((tags_with_separator))
         2,
         _get_tags_with_separator_format(at_least_one=False, stop_after_first=True),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator ::= ("" | (tags_with_separator_tags))
 root ::= ((tags_with_separator))
 """,
@@ -1857,10 +1860,11 @@ root ::= ((tags_with_separator))
         3,
         _get_tags_with_separator_format(at_least_one=True, stop_after_first=True),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator ::= ((tags_with_separator_tags))
 root ::= ((tags_with_separator))
 """,
@@ -1916,10 +1920,11 @@ tags_with_separator_with_outside_tag_stag_grammar = [
             at_least_one=False, stop_after_first=False
         ),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 tag_2 ::= (("begin" tags_with_separator "end"))
@@ -1930,10 +1935,11 @@ root ::= ((tag_2))
         1,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=True, stop_after_first=False),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator_sub ::= ("" | ("AA" tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
 tag_2 ::= (("begin" tags_with_separator "end"))
@@ -1944,10 +1950,11 @@ root ::= ((tag_2))
         2,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=False, stop_after_first=True),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator ::= ("" | (tags_with_separator_tags))
 tag_2 ::= (("begin" tags_with_separator "end"))
 root ::= ((tag_2))
@@ -1957,10 +1964,11 @@ root ::= ((tag_2))
         3,
         _get_tags_with_separator_format_with_outside_tag(at_least_one=True, stop_after_first=True),
         r"""const_string ::= (("L1"))
-tag ::= (("A1" const_string "A"))
+tag ::= (("1" const_string "A"))
 const_string_1 ::= (("L2"))
-tag_1 ::= (("A2" const_string_1 "A"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("2" const_string_1 "A"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("A" tags_with_separator_suffixes))
 tags_with_separator ::= ((tags_with_separator_tags))
 tag_2 ::= (("begin" tags_with_separator "end"))
 root ::= ((tag_2))
@@ -2014,10 +2022,11 @@ tags_with_empty_separator_stag_grammar = [
         0,
         _get_tags_with_empty_separator_format(at_least_one=False, stop_after_first=False),
         r"""const_string ::= (("X"))
-tag ::= (("<a>" const_string "</a>"))
+tag ::= (("a>" const_string "</a>"))
 const_string_1 ::= (("Y"))
-tag_1 ::= (("<b>" const_string_1 "</b>"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("b>" const_string_1 "</b>"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("<" tags_with_separator_suffixes))
 tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
@@ -2027,10 +2036,11 @@ root ::= ((tags_with_separator))
         1,
         _get_tags_with_empty_separator_format(at_least_one=True, stop_after_first=False),
         r"""const_string ::= (("X"))
-tag ::= (("<a>" const_string "</a>"))
+tag ::= (("a>" const_string "</a>"))
 const_string_1 ::= (("Y"))
-tag_1 ::= (("<b>" const_string_1 "</b>"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("b>" const_string_1 "</b>"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("<" tags_with_separator_suffixes))
 tags_with_separator_sub ::= ("" | (tags_with_separator_tags tags_with_separator_sub))
 tags_with_separator ::= ((tags_with_separator_tags tags_with_separator_sub))
 root ::= ((tags_with_separator))
@@ -2040,10 +2050,11 @@ root ::= ((tags_with_separator))
         2,
         _get_tags_with_empty_separator_format(at_least_one=False, stop_after_first=True),
         r"""const_string ::= (("X"))
-tag ::= (("<a>" const_string "</a>"))
+tag ::= (("a>" const_string "</a>"))
 const_string_1 ::= (("Y"))
-tag_1 ::= (("<b>" const_string_1 "</b>"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("b>" const_string_1 "</b>"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("<" tags_with_separator_suffixes))
 tags_with_separator ::= ("" | (tags_with_separator_tags))
 root ::= ((tags_with_separator))
 """,
@@ -2052,10 +2063,11 @@ root ::= ((tags_with_separator))
         3,
         _get_tags_with_empty_separator_format(at_least_one=True, stop_after_first=True),
         r"""const_string ::= (("X"))
-tag ::= (("<a>" const_string "</a>"))
+tag ::= (("a>" const_string "</a>"))
 const_string_1 ::= (("Y"))
-tag_1 ::= (("<b>" const_string_1 "</b>"))
-tags_with_separator_tags ::= ((tag) | (tag_1))
+tag_1 ::= (("b>" const_string_1 "</b>"))
+tags_with_separator_suffixes ::= ((tag) | (tag_1))
+tags_with_separator_tags ::= (("<" tags_with_separator_suffixes))
 tags_with_separator ::= ((tags_with_separator_tags))
 root ::= ((tags_with_separator))
 """,
@@ -5051,6 +5063,41 @@ def test_deeply_nested_formats_rejected():
     xgr.Grammar.from_structural_tag(nested(50))
     with pytest.raises(Exception, match="nested deeper than"):
         xgr.Grammar.from_structural_tag(nested(300))
+
+
+@pytest.mark.parametrize("cache_enabled", [False, True])
+@pytest.mark.parametrize("prefix", ["", "<tool>", "<工具>"])
+@pytest.mark.parametrize("names", [("é", "ê"), ("工", "巧"), ("😀", "😁")])
+def test_tags_with_separator_unicode_prefix_roundtrip(cache_enabled, prefix, names):
+    tags = [
+        {"begin": prefix + name, "content": {"type": "const_string", "value": "x"}, "end": "!"}
+        for name in names
+    ]
+    grammar = xgr.Grammar.from_structural_tag(
+        {
+            "type": "structural_tag",
+            "format": {
+                "type": "tags_with_separator",
+                "tags": tags,
+                "separator": "",
+                "at_least_one": True,
+                "stop_after_first": True,
+            },
+        }
+    )
+    # compile_grammar's cache also uses the EBNF printer/parser path on upstream main.
+    restored = xgr.Grammar.from_ebnf(str(grammar))
+    tokenizer = xgr.TokenizerInfo([bytes([i]) for i in range(256)], stop_token_ids=[])
+    compiler = xgr.GrammarCompiler(tokenizer, max_threads=1, cache_enabled=cache_enabled)
+    for candidate in [grammar, restored]:
+        compiled = compiler.compile_grammar(candidate)
+        for name in names:
+            matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+            for byte in (prefix + name + "x!").encode():
+                assert matcher.accept_token(byte)
+            assert matcher.is_terminated()
+        invalid = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert not invalid.accept_string(prefix + "wrongx!")
 
 
 if __name__ == "__main__":
