@@ -415,6 +415,13 @@ AdaptiveTokenMask::AdaptiveTokenMask(
   this->uncertain_indices = uncertain_indices;
 }
 
+AdaptiveTokenMask::AdaptiveTokenMask(
+    const DynamicBitset& accepted_bitset, const std::vector<int32_t>& uncertain_indices
+)
+    : store_type(StoreType::kAcceptedBitset),
+      accepted_bitset(accepted_bitset),
+      uncertain_indices(uncertain_indices) {}
+
 std::string AdaptiveTokenMask::Print(const TokenizerInfo& tokenizer_info) const {
   constexpr int kMaxPrintTokens = 100;
   std::stringstream ss;

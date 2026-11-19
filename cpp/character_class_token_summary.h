@@ -1,0 +1,235 @@
+/*!
+ *  Copyright (c) 2024 by Contributors
+ * \file xgrammar/character_class_token_summary.h
+ * \brief Vocabulary summaries for tokens matched by one character class.
+ */
+#ifndef XGRAMMAR_CHARACTER_CLASS_TOKEN_SUMMARY_H_
+#define XGRAMMAR_CHARACTER_CLASS_TOKEN_SUMMARY_H_
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "support/dynamic_bitset.h"
+#include "support/encoding.h"
+
+namespace xgrammar {
+
+struct CharacterClassTokenSummary {
+  int32_t sorted_vocab_index;
+  int32_t locally_consumed_characters;
+  bool consumed_whole_token;
+};
+
+/*!
+ * \brief Summarizes how each sorted-vocabulary token is consumed by repeated matches of one
+ * character class. Only tokens that are consumed whole, or that match at least one
+ * complete character before failing, get a summary; every other token is rejected.
+ */
+template <typename CharacterClass>
+std::vector<CharacterClassTokenSummary> BuildCharacterClassTokenSummaries(
+    const CharacterClass& character_class,
+    const std::vector<std::pair<int32_t, std::string>>& sorted_vocab,
+    const std::vector<int32_t>& lcp_with_previous,
+    const DynamicBitset& ascii_string_safe_bitset
+) {
+  const bool is_negative = static_cast<bool>(character_class[0]);
+  const int32_t class_size = static_cast<int32_t>(character_class.size());
+  const auto codepoint_is_in_ranges = [&](TCodepoint codepoint) {
+    for (int32_t range_index = 1; range_index < class_size; range_index += 2) {
+      if (codepoint >= character_class[range_index] &&
+          codepoint <= character_class[range_index + 1]) {
+        return true;
+      }
+    }
+    return false;
+  };
+  const auto partial_codepoint_can_match =
+      [&](TCodepoint partial, int32_t remaining_bytes, int32_t total_bytes) {
+        static constexpr std::array<TCodepoint, 5> kMinCodepointByUtf8Length = {
+            0, 0, 0x80, 0x800, 0x10000
+        };
+        const TCodepoint raw_min_codepoint = partial << (6 * remaining_bytes);
+        const TCodepoint min_codepoint =
+            std::max(raw_min_codepoint, kMinCodepointByUtf8Length[total_bytes]);
+        const TCodepoint max_codepoint = std::min<TCodepoint>(
+            raw_min_codepoint | ((TCodepoint{1} << (6 * remaining_bytes)) - 1), 0x10FFFF
+        );
+        if (min_codepoint > max_codepoint) {
+          return false;
+        }
+        if (is_negative) {
+          TCodepoint candidate = min_codepoint;
+          while (candidate <= max_codepoint) {
+            TCodepoint next = candidate;
+            for (int32_t i = 1; i < class_size; i += 2) {
+              if (character_class[i] <= candidate && candidate <= character_class[i + 1]) {
+                next = std::max(next, character_class[i + 1] + 1);
+              }
+            }
+            if (next == candidate) {
+              return true;
+            }
+            candidate = next;
+          }
+          return false;
+        }
+        for (int32_t range_index = 1; range_index < class_size; range_index += 2) {
+          if (max_codepoint >= character_class[range_index] &&
+              min_codepoint <= character_class[range_index + 1]) {
+            return true;
+          }
+        }
+        return false;
+      };
+  bool is_positive_ascii_only = !is_negative;
+  std::array<uint8_t, 128> accepted_ascii_bytes{};
+  for (int32_t range_index = 1; is_positive_ascii_only && range_index < class_size;
+       range_index += 2) {
+    if (character_class[range_index + 1] >= 128) {
+      is_positive_ascii_only = false;
+      break;
+    }
+    for (int32_t byte = character_class[range_index]; byte <= character_class[range_index + 1];
+         ++byte) {
+      accepted_ascii_bytes[byte] = true;
+    }
+  }
+  if (is_positive_ascii_only) {
+    std::vector<CharacterClassTokenSummary> summaries;
+    summaries.reserve(sorted_vocab.size());
+    int32_t previous_mismatch_offset = -1;
+    for (int32_t sorted_vocab_index = 0;
+         sorted_vocab_index < static_cast<int32_t>(sorted_vocab.size());
+         ++sorted_vocab_index) {
+      const auto& token = sorted_vocab[sorted_vocab_index].second;
+      const int32_t common_prefix = lcp_with_previous[sorted_vocab_index];
+      int32_t completed_characters = common_prefix;
+      // the index of next byte to examine
+      int32_t byte_offset = common_prefix;
+      bool mismatch = false;
+      if (previous_mismatch_offset >= 0 && byte_offset > previous_mismatch_offset) {
+        completed_characters = previous_mismatch_offset;
+        byte_offset = previous_mismatch_offset;
+        mismatch = true;
+      } else {
+        for (; byte_offset < static_cast<int32_t>(token.size()); ++byte_offset) {
+          const uint8_t byte = static_cast<uint8_t>(token[byte_offset]);
+          if (byte >= accepted_ascii_bytes.size() || !accepted_ascii_bytes[byte]) {
+            mismatch = true;
+            break;
+          }
+          ++completed_characters;
+        }
+      }
+      previous_mismatch_offset = mismatch ? byte_offset : -1;
+      const bool consumed_whole_token =
+          byte_offset == static_cast<int32_t>(token.size()) && !mismatch;
+      if (consumed_whole_token || completed_characters > 0) {
+        summaries.push_back(CharacterClassTokenSummary{
+            sorted_vocab_index, completed_characters, consumed_whole_token
+        });
+      }
+    }
+    return summaries;
+  }
+
+  bool accepts_all_ascii_string_safe_alphabet = true;
+  for (TCodepoint codepoint = 0x20; codepoint < 0x7f; ++codepoint) {
+    if (codepoint == '"' || codepoint == '\\') {
+      continue;
+    }
+    if (codepoint_is_in_ranges(codepoint) == is_negative) {
+      accepts_all_ascii_string_safe_alphabet = false;
+      break;
+    }
+  }
+
+  std::vector<CharacterClassTokenSummary> summaries;
+  summaries.reserve(sorted_vocab.size());
+  for (int32_t sorted_vocab_index = 0;
+       sorted_vocab_index < static_cast<int32_t>(sorted_vocab.size());
+       ++sorted_vocab_index) {
+    const auto& token = sorted_vocab[sorted_vocab_index].second;
+    if (accepts_all_ascii_string_safe_alphabet && ascii_string_safe_bitset[sorted_vocab_index]) {
+      summaries.push_back(
+          CharacterClassTokenSummary{sorted_vocab_index, static_cast<int32_t>(token.size()), true}
+      );
+      continue;
+    }
+    int32_t byte_offset = 0;
+    int32_t completed_characters = 0;
+    bool incomplete_character = false;
+    bool mismatch = false;
+    while (byte_offset < static_cast<int32_t>(token.size())) {
+      auto [valid_first_byte, total_bytes, partial_codepoint] =
+          HandleUTF8FirstByte(static_cast<uint8_t>(token[byte_offset]));
+      if (!valid_first_byte) {
+        mismatch = true;
+        break;
+      }
+      if (total_bytes == 1) {
+        if (codepoint_is_in_ranges(partial_codepoint) == is_negative) {
+          mismatch = true;
+          break;
+        }
+        ++completed_characters;
+        ++byte_offset;
+        continue;
+      }
+      int32_t consumed_bytes = 1;
+      while (consumed_bytes < total_bytes &&
+             byte_offset + consumed_bytes < static_cast<int32_t>(token.size())) {
+        const uint8_t continuation = static_cast<uint8_t>(token[byte_offset + consumed_bytes]);
+        if ((continuation & 0xC0) != 0x80) {
+          mismatch = true;
+          break;
+        }
+        partial_codepoint = (partial_codepoint << 6) | (continuation & 0x3F);
+        ++consumed_bytes;
+      }
+      if (mismatch) {
+        break;
+      }
+      if (consumed_bytes < total_bytes) {
+        incomplete_character = partial_codepoint_can_match(
+            partial_codepoint, total_bytes - consumed_bytes, total_bytes
+        );
+        mismatch = !incomplete_character;
+        byte_offset = token.size();
+        break;
+      }
+      static constexpr std::array<TCodepoint, 5> kMinCodepointByUtf8Length = {
+          0, 0, 0x80, 0x800, 0x10000
+      };
+      if (partial_codepoint < kMinCodepointByUtf8Length[total_bytes] ||
+          partial_codepoint > 0x10FFFF) {
+        mismatch = true;
+        break;
+      }
+      if (codepoint_is_in_ranges(partial_codepoint) == is_negative) {
+        mismatch = true;
+        break;
+      }
+      ++completed_characters;
+      byte_offset += total_bytes;
+    }
+    const bool consumed_whole_token =
+        byte_offset == static_cast<int32_t>(token.size()) && !mismatch;
+    if (consumed_whole_token || completed_characters > 0) {
+      summaries.push_back(CharacterClassTokenSummary{
+          sorted_vocab_index,
+          completed_characters + static_cast<int32_t>(incomplete_character),
+          consumed_whole_token
+      });
+    }
+  }
+  return summaries;
+}
+
+}  // namespace xgrammar
+
+#endif  // XGRAMMAR_CHARACTER_CLASS_TOKEN_SUMMARY_H_
