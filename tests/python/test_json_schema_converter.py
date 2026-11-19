@@ -580,6 +580,79 @@ def test_numeric_const_enum_literals(schema: Dict[str, Any], accepted: str, reje
     check_schema_with_instance(schema, rejected, is_accepted=False, any_whitespace=False)
 
 
+@pytest.mark.parametrize(
+    "schema, accepted, rejected",
+    [
+        (
+            {"enum": [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0]},
+            ["3", "3.0", "3.5", "0.0", "5.0"],
+            ["3.00", "3.", "3.1"],
+        ),
+        ({"const": 100000.0}, ["100000", "100000.0"], ["1e+05", "100000.00"]),
+        ({"const": -2.0}, ["-2", "-2.0"], ["2.0"]),
+        # Integers written without a fraction stay exact.
+        ({"enum": [1, 2]}, ["1", "2"], ["1.0", "2.0"]),
+        ({"const": 1e20}, ["1e+20"], ["1e+20.0"]),
+    ],
+)
+def test_whole_float_const_enum_accepts_fraction_spelling(
+    schema: Dict[str, Any], accepted: List[str], rejected: List[str]
+):
+    # 3.0 is serialized as "3", but the schema's "3.0" spelling is the same JSON number.
+    for instance in accepted:
+        check_schema_with_instance(schema, instance, any_whitespace=False)
+    for instance in rejected:
+        check_schema_with_instance(schema, instance, is_accepted=False, any_whitespace=False)
+
+
+@pytest.mark.parametrize(
+    "schema, accepted, rejected",
+    [
+        # Whole-float literal parsed first: the integer const must stay strict.
+        (
+            {
+                "type": "object",
+                "properties": {"a": {"const": 3.0}, "b": {"const": 3}},
+                "required": ["a", "b"],
+            },
+            ['{"a":3,"b":3}', '{"a":3.0,"b":3}'],
+            ['{"a":3,"b":3.0}', '{"a":3.0,"b":3.0}'],
+        ),
+        # Integer literal parsed first: the float const must still accept ".0".
+        (
+            {
+                "type": "object",
+                "properties": {"b": {"const": 3}, "a": {"const": 3.0}},
+                "required": ["b", "a"],
+            },
+            ['{"b":3,"a":3}', '{"b":3,"a":3.0}'],
+            ['{"b":3.0,"a":3}', '{"b":3.0,"a":3.0}'],
+        ),
+        # Same collision through enum literals.
+        (
+            {
+                "type": "object",
+                "properties": {"a": {"enum": [3.0]}, "b": {"enum": [3]}},
+                "required": ["a", "b"],
+            },
+            ['{"a":3.0,"b":3}'],
+            ['{"a":3,"b":3.0}'],
+        ),
+    ],
+)
+def test_int_and_whole_float_literals_do_not_share_cached_rule(
+    schema: Dict[str, Any], accepted: List[str], rejected: List[str]
+):
+    # {"const": 3} and {"const": 3.0} serialize to the same cache key "{\"const\":3}", so
+    # whichever subschema is parsed first used to hand its spec to the other one.
+    for instance in accepted:
+        check_schema_with_instance(schema, instance, any_whitespace=False, separators=(",", ":"))
+    for instance in rejected:
+        check_schema_with_instance(
+            schema, instance, is_accepted=False, any_whitespace=False, separators=(",", ":")
+        )
+
+
 @pytest.mark.parametrize("style", ["qwen_xml", "minimax_m3_xml"])
 def test_numeric_const_literals_in_xml_styles(style: str):
     schema = {"type": "object", "const": {"price": 19.99}}
