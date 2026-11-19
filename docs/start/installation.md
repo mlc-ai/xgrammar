@@ -80,6 +80,8 @@ cmake -G Ninja ..
 ninja
 ```
 
+Add `set(XGRAMMAR_ENABLE_UNITY_BUILD ON)` to `config.cmake` to group the core library's source files in batches of four. This can speed up full builds, but may use more memory and slow down rebuilds after editing one file. The option is off by default; set it to `OFF` to disable it.
+
 ### Optional: Run C++ Tests
 
 ```bash

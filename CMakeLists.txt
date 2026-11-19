@@ -16,6 +16,7 @@ endif()
 
 option(XGRAMMAR_BUILD_PYTHON_BINDINGS "Build Python bindings" ON)
 option(XGRAMMAR_BUILD_CXX_TESTS "Build C++ tests" OFF)
+option(XGRAMMAR_ENABLE_UNITY_BUILD "Combine C++ sources to reduce repeated header parsing" OFF)
 option(XGRAMMAR_ENABLE_CPPTRACE
        "Enable C++ trace (Now only support Linux, and RelWithDebugInfo or Debug build)" OFF
 )
@@ -79,6 +80,14 @@ file(GLOB_RECURSE XGRAMMAR_SOURCES_PATH CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}
 list(FILTER XGRAMMAR_SOURCES_PATH EXCLUDE REGEX "/cpp/tvm_ffi/.*\\.cc$")
 
 add_library(xgrammar STATIC ${XGRAMMAR_SOURCES_PATH})
+if(XGRAMMAR_ENABLE_UNITY_BUILD)
+  set_target_properties(
+    xgrammar
+    PROPERTIES UNITY_BUILD ON
+               UNITY_BUILD_MODE BATCH
+               UNITY_BUILD_BATCH_SIZE 4
+  )
+endif()
 target_include_directories(xgrammar PUBLIC include)
 target_include_directories(xgrammar SYSTEM PUBLIC ${XGRAMMAR_INCLUDE_PATH})
 
