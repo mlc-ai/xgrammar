@@ -22,7 +22,8 @@ export interface JSONSchemaFormat {
     | "glm_xml"
     | "cohere_xml"
     | "kimi_k3_xml"
-    | "gemma";
+    | "gemma"
+    | "muse_xml";
   excludes?: string[];
 }
 

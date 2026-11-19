@@ -64,6 +64,54 @@ def _check_cohere_grammar(schema: dict, instance: str, accepted: bool):
     check_grammar_with_instance(ebnf_grammar, instance, accepted)
 
 
+@pytest.mark.parametrize(
+    "key, rendered",
+    [
+        ("plain_key", "plain_key"),
+        # The chat template's esc_attr: XML attribute entities ...
+        ("q&a", "q&amp;a"),
+        ('<tag>\'s "id"', "&lt;tag&gt;&#39;s &quot;id&quot;"),
+        # ... applied after esc_header (line breaks become spaces) and esc ("<|" becomes "< |").
+        ("two\nlines\r", "two lines "),
+        ("<|eom|>", "&lt; |eom|&gt;"),
+        ("<image>", "&lt; image&gt;"),
+    ],
+)
+def test_muse_parameter_names_are_attribute_escaped(key: str, rendered: str):
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string"}},
+        "required": [key],
+        "additionalProperties": False,
+    }
+    grammar = Grammar.from_ebnf(_json_schema_to_ebnf(json.dumps(schema), json_format="muse_xml"))
+    assert _is_grammar_accept_string(
+        grammar, f'<atem:parameter name="{rendered}">v</atem:parameter>'
+    )
+    if rendered != key:
+        assert not _is_grammar_accept_string(
+            grammar, f'<atem:parameter name="{key}">v</atem:parameter>'
+        )
+
+
+@pytest.mark.parametrize("schema", [{}, True, {"$defs": {"Any": {}}, "$ref": "#/$defs/Any"}])
+def test_muse_unconstrained_root_is_a_parameter_list(schema):
+    grammar = Grammar.from_ebnf(_json_schema_to_ebnf(json.dumps(schema), json_format="muse_xml"))
+    for output in [
+        "",
+        '<atem:parameter name="text">raw string</atem:parameter>'
+        '<atem:parameter name="data">{"nested": [1, null]}</atem:parameter>',
+    ]:
+        assert _is_grammar_accept_string(grammar, output)
+    for output in [
+        "unwrapped text",
+        '{"text": "raw string"}',
+        '<atem:parameter name="text">unclosed',
+        '<parameter name="text">not atem</parameter>',
+    ]:
+        assert not _is_grammar_accept_string(grammar, output)
+
+
 @pytest.mark.parametrize("schema", [{}, True, {"$defs": {"Any": {}}, "$ref": "#/$defs/Any"}])
 def test_qwen_unconstrained_root_is_a_parameter_list(schema):
     grammar = Grammar.from_ebnf(_json_schema_to_ebnf(json.dumps(schema), json_format="qwen_xml"))
@@ -2940,6 +2988,12 @@ _XML_DYNAMIC_PROPERTY_CASES = (
         '<parameter name="name">n</parameter>',
         '<parameter name="x_key">3</parameter>',
         '<parameter name="x_key">v</parameter>',
+    ),
+    (
+        "muse_xml",
+        '<atem:parameter name="name">n</atem:parameter>',
+        '<atem:parameter name="x_key">3</atem:parameter>',
+        '<atem:parameter name="x_key">v</atem:parameter>',
     ),
     (
         "deepseek_xml",
