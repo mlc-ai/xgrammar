@@ -3903,6 +3903,54 @@ def test_prefix_items_min_items_forces_prefix_head():
     check_schema_with_instance(schema, '["a", 1, true]', is_accepted=True)
 
 
+def test_contains_requires_matching_element():
+    # Regression for issue #968: contains must check element content, not just
+    # raise the item count.
+    schema = {"type": "array", "items": True, "contains": {"type": "string"}}
+    check_schema_with_instance(schema, "[1,2]", is_accepted=False)
+    check_schema_with_instance(schema, "[]", is_accepted=False)
+    check_schema_with_instance(schema, '["a"]', is_accepted=True)
+    check_schema_with_instance(schema, '[1,"a"]', is_accepted=True)
+
+
+def test_contains_min_contains_two():
+    schema = {
+        "type": "array",
+        "items": True,
+        "contains": {"type": "string"},
+        "minContains": 2,
+    }
+    check_schema_with_instance(schema, '["a"]', is_accepted=False)
+    check_schema_with_instance(schema, "[1,2]", is_accepted=False)
+    check_schema_with_instance(schema, '["a","b"]', is_accepted=True)
+    check_schema_with_instance(schema, '["a",1,"b"]', is_accepted=True)
+
+
+def test_contains_with_min_items():
+    schema = {
+        "type": "array",
+        "items": True,
+        "contains": {"type": "string"},
+        "minItems": 3,
+    }
+    check_schema_with_instance(schema, '["a","b"]', is_accepted=False)
+    check_schema_with_instance(schema, '["a","b",1]', is_accepted=True)
+
+
+def test_contains_unsupported_combinations_fail_closed():
+    with pytest.raises(Exception, match="maxContains"):
+        _json_schema_to_ebnf(
+            {"type": "array", "items": True, "contains": {"type": "string"}, "maxContains": 1}
+        )
+    with pytest.raises(Exception, match="prefixItems"):
+        _json_schema_to_ebnf(
+            {"type": "array", "prefixItems": [{"type": "integer"}], "contains": {"type": "string"}}
+        )
+    # maxContains without contains has no effect (draft 2020-12).
+    grammar = _json_schema_to_ebnf({"type": "array", "items": True, "maxContains": 1})
+    assert grammar is not None
+
+
 def test_prefix_items_no_additional_items_allows_shorter():
     # Regression for issue #824: items: false forbids elements beyond the
     # prefix but must not force the full prefix length.
