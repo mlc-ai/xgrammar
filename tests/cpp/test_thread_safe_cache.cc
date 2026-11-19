@@ -7,6 +7,7 @@
 #include <future>
 #include <iostream>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <thread>
 #include <unordered_set>
@@ -18,6 +19,126 @@
 using namespace xgrammar;
 
 namespace {
+
+class CompilerCacheClearTest : public ::testing::TestWithParam<int64_t> {};
+
+TEST_P(CompilerCacheClearTest, ResetsMemoryUsageBeforeRecompilation) {
+  GrammarCompiler compiler(TokenizerInfo({"a", "b"}), 1, true, GetParam());
+  EXPECT_EQ(compiler.GetCacheSizeBytes(), 0);
+  auto compiled = compiler.CompileGrammar("root ::= \"a\"");
+  const auto initial_size = compiler.GetCacheSizeBytes();
+  ASSERT_GT(initial_size, 0);
+  const auto serialized = compiled.SerializeJSON();
+
+  compiler.CompileGrammar("root ::= \"a\"");
+  EXPECT_EQ(compiler.GetCacheSizeBytes(), initial_size);
+  compiler.ClearCache();
+  EXPECT_EQ(compiler.GetCacheSizeBytes(), 0);
+  compiler.ClearCache();
+  EXPECT_EQ(compiler.GetCacheSizeBytes(), 0);
+
+  auto recompiled = compiler.CompileGrammar("root ::= \"a\"");
+  EXPECT_EQ(recompiled.SerializeJSON(), serialized);
+  EXPECT_EQ(compiled.SerializeJSON(), serialized);
+  EXPECT_EQ(compiler.GetCacheSizeBytes(), initial_size);
+  compiler.ClearCache();
+  EXPECT_EQ(compiler.GetCacheSizeBytes(), 0);
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    UnlimitedAndLimited, CompilerCacheClearTest, ::testing::Values(-1, 1048576)
+);
+
+class UnlimitedCacheClearTest : public ::testing::TestWithParam<bool> {};
+
+TEST_P(UnlimitedCacheClearTest, InFlightCompletionDoesNotChargeANewerGeneration) {
+  using namespace std::chrono_literals;
+  std::promise<void> entered;
+  auto entered_future = entered.get_future();
+  std::promise<void> release;
+  auto release_future = release.get_future().share();
+  std::atomic<int> calls{0};
+  const bool fail_first = GetParam();
+  auto compute = [&](const int& key) {
+    EXPECT_EQ(key, 7);
+    const int call = ++calls;
+    if (call == 1) {
+      entered.set_value();
+      release_future.wait();
+      if (fail_first) throw std::runtime_error("first computation failed");
+    }
+    return call * 17;
+  };
+  auto estimate = [](int value) { return static_cast<std::size_t>(value); };
+  using Cache = ThreadSafeLRUCache<int, int, decltype(compute), decltype(estimate)>;
+  Cache cache(Cache::kUnlimitedSize, compute, estimate);
+  std::future<int> old_get, new_get;
+  std::future<void> clear;
+  struct ReleaseGuard {
+    std::promise<void>& promise;
+    bool released{false};
+    void Release() {
+      if (!released) {
+        promise.set_value();
+        released = true;
+      }
+    }
+    ~ReleaseGuard() { Release(); }
+  } release_guard{release};
+  // Destroy the guard before the futures, so any early exit unblocks their computations.
+  old_get = std::async(std::launch::async, [&] { return cache.Get(7); });
+
+  if (entered_future.wait_for(5s) != std::future_status::ready) {
+    release_guard.Release();
+    old_get.wait();
+    FAIL() << "The old computation did not start";
+  }
+  clear = std::async(std::launch::async, [&] {
+    cache.Clear();
+    cache.Clear();
+  });
+  if (clear.wait_for(5s) != std::future_status::ready) {
+    release_guard.Release();
+    old_get.wait();
+    clear.wait();
+    FAIL() << "Unlimited Clear blocked on an in-flight computation";
+  }
+  clear.get();
+  EXPECT_EQ(cache.MemorySize(), 0);
+
+  // Reuse the same key before the old computation finishes.
+  new_get = std::async(std::launch::async, [&] { return cache.Get(7); });
+  if (new_get.wait_for(5s) != std::future_status::ready) {
+    release_guard.Release();
+    old_get.wait();
+    new_get.wait();
+    FAIL() << "Clear did not remove the old in-flight entry";
+  }
+  EXPECT_EQ(new_get.get(), 34);
+  EXPECT_EQ(cache.MemorySize(), 34);
+  EXPECT_EQ(cache.Get(7), 34);
+  EXPECT_EQ(calls, 2);
+  cache.Clear();
+  EXPECT_EQ(cache.MemorySize(), 0);
+  EXPECT_EQ(cache.Get(7), 51);
+  EXPECT_EQ(cache.MemorySize(), 51);
+
+  release_guard.Release();
+  if (fail_first) {
+    EXPECT_THROW(old_get.get(), std::runtime_error);
+  } else {
+    EXPECT_EQ(old_get.get(), 17);
+  }
+  EXPECT_EQ(cache.MemorySize(), 51);
+  EXPECT_EQ(cache.Get(7), 51);
+  EXPECT_EQ(calls, 3);
+  cache.Clear();
+  EXPECT_EQ(cache.MemorySize(), 0);
+  cache.Clear();
+  EXPECT_EQ(cache.MemorySize(), 0);
+}
+
+INSTANTIATE_TEST_SUITE_P(SuccessAndException, UnlimitedCacheClearTest, ::testing::Bool());
 
 // static_assert(
 //     sizeof(CompiledGrammar) >= sizeof(std::size_t),

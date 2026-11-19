@@ -287,11 +287,14 @@ class ThreadSafeLRUCache {
   }
 
   void Clear() {
-    // Remove all the ready entries.
+    // Remove cached entries.
     const auto lock_map = std::lock_guard{map_mutex_};
-    if (this->max_size_ == kUnlimitedSize)
+    if (this->max_size_ == kUnlimitedSize) {
+      // In-flight computations still return their values, but no longer belong to this cache.
+      ++generation_;
       cache_.GetMap().clear();
-    else
+      current_size_ = 0;
+    } else
       cache_.LRUEvict(
           [] { return true; },
           [&](const std::shared_future<SizedValue>& value) {
@@ -369,19 +372,22 @@ class ThreadSafeLRUCache {
       if (it != map.end()) return it->second.value;
     }
 
-    auto task = std::packaged_task<SizedValue()>{[this, &key] {
+    auto lock_map = std::unique_lock{map_mutex_};
+    auto it = map.find(key);
+    if (it != map.end()) return it->second.value;
+
+    const auto generation = generation_;
+    auto task = std::packaged_task<SizedValue()>{[this, &key, generation] {
       auto value = computer_(key);
       auto result = SizedValue{value, size_estimator_(value)};
-      current_size_ += result.size;
+      // Serialize the generation check and accounting with Clear().
+      auto lock_map = std::shared_lock{map_mutex_};
+      if (generation == generation_) current_size_ += result.size;
       return result;
     }};
 
-    auto lock_map = std::unique_lock{map_mutex_};
-    auto [it, success] = map.try_emplace(key);
-    if (!success) return it->second.value;
-
     auto future = task.get_future().share();
-    it->second.value = future;
+    map.try_emplace(key).first->second.value = future;
 
     // perform the costly computation outside all locks
     lock_map.unlock();
@@ -395,6 +401,8 @@ class ThreadSafeLRUCache {
   const SizeEstimator size_estimator_;
   details::LRUCacheImpl<Key, std::shared_future<SizedValue>> cache_;
   std::atomic_size_t current_size_{0};
+  // Protected by map_mutex_; only used when the cache has no memory limit.
+  std::size_t generation_{0};
   std::shared_mutex map_mutex_;
   std::mutex lru_mutex_;
 };
