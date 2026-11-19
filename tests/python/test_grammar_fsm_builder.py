@@ -197,8 +197,21 @@ def test_character_class_utf8_boundaries_and_mask(expression):
         b"\xf4\x90\x80\x80",
         b"\xc0",
         b"\xc1",
+        b"\xed\xa0\x80",
+        b"\xed\xbf\xbf",
     ]
-    valid = ["]", "\x7f", "\x80", "\u07ff", "\u0800", "\uffff", "\U00010000", "\U0010ffff"]
+    valid = [
+        "]",
+        "\x7f",
+        "\x80",
+        "\u07ff",
+        "\u0800",
+        "\ud7ff",
+        "\ue000",
+        "\uffff",
+        "\U00010000",
+        "\U0010ffff",
+    ]
     vocabulary = invalid + [value.encode() for value in valid] + [b"[EOS]"]
     info = xgr.TokenizerInfo(vocabulary, stop_token_ids=[len(vocabulary) - 1])
     matcher = xgr.GrammarMatcher(
@@ -214,6 +227,37 @@ def test_character_class_utf8_boundaries_and_mask(expression):
     for token in invalid:
         matcher.reset()
         assert not matcher.accept_string(token)
+
+
+@pytest.mark.parametrize(
+    "expression,valid",
+    [(r"[\ud800]", []), (r"[\ud800-\udfff]", []), (r"[\ud7ff-\ue000]", ["\ud7ff", "\ue000"])],
+)
+def test_character_class_skips_surrogates(expression, valid):
+    # U+D800 to U+DFFF are UTF-16 surrogates, which have no UTF-8 encoding, so a class must not
+    # accept the bytes ED A0 80 to ED BF BF that encoding them like other codepoints produces.
+    matcher = _make_string_matcher("root ::= " + expression)
+    for value in valid:
+        assert _matcher_accepts(matcher, value)
+    for value in (b"\xed\xa0\x80", b"\xed\xb0\x80", b"\xed\xbf\xbf"):
+        matcher.reset()
+        assert not matcher.accept_string(value)
+
+
+def test_json_schema_strings_and_patterns_reject_invalid_utf8():
+    # Patterns go through the regex FSM builder, which used to bridge UTF-8 widths with the
+    # overlong minimum sequences E0 80 80 and F0 80 80 80.
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo([]), cache_enabled=False)
+    for schema in ({"type": "string"}, {"type": "string", "pattern": "^[^a]$"}):
+        matcher = xgr.GrammarMatcher(
+            compiler.compile_grammar(xgr.Grammar.from_json_schema(schema)),
+            terminate_without_stop_token=True,
+        )
+        for value in ("é", "你", "😀"):
+            assert _matcher_accepts(matcher, '"' + value + '"')
+        for value in (b"\xed\xa0\x80", b"\xe0\x80\x80", b"\xf0\x80\x80\x80"):
+            matcher.reset()
+            assert not matcher.accept_string(b'"' + value + b'"')
 
 
 # --- Long mixed sequences stress the streaming concatenation loop ---
@@ -425,26 +469,28 @@ fsm_structure_cases = [
         'root ::= "x" [^0-9] "y" [^a-z]* "z"',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=17, start=7, end=[16], edges=[
+            Rule 0: root, FSM: CompactFSM(num_states=19, start=7, end=[18], edges=[
             0: [[\x80-\xbf]->2]
             1: [[\x80-\xbf]->3]
             2: [[\x80-\xbf]->5]
             3: [[\x80-\xbf]->6]
-            4: [[\0-/]->5, [:-\x7f]->5, [\xc2-\xdf]->2, '\xe0'->8, [\xe1-\xef]->0, '\xf0'->9, [\xf1-\xf3]->11, '\xf4'->10]
+            4: [[\0-/]->5, [:-\x7f]->5, [\xc2-\xdf]->2, '\xe0'->8, [\xe1-\xec]->0, '\xed'->9, [\xee-\xef]->0, '\xf0'->10, [\xf1-\xf3]->12, '\xf4'->11]
             5: ['y'->6]
-            6: [[\0-`]->6, 'z'->16, [{-\x7f]->6, [\xc2-\xdf]->3, '\xe0'->12, [\xe1-\xef]->1, '\xf0'->13, [\xf1-\xf3]->15, '\xf4'->14]
+            6: [[\0-`]->6, 'z'->18, [{-\x7f]->6, [\xc2-\xdf]->3, '\xe0'->13, [\xe1-\xec]->1, '\xed'->14, [\xee-\xef]->1, '\xf0'->15, [\xf1-\xf3]->17, '\xf4'->16]
             7: ['x'->4]
             8: [[\xa0-\xbf]->2]
-            9: [[\x90-\xbf]->0]
-            10: [[\x80-\x8f]->0]
-            11: [[\x80-\xbf]->0]
-            12: [[\xa0-\xbf]->3]
-            13: [[\x90-\xbf]->1]
-            14: [[\x80-\x8f]->1]
-            15: [[\x80-\xbf]->1]
-            16: []
+            9: [[\x80-\x9f]->2]
+            10: [[\x90-\xbf]->0]
+            11: [[\x80-\x8f]->0]
+            12: [[\x80-\xbf]->0]
+            13: [[\xa0-\xbf]->3]
+            14: [[\x80-\x9f]->3]
+            15: [[\x90-\xbf]->1]
+            16: [[\x80-\x8f]->1]
+            17: [[\x80-\xbf]->1]
+            18: []
             ])
-            """
+        """
         ),
         id="negated-character-classes",
     ),
@@ -685,45 +731,46 @@ fsm_structure_cases = [
         'root ::= a b c\na ::= "x" [0-9]*\nb ::= a "y" | [^xyz]\nc ::= b{1,3} "end"',
         _fsm_snapshot(
             r"""
-            Rule 0: root, FSM: CompactFSM(num_states=26, start=2, end=[3], edges=[
+            Rule 0: root, FSM: CompactFSM(num_states=27, start=2, end=[3], edges=[
             0: [Rule(1)->1, [0-9]->0]
             1: [Rule(2)->3]
             2: ['x'->0]
             3: []
             ])
-            Rule 1: b, FSM: CompactFSM(num_states=26, start=7, end=[5], edges=[
+            Rule 1: b, FSM: CompactFSM(num_states=27, start=7, end=[5], edges=[
             4: [[\x80-\xbf]->6]
             5: []
             6: [[\x80-\xbf]->5]
-            7: [[\0-w]->5, 'x'->8, [{-\x7f]->5, [\xc2-\xdf]->6, '\xe0'->9, [\xe1-\xef]->4, '\xf0'->10, [\xf1-\xf3]->12, '\xf4'->11]
+            7: [[\0-w]->5, 'x'->8, [{-\x7f]->5, [\xc2-\xdf]->6, '\xe0'->9, [\xe1-\xec]->4, '\xed'->10, [\xee-\xef]->4, '\xf0'->11, [\xf1-\xf3]->13, '\xf4'->12]
             8: [[0-9]->8, 'y'->5]
             9: [[\xa0-\xbf]->6]
-            10: [[\x90-\xbf]->4]
-            11: [[\x80-\x8f]->4]
-            12: [[\x80-\xbf]->4]
+            10: [[\x80-\x9f]->6]
+            11: [[\x90-\xbf]->4]
+            12: [[\x80-\x8f]->4]
+            13: [[\x80-\xbf]->4]
             ])
-            Rule 2: c, FSM: CompactFSM(num_states=26, start=14, end=[17], edges=[
-            13: ['e'->15]
-            14: [Rule(5)->13]
-            15: ['n'->16]
-            16: ['d'->17]
-            17: []
+            Rule 2: c, FSM: CompactFSM(num_states=27, start=15, end=[18], edges=[
+            14: ['e'->16]
+            15: [Rule(5)->14]
+            16: ['n'->17]
+            17: ['d'->18]
+            18: []
             ])
-            Rule 3: c_1, FSM: CompactFSM(num_states=26, start=18, end=[18, 20], edges=[
-            18: [Rule(1)->19]
-            19: [Rule(4)->20]
-            20: []
+            Rule 3: c_1, FSM: CompactFSM(num_states=27, start=19, end=[19, 21], edges=[
+            19: [Rule(1)->20]
+            20: [Rule(4)->21]
+            21: []
             ])
-            Rule 4: c_2, FSM: CompactFSM(num_states=26, start=21, end=[21, 22], edges=[
-            21: [Rule(1)->22]
-            22: []
+            Rule 4: c_2, FSM: CompactFSM(num_states=27, start=22, end=[22, 23], edges=[
+            22: [Rule(1)->23]
+            23: []
             ])
-            Rule 5: c_3, FSM: CompactFSM(num_states=26, start=24, end=[25], edges=[
-            23: [Rule(3)->25]
-            24: [Rule(1)->23]
-            25: []
+            Rule 5: c_3, FSM: CompactFSM(num_states=27, start=25, end=[26], edges=[
+            24: [Rule(3)->26]
+            25: [Rule(1)->24]
+            26: []
             ])
-            """
+        """
         ),
         id="nested-rule-references",
     ),
