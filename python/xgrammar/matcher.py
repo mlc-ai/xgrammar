@@ -196,7 +196,7 @@ def apply_token_bitmask_inplace(
     elif backend == "cuda":
         from .kernels.apply_token_bitmask_inplace_cuda import apply_token_bitmask_inplace_cuda
 
-        apply_token_bitmask_inplace_cuda(logits, bitmask, indices)
+        apply_token_bitmask_inplace_cuda(logits, bitmask, indices, vocab_size)
 
     else:
         raise ValueError(

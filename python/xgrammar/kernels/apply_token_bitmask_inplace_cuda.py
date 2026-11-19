@@ -102,7 +102,10 @@ if _is_register_fake_available:
     # To support torch.compile with fullgraph=True, a fake kernel is needed.
     @torch.library.register_fake("xgrammar::apply_token_bitmask_inplace_cuda")
     def _(
-        logits: torch.Tensor, bitmask: torch.Tensor, indices: Optional[torch.Tensor] = None
+        logits: torch.Tensor,
+        bitmask: torch.Tensor,
+        indices: Optional[torch.Tensor] = None,
+        vocab_size: Optional[int] = None,
     ) -> None:
         pass
 
@@ -111,9 +114,11 @@ def apply_token_bitmask_inplace_cuda(
     logits: torch.Tensor,
     bitmask: torch.Tensor,
     indices: Optional[Union[List[int], torch.Tensor]] = None,
+    vocab_size: Optional[int] = None,
 ) -> None:
+    """Mask the logical vocabulary prefix, preserving padding in unit-inner-stride views."""
     if isinstance(indices, list):
         indices = torch.tensor(indices, dtype=torch.int32, device=logits.device)
     if indices is not None:
         indices = indices.to(logits.device)
-    torch.ops.xgrammar.apply_token_bitmask_inplace_cuda(logits, bitmask, indices)
+    torch.ops.xgrammar.apply_token_bitmask_inplace_cuda(logits, bitmask, indices, vocab_size)
