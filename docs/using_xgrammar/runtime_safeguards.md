@@ -29,6 +29,16 @@ with max_recursion_depth(10000):
 
 After XGrammar v0.1.21, the pushdown automaton parser was replaced with an Earley parser, and there is no recursion involved. So the recursion will never be exceed during parsing, and the exception will not be raised.
 
+## Regex Compilation Depth Limit
+
+The native regex compiler limits its expression tree depth to 256. Nested groups,
+alternations, and quantifiers contribute to this depth. Expressions exceeding the limit
+return a compilation error before constructing a deeper tree. This also applies to regexes
+embedded in JSON schemas, structural tags, EBNF, and Lark grammars. Grammar conversion may
+use an alternative compilation path when supported.
+
+This limit is independent of the matcher recursion settings above and cannot be configured.
+
 ## Cache Size Limit
 
 The {py:class}`xgr.GrammarCompiler` class uses a cache to store the compiled grammars.

@@ -38,6 +38,49 @@ def _matcher_accepts(matcher: xgr.GrammarMatcher, input_str: str) -> bool:
     return matcher.accept_string(input_str) and matcher.is_terminated()
 
 
+@pytest.mark.parametrize(
+    "entry_point",
+    [
+        "schema",
+        "property_names",
+        "pattern_properties",
+        "ref",
+        "tag_schema",
+        "tag_regex",
+        "legacy_tag",
+        "ebnf",
+        "lark",
+    ],
+)
+def test_deep_regex_rejected_at_grammar_entry_points(entry_point):
+    """Embedded regex compilation must reject deep trees without terminating the process."""
+    pattern = "(" * 30000 + "a" + ")" * 30000
+    schema = {"type": "string", "pattern": pattern}
+    constructors = {
+        "schema": lambda: xgr.Grammar.from_json_schema(schema),
+        "property_names": lambda: xgr.Grammar.from_json_schema(
+            {"type": "object", "propertyNames": schema}
+        ),
+        "pattern_properties": lambda: xgr.Grammar.from_json_schema(
+            {"type": "object", "patternProperties": {pattern: {"type": "string"}}}
+        ),
+        "ref": lambda: xgr.Grammar.from_json_schema({"$ref": "#/examples/0", "examples": [schema]}),
+        "tag_schema": lambda: xgr.Grammar.from_structural_tag(
+            {"type": "structural_tag", "format": {"type": "json_schema", "json_schema": schema}}
+        ),
+        "tag_regex": lambda: xgr.Grammar.from_structural_tag(
+            {"type": "structural_tag", "format": {"type": "regex", "pattern": pattern}}
+        ),
+        "legacy_tag": lambda: xgr.Grammar.from_structural_tag(
+            [xgr.StructuralTagItem(begin="<a>", schema=schema, end="</a>")], ["<a>"]
+        ),
+        "ebnf": lambda: xgr.Grammar.from_ebnf(f'root ::= Regex("{pattern}")'),
+        "lark": lambda: xgr.Grammar.from_lark(f"start: /{pattern}/i"),
+    }
+    with pytest.raises(RuntimeError, match="[Dd]epth|nesting"):
+        xgr.GrammarCompiler(xgr.TokenizerInfo([])).compile_grammar(constructors[entry_point]())
+
+
 # --- Exhaustive comparison against reference regexes ---
 
 # Each entry: (grammar, equivalent regex, alphabet, max enumerated length)

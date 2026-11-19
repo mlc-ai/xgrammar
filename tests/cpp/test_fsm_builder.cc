@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <unordered_set>
 #include <vector>
@@ -903,6 +904,92 @@ TEST(XGrammarFSMBuilderTest, TestRegexMatchesEmpty) {
   EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("(abc){0,1000000}").Unwrap());
   EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("(?i)A*").Unwrap());
   EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty("\\b").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexDeepTreesRejectedWithoutCrashing) {
+  EXPECT_EXIT(
+      {
+        const std::string grouped = std::string(30000, '(') + "a" + std::string(30000, ')');
+        std::string repeated = "a";
+        for (int i = 0; i < 30000; ++i) repeated += "{1}";
+        const std::string quantified = "a" + std::string(30000, '+');
+        for (const auto& regex : {grouped, repeated, quantified, grouped + "[", repeated + "["}) {
+          if (!RegexFSMBuilder::Build(regex).IsErr() ||
+              !RegexFSMBuilder::MatchesEmpty(regex).IsErr()) {
+            std::_Exit(1);
+          }
+        }
+        std::_Exit(0);
+      },
+      ::testing::ExitedWithCode(0),
+      ""
+  );
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexTreeDepthLimit) {
+  auto grouped = [](int depth) { return std::string(depth, '(') + "a" + std::string(depth, ')'); };
+  auto alternated = [](int depth) {
+    std::string regex = "a";
+    for (int i = 0; i < depth; ++i) regex = "(" + regex + "|b)";
+    return regex;
+  };
+  std::string repeated = "a";
+  for (int i = 0; i < 255; ++i) repeated += "{1}";
+  // Leaves count as one level; a union adds a bracket and a union node.
+  for (const auto& regex :
+       {grouped(255),
+        grouped(254) + "{1}",
+        repeated,
+        grouped(253) + "|b",
+        "a" + std::string(255, '+'),
+        alternated(127) + "{1}"}) {
+    auto result = RegexFSMBuilder::Build(regex);
+    ASSERT_TRUE(result.IsOk());
+    auto fsm = std::move(result).Unwrap();
+    EXPECT_TRUE(fsm.AcceptString("a"));
+    EXPECT_FALSE(fsm.AcceptString("c"));
+    EXPECT_FALSE(RegexFSMBuilder::MatchesEmpty(regex).Unwrap());
+  }
+  for (const auto& regex :
+       {grouped(256),
+        grouped(255) + "{1}",
+        repeated + "{1}",
+        grouped(254) + "|b",
+        "a" + std::string(256, '+'),
+        alternated(128)}) {
+    auto result = RegexFSMBuilder::Build(regex);
+    ASSERT_TRUE(result.IsErr());
+    EXPECT_NE(
+        std::string(std::move(result).UnwrapErr().what()).find("maximum depth"), std::string::npos
+    );
+    EXPECT_TRUE(RegexFSMBuilder::MatchesEmpty(regex).IsErr());
+  }
+  EXPECT_TRUE(RegexFSMBuilder::Build(grouped(255) + "[").IsErr());
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexLoweredRepeatPreservesDepthLimit) {
+  for (const auto& repeat : {std::string("{129}"), std::string("{129,}")}) {
+    const std::string regex = std::string(254, '(') + "a" + std::string(254, ')') + repeat;
+    GrammarBuilder builder;
+    EXPECT_TRUE(RegexFSMBuilder::Build(regex, &builder).IsOk());
+    // Replacing the repeated atom with a rule reference must not reset its depth.
+    auto result = RegexFSMBuilder::Build("(" + regex + ")", &builder);
+    ASSERT_TRUE(result.IsErr());
+    EXPECT_NE(
+        std::string(std::move(result).UnwrapErr().what()).find("maximum depth"), std::string::npos
+    );
+  }
+}
+
+TEST(XGrammarFSMBuilderTest, TestRegexDepthLimitPreservesLiteralParentheses) {
+  for (const auto& atom : {std::string("[()]"), std::string("\\(")}) {
+    const std::string regex = std::string(255, '(') + atom + std::string(255, ')');
+    auto result = RegexFSMBuilder::Build(regex);
+    ASSERT_TRUE(result.IsOk());
+    auto fsm = std::move(result).Unwrap();
+    EXPECT_TRUE(fsm.AcceptString("("));
+    EXPECT_FALSE(fsm.AcceptString("a"));
+  }
 }
 
 TEST(XGrammarFSMBuilderTest, TestRegexLargeRepeatWithoutBuilder) {
