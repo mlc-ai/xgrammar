@@ -2,7 +2,7 @@
 
 - CPU: used for CPU tensors
 - CUDA: not used in the current implementation
-- Triton: used for CUDA GPU tensors
+- Triton: used for CUDA and Intel XPU GPU tensors
 - MLX: used for MLX tensors
 - Torch Compile: used for torch tensors on other devices
 """

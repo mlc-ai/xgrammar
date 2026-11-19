@@ -2,6 +2,7 @@
 token.
 """
 
+import functools
 import math
 import warnings
 from typing import List, Literal, Optional, Tuple, Union
@@ -53,6 +54,26 @@ def allocate_token_bitmask(batch_size: int, vocab_size: int) -> torch.Tensor:
 def reset_token_bitmask(bitmask: torch.Tensor) -> None:
     """Reset the bitmask to the full mask."""
     bitmask.fill_(_FULL_MASK)
+
+
+@functools.lru_cache(maxsize=None)
+def _can_use_triton(device_type: str) -> bool:
+    """Whether Triton can generate kernels for the device type ("cuda" or "xpu").
+
+    XGrammar does not depend on Triton directly; it comes with PyTorch. The XPU build is
+    ``triton-xpu``, which is also imported as ``triton``, so for XPU check for the Intel backend:
+    a CUDA-only ``triton`` imports fine but cannot target XPU.
+    """
+    try:
+        import triton  # noqa: F401
+
+        if device_type != "xpu":
+            return True
+        # Triton >= 3.0, which every PyTorch XPU release ships.
+        from triton.backends import backends
+    except ImportError:
+        return False
+    return "intel" in backends
 
 
 def apply_token_bitmask_inplace(
@@ -139,7 +160,7 @@ def apply_token_bitmask_inplace(
         choose the backend according to the type of the logits.
 
         * CPU: CPU implementation
-        * Triton: Default CUDA implementation
+        * Triton: Default CUDA and Intel XPU implementation
         * Torch Compile: If the hardware is not the above, use this. This supports multiple backends, including CPU/CUDA/TPU/ROCm
         * CUDA: CUDA native implementation, helpful for C++-based inference engines
         * Torch Native: Support more backends such as Kunlun. Its performance may be worse than torch compile.
@@ -163,8 +184,9 @@ def apply_token_bitmask_inplace(
     if backend == "auto":
         if logits.device.type == "cpu":
             backend = "cpu"
-        elif logits.device.type == "cuda":
-            backend = "triton"
+        elif logits.device.type in ("cuda", "xpu"):
+            # Without Triton, torch.compile cannot generate GPU kernels either.
+            backend = "triton" if _can_use_triton(logits.device.type) else "torch_native"
         elif logits.device.type == "npu":
             backend = "torch_native"
         else:
