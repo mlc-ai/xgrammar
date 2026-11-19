@@ -334,7 +334,9 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
   ) override;
   int32_t CreatePatternKeyRule(const std::string& pattern, const std::string& rule_name_hint)
       override;
-  int32_t CreatePropertyNamesKeyRule(
+  int32_t GeneratePropertyNameString(const StringSpec& spec, const std::string& rule_name) override;
+  int32_t GeneratePropertyNameConst(const ConstSpec& spec, const std::string& rule_name) override;
+  int32_t CreatePropertyNamesConstraintRule(
       const SchemaSpecPtr& property_names, const std::string& rule_name_hint
   ) override;
 
@@ -350,8 +352,6 @@ class GemmaToolCallingConverter : public JSONSchemaConverter {
   int32_t GemmaString(int32_t body);
   /*! \brief A regex string body that cannot contain the delimiter, when the FSM engine allows. */
   int32_t GemmaRegexBody(const std::string& regex, const std::string& rule_name);
-  /*! \brief A choice of the bare keys spelled by the JSON string literals, or Unsatisfiable. */
-  int32_t GemmaKeyLiterals(const std::vector<std::string>& json_values);
   /*! \brief Whether no raw string or key inside the value contains an exclusion. */
   bool IsAllowedGemmaValue(const picojson::value& value) const;
   /*! \brief Serialize a JSON value into Gemma's argument spelling. */

@@ -223,6 +223,10 @@ class Grammar(XGRObject):
         schema : Union[str, Type[BaseModel], Dict[str, Any]]
             The schema string or Pydantic model or JSON schema dict.
 
+            propertyNames is applied to every object key, including keys declared in
+            properties and keys matched by patternProperties; a required key whose name
+            violates it makes the object unsatisfiable.
+
         any_whitespace : bool, default: True
             Whether to use any whitespace. If True, the generated grammar will ignore the
             indent parameter, and allow any whitespace.
@@ -288,6 +292,8 @@ class Grammar(XGRObject):
         ------
         RuntimeError
             When converting the json schema fails, with details about the parsing error.
+            Also raised for unsupported propertyNames constructs: allOf with multiple
+            subschemas, or oneOf with branches that are not provably disjoint.
         """
         schema_str = _convert_schema_to_str(schema)
         return Grammar._create_from_handle(

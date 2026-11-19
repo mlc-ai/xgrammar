@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <xgrammar/xgrammar.h>
 
+#include "grammar_builder.h"
 #include "grammar_functor.h"
 
 using namespace xgrammar;
@@ -40,6 +41,44 @@ part ::= "a" part | "b"
   for (const auto* text : {"az", "za", "bza", "aaz", "zba"}) {
     EXPECT_FALSE(fsm.AcceptString(text)) << text;
   }
+}
+
+TEST(RegularGrammarFSM, MutualTailCallsKeepSeparateReturns) {
+  auto grammar = Grammar::FromEBNF(R"(
+root ::= part? "x" part "y"
+part ::= "a" other | "b"
+other ::= "c" part | "d"
+)");
+  auto result = GrammarFSMBuilder::FromRegularGrammar(grammar);
+  ASSERT_TRUE(result.IsOk());
+  auto fsm = std::move(result).Unwrap();
+  for (const auto* text : {"xby", "bxady", "acbxacady", "adxby"}) {
+    EXPECT_TRUE(fsm.AcceptString(text)) << text;
+  }
+  for (const auto* text : {"", "xy", "ay", "adxy", "xay", "adxb", "adxadyb"}) {
+    EXPECT_FALSE(fsm.AcceptString(text)) << text;
+  }
+}
+
+TEST(RegularGrammarFSM, RegexAndLeafTagDispatchPreserveByteLanguages) {
+  GrammarBuilder builder;
+  builder.AddRule("root", builder.AddRegex(R"(\S+)", true));
+  auto result = GrammarFSMBuilder::FromRegularGrammar(builder.Get());
+  ASSERT_TRUE(result.IsOk());
+  auto fsm = std::move(result).Unwrap();
+  EXPECT_TRUE(fsm.AcceptString("abc"));
+  for (const auto* text : {"", "a b", "a\"b", "a\\b", "a\nb"}) {
+    EXPECT_FALSE(fsm.AcceptString(text)) << text;
+  }
+  auto grammar =
+      Grammar::FromEBNF(R"(root ::= TagDispatch(loop_after_dispatch=false,excludes=("stop")))");
+  result = GrammarFSMBuilder::FromRegularGrammar(grammar);
+  ASSERT_TRUE(result.IsOk());
+  fsm = std::move(result).Unwrap();
+  EXPECT_TRUE(fsm.AcceptString("sto"));
+  EXPECT_TRUE(fsm.AcceptString("你好"));
+  EXPECT_FALSE(fsm.AcceptString("stop"));
+  EXPECT_FALSE(fsm.AcceptString("a stop b"));
 }
 
 TEST(RegularGrammarFSM, RegexFallbackMatchesOriginalGrammar) {
@@ -95,7 +134,7 @@ TEST(RegularGrammarFSM, RegexFallbackMatchesOriginalGrammar) {
 TEST(RegularGrammarFSM, RejectsUnsupportedRecursionAndBounds) {
   for (const auto* source :
        {"root ::= \"a\" root \"b\" | \"\"",
-        "root ::= \"a\" child | \"\"\nchild ::= \"b\" root | \"c\"",
+        "root ::= \"a\" child \"z\" | \"\"\nchild ::= \"b\" root | \"c\"",
         "root ::= Token(1)"}) {
     EXPECT_TRUE(GrammarFSMBuilder::FromRegularGrammar(Grammar::FromEBNF(source)).IsErr()) << source;
   }

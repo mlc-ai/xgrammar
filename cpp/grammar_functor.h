@@ -408,9 +408,10 @@ class GrammarFSMBuilder {
   static Result<FSMWithStartEnd> Regex(const std::string& regex, bool json_string = false);
   /*!
    * \brief Flatten a regular EBNF grammar without reinterpreting its terminal expressions.
-   * Supports finite rule calls, direct tail self-recursion, and repetition. Each call gets
-   * separate return states. Other recursion, non-byte terminals, and rule annotations return
-   * an error. Intended for the existing RegexToEBNF fallback, not arbitrary CFGs.
+   * Supports finite rule calls, tail recursion, repetition, regex, and leaf tag dispatch.
+   * Each finite call gets separate return states. Other recursion, non-byte terminals, and
+   * rule annotations return an error. Used for regex fallback and property-name constraints,
+   * not arbitrary CFGs.
    * \param max_num_states Bound on the intermediate automaton size.
    */
   static Result<FSMWithStartEnd> FromRegularGrammar(
