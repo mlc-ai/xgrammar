@@ -56,7 +56,9 @@ std::string NumberSpec::ToString() const {
          ", exclusive_minimum=" +
          (exclusive_minimum.has_value() ? std::to_string(*exclusive_minimum) : "null") +
          ", exclusive_maximum=" +
-         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") + "}";
+         (exclusive_maximum.has_value() ? std::to_string(*exclusive_maximum) : "null") +
+         ", multiple_of=" +
+         (multiple_of.has_value() ? std::to_string(*multiple_of) : "null") + "}";
 }
 
 std::string StringSpec::ToString() const {
@@ -1079,6 +1081,7 @@ Result<IntegerSpec, SchemaError> SchemaParser::ParseInteger(const picojson::obje
 }
 
 Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object& schema) {
+  std::optional<double> parsed_multiple_of;
   if (schema.count("multipleOf")) {
     const auto& value = schema.at("multipleOf");
     if (!value.is<int64_t>() && !value.is<double>()) {
@@ -1091,9 +1094,27 @@ Result<NumberSpec, SchemaError> SchemaParser::ParseNumber(const picojson::object
           SchemaErrorType::kInvalidSchema, "multipleOf must be greater than 0"
       );
     }
-    XGRAMMAR_LOG(WARNING) << "multipleOf is not supported for type:number; ignoring multipleOf";
+    if (multiple_of != std::floor(multiple_of) || multiple_of > kIntegerMultipleOfMax) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf for type:number is only supported for integer divisors up to " +
+              std::to_string(kIntegerMultipleOfMax) + "; got " +
+              std::to_string(multiple_of)
+      );
+    }
+    bool has_bounds = schema.count("minimum") || schema.count("maximum") ||
+                      schema.count("exclusiveMinimum") || schema.count("exclusiveMaximum");
+    if (has_bounds) {
+      return ResultErr<SchemaError>(
+          SchemaErrorType::kUnsupportedSchema,
+          "multipleOf for type:number is not yet supported together with "
+          "minimum/maximum/exclusiveMinimum/exclusiveMaximum"
+      );
+    }
+    parsed_multiple_of = multiple_of;
   }
   NumberSpec spec;
+  spec.multiple_of = parsed_multiple_of;
 
   auto getDouble = [](const picojson::value& value) -> Result<double, SchemaError> {
     if (!value.is<double>() && !value.is<int64_t>()) {
@@ -2722,6 +2743,20 @@ int32_t JSONSchemaConverter::GenerateNumber(const NumberSpec& spec, const std::s
         false,
         /*force_cfg_expansion=*/true
     );
+  }
+
+  // A multiple-of constraint keeps only spellings without an exponent: an integer
+  // multiple (via the divisibility DFA) followed by an optional all-zero fraction.
+  // The exponent grammar is dropped because 10^e modulo the divisor is not
+  // expressible with the per-digit DFA; spellings like 4e2 for 40 are excluded.
+  if (spec.multiple_of.has_value()) {
+    int64_t divisor = static_cast<int64_t>(*spec.multiple_of);
+    int32_t multiples = GenerateIntegerMultipleOfDFA(divisor, rule_name);
+    int32_t zero_fraction = Sequence(
+        {ByteString("."),
+         Repeat(rule_name + "_frac_zeros", builder_.AddCharacterClass({{'0', '0'}}), 1, -1)}
+    );
+    return Sequence({multiples, Choice({Empty(), zero_fraction})});
   }
 
   int32_t optional_minus = Choice({Empty(), ByteString("-")});

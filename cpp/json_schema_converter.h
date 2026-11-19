@@ -48,6 +48,9 @@ struct NumberSpec {
   std::optional<double> maximum;
   std::optional<double> exclusive_minimum;
   std::optional<double> exclusive_maximum;
+  // Kept only when it is a positive integer divisor within kIntegerMultipleOfMax
+  // and no bounds are set; other combinations fail closed in ParseNumber.
+  std::optional<double> multiple_of;
 
   std::string ToString() const;
 };
