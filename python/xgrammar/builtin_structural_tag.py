@@ -1553,6 +1553,9 @@ def get_qwen_3_5_structural_tag(
 
     Corresponding model keys: ``"qwen_3_5"`` and ``"qwen_3_coder"``.
 
+    The opening ``<tool_call>`` marker may be followed by whitespace before
+    ``<function=...>``.
+
     Reference: https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/blob/main/chat_template.jinja
 
     Parameters are normalized by :func:`get_model_structural_tag` before this
@@ -1575,88 +1578,47 @@ def get_qwen_3_5_structural_tag(
     StructuralTag
         A structural tag for Qwen XML function calling format.
     """
-    TOOL_CALL_BEGIN_PREFIX = "<tool_call>\n<function="
-    TOOL_CALL_BEGIN_SUFFIX = ">\n"
-    TOOL_CALL_END = "\n</function>\n</tool_call>"
-    TOOL_CALL_TRIGGER = "<tool_call>\n<function="
+    TOOL_CALL_MARKER = "<tool_call>"
     THINK_TAG_BEGIN = "<think>"
     THINK_TAG_END = "</think>"
     THINK_SUFFIX = "\n\n"
     THINK_EXCLUDE_TOKENS = ["<think>", "</think>"]
-    tools = tools or []
-    builtin_tools = builtin_tools or []
-    if tool_choice == "auto":
-        tags = []
-        for tool in tools:
-            function = tool.function
-            parameters = _get_function_parameters(function)
-            name = function.name
-            tags.append(
-                TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=JSONSchemaFormat(
-                        json_schema=parameters,
+    tags = [
+        TagFormat(
+            begin=TOOL_CALL_MARKER,
+            content=SequenceFormat(
+                elements=[
+                    RegexFormat(pattern=r"\s*"),
+                    ConstStringFormat(value=f"<function={tool.function.name}>\n"),
+                    JSONSchemaFormat(
+                        json_schema=_get_function_parameters(tool.function),
                         style="qwen_xml",
                         any_order=any_order,
                         max_whitespace_cnt=max_whitespace_cnt,
                     ),
-                    end=TOOL_CALL_END,
-                )
-            )
-
-        if len(tags) > 0:
-            suffix_tag = TriggeredTagsFormat(
-                triggers=[TOOL_CALL_TRIGGER],
-                tags=tags,
-                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
-                stop_after_first=not parallel_tool_calls,
-            )
-        else:
-            suffix_tag = AnyTextFormat(
-                excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
-            )
-
-    elif tool_choice == "forced":
-        if not tools:
-            raise ValueError("Forced tool choice must resolve to exactly one tool.")
-        function = tools[0].function
-        suffix_tag = TagFormat(
-            begin=f"{TOOL_CALL_BEGIN_PREFIX}{function.name}{TOOL_CALL_BEGIN_SUFFIX}",
-            content=JSONSchemaFormat(
-                json_schema=_get_function_parameters(function),
-                style="qwen_xml",
-                any_order=any_order,
-                max_whitespace_cnt=max_whitespace_cnt,
+                    ConstStringFormat(value="\n</function>\n"),
+                ]
             ),
-            end=TOOL_CALL_END,
+            end="</tool_call>",
         )
-
-    elif tool_choice == "required":
-        tags = []
-        for tool in tools:
-            function = tool.function
-            parameters = _get_function_parameters(function)
-            name = function.name
-            tags.append(
-                TagFormat(
-                    begin=f"{TOOL_CALL_BEGIN_PREFIX}{name}{TOOL_CALL_BEGIN_SUFFIX}",
-                    content=JSONSchemaFormat(
-                        json_schema=parameters,
-                        style="qwen_xml",
-                        any_order=any_order,
-                        max_whitespace_cnt=max_whitespace_cnt,
-                    ),
-                    end=TOOL_CALL_END,
-                )
-            )
-
-        assert len(tags) > 0
+        for tool in tools or []
+    ]
+    if tool_choice == "forced":
+        if not tags:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        suffix_tag = tags[0]
+    elif tags:
         suffix_tag = TriggeredTagsFormat(
-            triggers=[TOOL_CALL_TRIGGER],
+            triggers=[TOOL_CALL_MARKER],
             tags=tags,
             excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS),
-            at_least_one=True,
+            at_least_one=tool_choice == "required",
             stop_after_first=not parallel_tool_calls,
+        )
+    else:
+        assert tool_choice == "auto"
+        suffix_tag = AnyTextFormat(
+            excludes=_text_excludes(exclude_special_tokens, THINK_EXCLUDE_TOKENS)
         )
 
     prefix_tag = _build_reasoning_prefix(
