@@ -709,6 +709,7 @@ class SchemaParser {
   picojson::value root_schema_;
   std::unordered_map<std::string, SchemaSpecPtr> ref_cache_;
   std::unordered_map<std::string, SchemaSpecPtr> schema_cache_;
+  std::unordered_set<std::string> array_refs_in_progress_;
 };
 
 std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
@@ -1215,6 +1216,7 @@ Result<NullSpec, SchemaError> SchemaParser::ParseNull(const picojson::object&) {
 Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& schema) {
   WarnUnsupportedKeywords(schema, {"uniqueItems", "contains", "minContains", "maxContains"});
   ArraySpec spec;
+  bool unreachable_prefix = false;
 
   if (schema.count("prefixItems")) {
     if (!schema.at("prefixItems").is<picojson::array>()) {
@@ -1223,18 +1225,38 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
       );
     }
     for (const auto& item : schema.at("prefixItems").get<picojson::array>()) {
-      if (item.is<bool>() && !item.get<bool>()) {
-        return ResultErr<SchemaError>(
-            SchemaErrorType::kUnsatisfiableSchema, "prefixItems contains false"
-        );
-      } else if (!item.is<picojson::object>()) {
+      if (!item.is<bool>() && !item.is<picojson::object>()) {
         return ResultErr<SchemaError>(
             SchemaErrorType::kInvalidSchema, "prefixItems must be an array of objects or booleans"
         );
       }
       auto item_result = Parse(item, "prefix_item");
-      if (item_result.IsErr()) return ResultErr(std::move(item_result).UnwrapErr());
-      spec.prefix_items.push_back(std::move(item_result).Unwrap());
+      // Resolve enough of a reference chain to detect an impossible position.
+      // Keep the original RefSpec for generation and leave recursive arrays lazy.
+      if (item_result.IsOk()) {
+        auto target = item_result.ValueRef();
+        std::vector<std::string> checked_refs;
+        while (const auto* ref = std::get_if<RefSpec>(&target->spec)) {
+          if (!array_refs_in_progress_.insert(ref->uri).second) break;
+          checked_refs.push_back(ref->uri);
+          auto resolved = ResolveRef(ref->uri, "prefix_item");
+          if (resolved.IsErr()) {
+            item_result = ResultErr(std::move(resolved).UnwrapErr());
+            break;
+          }
+          target = std::move(resolved).Unwrap();
+        }
+        for (const auto& uri : checked_refs) array_refs_in_progress_.erase(uri);
+      }
+      if (item_result.IsErr()) {
+        if (item_result.ErrRef().Type() != SchemaErrorType::kUnsatisfiableSchema) {
+          return ResultErr(std::move(item_result).UnwrapErr());
+        }
+        // No instance can reach this position, but shorter arrays may still be valid.
+        unreachable_prefix = true;
+      } else if (!unreachable_prefix) {
+        spec.prefix_items.push_back(std::move(item_result).Unwrap());
+      }
     }
   }
 
@@ -1309,6 +1331,11 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     spec.max_items = -1;
   }
 
+  if (unreachable_prefix) {
+    spec.allow_additional_items = false;
+    const auto reachable = static_cast<int64_t>(spec.prefix_items.size());
+    spec.max_items = spec.max_items == -1 ? reachable : std::min(spec.max_items, reachable);
+  }
   if (spec.max_items != -1 && spec.min_items > spec.max_items) {
     return ResultErr<SchemaError>(
         SchemaErrorType::kUnsatisfiableSchema,
@@ -1317,11 +1344,10 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
     );
   }
   if (spec.max_items != -1 && spec.max_items < static_cast<int64_t>(spec.prefix_items.size())) {
-    return ResultErr<SchemaError>(
-        SchemaErrorType::kUnsatisfiableSchema,
-        "maxItems is less than the number of prefixItems: " + std::to_string(spec.max_items) +
-            " < " + std::to_string(spec.prefix_items.size())
-    );
+    // maxItems limits the instance, not the number of declared positional schemas.
+    // Truncation must not move the additional-items boundary earlier.
+    spec.prefix_items.resize(static_cast<size_t>(spec.max_items));
+    spec.allow_additional_items = false;
   }
   if (!spec.allow_additional_items) {
     int64_t prefix_size = static_cast<int64_t>(spec.prefix_items.size());
@@ -1331,14 +1357,6 @@ Result<ArraySpec, SchemaError> SchemaParser::ParseArray(const picojson::object& 
           "minItems is greater than the number of prefixItems, but additional items are not "
           "allowed: " +
               std::to_string(spec.min_items) + " > " + std::to_string(prefix_size)
-      );
-    }
-    if (spec.max_items != -1 && prefix_size > spec.max_items) {
-      return ResultErr<SchemaError>(
-          SchemaErrorType::kUnsatisfiableSchema,
-          "maxItems is less than the number of prefixItems, but additional items are not "
-          "allowed: " +
-              std::to_string(spec.max_items) + " < " + std::to_string(prefix_size)
       );
     }
   }
