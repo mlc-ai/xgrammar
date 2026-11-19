@@ -1396,6 +1396,17 @@ def test_pattern_whitespace_class(char: str, is_accepted: bool):
     check_schema_with_instance(schema, instance, is_accepted=is_accepted, any_whitespace=False)
 
 
+# The FSM regex engine rejects \p inside a character class, and the CFG fallback must not
+# compile it into a class of the literal characters 'p', '{', 'L', 'M' and '}'.
+@pytest.mark.parametrize("pattern", [r"^[\p{L}\p{M}]+$", r"^[\P{L}]+$"])
+def test_pattern_unicode_property_escape_in_char_class(pattern: str):
+    schema = {"type": "string", "pattern": pattern}
+    with pytest.raises(
+        RuntimeError, match="Unicode character class escape sequence is not supported yet."
+    ):
+        xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
 def test_complex_restrictions():
     class RestrictedModel(BaseModel):
         restricted_string: str = Field(..., pattern=r"[^\"]*")
