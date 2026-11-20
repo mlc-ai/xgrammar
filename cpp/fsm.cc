@@ -1063,10 +1063,12 @@ FSMWithStartEnd FSMWithStartEnd::Plus() const {
 
 FSMWithStartEnd FSMWithStartEnd::Optional() const {
   FSM fsm = fsm_.Copy();
-  if (!ends_.empty()) {
-    fsm.AddEpsilonEdge(start_, ends_.front());
+  auto new_end = fsm.AddState();
+  fsm.AddEpsilonEdge(start_, new_end);
+  for (auto end : ends_) {
+    fsm.AddEpsilonEdge(end, new_end);
   }
-  return FSMWithStartEnd(fsm, start_, ends_);
+  return FSMWithStartEnd(fsm, start_, {new_end});
 }
 
 Result<FSMWithStartEnd> FSMWithStartEnd::Not(int max_result_num_states) const {
