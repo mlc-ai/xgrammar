@@ -36,6 +36,25 @@ def check_grammar_with_instance(grammar: Grammar, instance: str, accepted: bool)
     assert _is_grammar_accept_string(grammar, instance) == accepted
 
 
+@pytest.mark.parametrize("keyword", ["anyOf", "oneOf"])
+def test_qwen_partial_object_arms_keep_enclosing_fields(keyword):
+    value = {
+        "type": "object",
+        "properties": {"flag": {"type": "boolean"}, "note": {"type": "string"}},
+        "additionalProperties": False,
+        keyword: [
+            {"properties": {"flag": {"const": b}}, "required": ["flag"]} for b in (True, False)
+        ],
+    }
+    schema = {"type": "object", "properties": {"v": value}, "required": ["v"]}
+    grammar = Grammar.from_structural_tag(
+        StructuralTag(format=JSONSchemaFormat(json_schema=schema, style="qwen_xml", any_order=True))
+    )
+    assert _is_grammar_accept_string(grammar, '<parameter=v>{"note":"ok","flag":true}</parameter>')
+    assert not _is_grammar_accept_string(grammar, '<parameter=v>{"flag":123}</parameter>')
+    assert not _is_grammar_accept_string(grammar, '<parameter=v>{"other":true}</parameter>')
+
+
 def _check_qwen_grammar(schema: dict, expected_grammar: str, instance: str, accepted: bool):
     ebnf_grammar = _json_schema_to_ebnf(schema, json_format="qwen_xml")
     check_grammar_with_expected_grammar(ebnf_grammar, expected_grammar)

@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -1346,6 +1347,7 @@ void GrammarCompilerSub::TagDispatchOptimization(
 ) {
   using GrammarExprType = Grammar::Impl::GrammarExprType;
   tag_dispatch_rule_id_to_second_slicing_bitset->clear();
+  std::map<std::vector<std::string>, int32_t> first_rule_by_excludes;
 
   // Optimization for TagDispatch: Precompute the definitely accepted tokens.
   for (int i = 0; i < compiled_grammar_impl->grammar->NumRules(); i++) {
@@ -1357,6 +1359,16 @@ void GrammarCompilerSub::TagDispatchOptimization(
     XGRAMMAR_DCHECK(rule_body.type == GrammarExprType::kTagDispatch);
     Grammar::Impl::TagDispatch tag_dispatch =
         compiled_grammar_impl->GetGrammar()->GetTagDispatch(rule.body_expr_id);
+    // Without triggers this slice depends only on the excluded strings and the fixed vocabulary.
+    if (tag_dispatch.tag_rule_pairs.empty()) {
+      auto [first, inserted] = first_rule_by_excludes.try_emplace(tag_dispatch.excludes, i);
+      if (!inserted) {
+        tag_dispatch_rule_id_to_second_slicing_bitset->emplace(
+            i, tag_dispatch_rule_id_to_second_slicing_bitset->at(first->second)
+        );
+        continue;
+      }
+    }
     const auto& sorted_decoded_vocab = tokenizer_info_.GetSortedDecodedVocab();
     DynamicBitset definite_accepted_tokens_since_second_char(sorted_decoded_vocab.size());
     for (int j = 0; j < static_cast<int32_t>(sorted_decoded_vocab.size()); j++) {
