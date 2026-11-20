@@ -665,3 +665,19 @@ TEST(XGrammarFSMTest, EpsilonSimplificationTest) {
   EXPECT_EQ(fsm_wse.ToString(), expected_fsm);
   EXPECT_EQ(fsm_wse.GetFsm().NumStates(), 3);
 }
+
+TEST(XGrammarFSMTest, OptionalDoesNotBypassRequiredPrefixIntoEndLoop) {
+  for (const auto& regex : {"^a(b[0-9]+)?$", "^a(b[0-9]*)?$", "^a(b[0-9]{0,2})?$"}) {
+    auto fsm = RegexFSMBuilder::Build(regex).Unwrap();
+    EXPECT_TRUE(fsm.AcceptString("a"));
+    EXPECT_TRUE(fsm.AcceptString("ab1"));
+    EXPECT_FALSE(fsm.AcceptString("a1"));
+    EXPECT_FALSE(fsm.AcceptString("a12"));
+  }
+  auto optional_alternatives = RegexFSMBuilder::Build("^a(b[0-9]+|c[a-z]+)?d$").Unwrap();
+  EXPECT_TRUE(optional_alternatives.AcceptString("ad"));
+  EXPECT_TRUE(optional_alternatives.AcceptString("ab12d"));
+  EXPECT_TRUE(optional_alternatives.AcceptString("acxyd"));
+  EXPECT_FALSE(optional_alternatives.AcceptString("a12d"));
+  EXPECT_FALSE(optional_alternatives.AcceptString("axyd"));
+}
