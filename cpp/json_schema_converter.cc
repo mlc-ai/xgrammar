@@ -734,21 +734,13 @@ std::string SchemaParser::ComputeCacheKey(const picojson::value& schema) {
 
   if (schema.is<picojson::object>()) {
     std::string result = "{";
-    std::vector<std::pair<std::string, picojson::value>> sorted_kv;
-    for (const auto& kv : schema.get<picojson::object>()) {
-      if (kSkippedKeys.count(kv.first) == 0) {
-        sorted_kv.push_back(kv);
-      }
-    }
-    std::sort(sorted_kv.begin(), sorted_kv.end(), [](const auto& lhs, const auto& rhs) {
-      return lhs.first < rhs.first;
-    });
-    int64_t idx = 0;
-    for (const auto& [key, value] : sorted_kv) {
-      if (idx != 0) {
-        result += ",";
-      }
-      ++idx;
+    const auto& object = schema.get<picojson::object>();
+    auto keys = object.ordered_keys();
+    std::sort(keys.begin(), keys.end());
+    for (const auto& key : keys) {
+      if (kSkippedKeys.count(key)) continue;
+      const auto& value = object.at(key);
+      if (result.size() > 1) result += ",";
       result += picojson::value(key).serialize(false) + ":";
       if (kSchemaMapKeys.count(key) && value.is<picojson::object>()) {
         // Map keys are names, not schema keywords. Keep their order: property
@@ -1354,7 +1346,7 @@ Result<ObjectSpec, SchemaError> SchemaParser::ParseObject(const picojson::object
           SchemaErrorType::kInvalidSchema, "properties must be an object"
       );
     }
-    auto properties_obj = schema.at("properties").get<picojson::object>();
+    const auto& properties_obj = schema.at("properties").get<picojson::object>();
     for (const auto& key : properties_obj.ordered_keys()) {
       auto prop_result = Parse(properties_obj.at(key), key);
       if (prop_result.IsErr()) return ResultErr(std::move(prop_result).UnwrapErr());
@@ -1620,6 +1612,54 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::ResolveRef(
   return ResultOk(resolved);
 }
 
+static bool IsPartialObjectArm(const picojson::value& arm, const picojson::object& fields) {
+  static const std::unordered_set<std::string> keys = {"type", "properties", "required", "not"};
+  if (!arm.is<picojson::object>() || !HasOnlyKeys(arm.get<picojson::object>(), keys) ||
+      (arm.contains("type") && arm.get("type") != picojson::value("object"))) {
+    return false;
+  }
+  if (!arm.contains("properties")) return arm.contains("required") && !fields.empty();
+  const auto& props = arm.get("properties");
+  return props.is<picojson::object>() &&
+         std::any_of(fields.begin(), fields.end(), [&](const auto& f) {
+           return !props.contains(f.first);
+         });
+}
+
+// Keep declared field shapes on the additional path. The original choice still handles
+// references, string predicates, and the other branch-specific constraints.
+static picojson::value QwenChoiceField(const picojson::value& schema) {
+  picojson::object shape;
+  if (!schema.is<picojson::object>()) return picojson::value(std::move(shape));
+  for (const char* key : {"enum", "const"}) {
+    if (schema.contains(key)) shape[key] = schema.get(key);
+  }
+  const auto& type = schema.get("type");
+  if (type.is<std::string>()) shape["type"] = type;
+  if (type == picojson::value("object")) {
+    if (schema.get("properties").is<picojson::object>()) {
+      picojson::object properties;
+      const auto& fields = schema.get("properties").get<picojson::object>();
+      for (const auto& key : fields.ordered_keys())
+        properties[key] = QwenChoiceField(fields.at(key));
+      shape["properties"] = picojson::value(std::move(properties));
+    }
+    const auto& additional = schema.get("additionalProperties");
+    shape["additionalProperties"] = additional.is<bool>() ? additional : picojson::value(true);
+    const auto& required = schema.get("required");
+    if (required.is<picojson::array>() &&
+        std::all_of(
+            required.get<picojson::array>().begin(),
+            required.get<picojson::array>().end(),
+            [](const auto& key) { return key.template is<std::string>(); }
+        ))
+      shape["required"] = required;
+  } else if (type == picojson::value("array")) {
+    shape["items"] = QwenChoiceField(schema.get("items"));
+  }
+  return picojson::value(std::move(shape));
+}
+
 Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
     const picojson::object& schema, const std::string& keyword
 ) {
@@ -1634,33 +1674,62 @@ Result<AnyOfSpec, SchemaError> SchemaParser::ParseAnyOf(
     spec.options.push_back(std::move(option_result).Unwrap());
     ++idx;
   }
+  if (config_.json_format != JSONFormat::kQwenXML || !schema.count("type") ||
+      schema.at("type") != picojson::value("object") || !schema.count("properties") ||
+      !schema.at("properties").is<picojson::object>())
+    return ResultOk(std::move(spec));
+
+  const auto& arms = schema.at(keyword).get<picojson::array>();
+  const auto& fields = schema.at("properties").get<picojson::object>();
+  std::vector<size_t> partial;
+  for (size_t i = 0; i < arms.size(); ++i) {
+    if (std::holds_alternative<AnySpec>(spec.options[i]->spec)) return ResultOk(std::move(spec));
+    if (IsPartialObjectArm(arms[i], fields)) partial.push_back(i);
+  }
+  if (partial.empty()) return ResultOk(std::move(spec));
+  // TODO: Remove this widening once Qwen XML applies parent object constraints to each arm.
+  auto shape = QwenChoiceField(picojson::value(schema));
+  auto parsed = ParseObject(shape.get<picojson::object>());
+  if (parsed.IsErr()) {
+    XGRAMMAR_LOG(WARNING) << "Qwen XML " << keyword
+                          << " adds an open object fallback: " << parsed.ErrRef().what();
+    ObjectSpec open;
+    open.allow_additional_properties = true;
+    spec.options.push_back(SchemaSpec::Make(std::move(open)));
+  } else if (partial.size() == arms.size()) {
+    spec.options.push_back(SchemaSpec::Make(std::move(parsed).Unwrap()));
+  } else {
+    for (size_t i : partial) {
+      auto branch = parsed.ValueRef();
+      const auto& arm = std::get<ObjectSpec>(spec.options[i]->spec);
+      branch.required.insert(arm.required.begin(), arm.required.end());
+      for (const auto& field : arm.properties) {
+        auto it =
+            std::find_if(branch.properties.begin(), branch.properties.end(), [&](const auto& f) {
+              return f.name == field.name;
+            });
+        if (it != branch.properties.end())
+          *it = field;
+        else if (branch.allow_additional_properties)
+          branch.properties.push_back(field);
+      }
+      spec.options.push_back(SchemaSpec::Make(std::move(branch)));
+    }
+  }
   return ResultOk(std::move(spec));
 }
 
 Result<OneOfSpec, SchemaError> SchemaParser::ParseOneOf(const picojson::object& schema) {
-  OneOfSpec spec;
   if (!schema.at("oneOf").is<picojson::array>()) {
     return ResultErr<SchemaError>(SchemaErrorType::kInvalidSchema, "oneOf must be an array");
   }
-
   const auto& options = schema.at("oneOf").get<picojson::array>();
-  if (options.empty()) {
+  if (options.empty() || !TryProvePairwiseDisjointOneOf(options)) {
     return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
   }
-
-  int idx = 0;
-  for (const auto& option : options) {
-    auto option_result = Parse(option, "case_" + std::to_string(idx));
-    if (option_result.IsErr()) return ResultErr(std::move(option_result).UnwrapErr());
-    spec.options.push_back(std::move(option_result).Unwrap());
-    ++idx;
-  }
-
-  if (!TryProvePairwiseDisjointOneOf(options)) {
-    return ResultErr<SchemaError>(SchemaErrorType::kUnsupportedSchema, kUnsupportedOneOfMessage);
-  }
-
-  return ResultOk(std::move(spec));
+  auto parsed = ParseAnyOf(schema, "oneOf");
+  if (parsed.IsErr()) return ResultErr(std::move(parsed).UnwrapErr());
+  return ResultOk(OneOfSpec{std::move(parsed).Unwrap().options});
 }
 
 Result<AllOfSpec, SchemaError> SchemaParser::ParseAllOf(const picojson::object& schema) {
@@ -4189,7 +4258,15 @@ int32_t XMLToolCallingConverter::FormatOtherProperty(
       elements.push_back(WhitespaceExpression());
       elements.push_back(ByteString(xml_wrapper_.value_wrapper_prefix));
     }
-    if (value_rule_id == builder_.GetRuleId(kXMLString)) {
+    if (json_format_ == JSONFormat::kQwenXML && nested_object_level_ == 1 && excludes_.empty() &&
+        schema && std::holds_alternative<AnySpec>(schema->spec)) {
+      // A raw XML string already consumes its surrounding whitespace.
+      const int32_t containers = Choice({RuleRef(kBasicArray), RuleRef(kBasicObject)});
+      elements.push_back(Choice(
+          {RuleRef(kXMLString),
+           Sequence({WhitespaceExpression(), containers, WhitespaceExpression()})}
+      ));
+    } else if (value_rule_id == builder_.GetRuleId(kXMLString)) {
       elements.push_back(RuleRef(value_rule_id));
     } else {
       elements.push_back(WhitespaceExpression());
