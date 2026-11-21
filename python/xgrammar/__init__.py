@@ -20,6 +20,7 @@ from .exception import (
     InvalidStructuralTagError,
 )
 from .grammar import Grammar, StructuralTagItem
+from .json_schema_to_structural_tag import json_schema_to_structural_tag
 from .matcher import (
     BatchGrammarMatcher,
     GrammarMatcher,
@@ -60,6 +61,7 @@ __all__ = [
     "TokenizerInfo",
     "VocabType",
     "get_model_structural_tag",
+    "json_schema_to_structural_tag",
     "normalize_tool_choice",
     "register_model_structural_tag",
     "get_builtin_structural_tag",
