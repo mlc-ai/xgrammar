@@ -160,6 +160,10 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   std::string XMLValue(const std::string& json_value) const;
   std::string EscapeAttrValue(const std::string& value) const;
 
+  /*! \brief Whether a pattern is a counted repetition of one character that can match the
+   * parameter suffix. Such a pattern is lowered and framed like a length-bounded string. */
+  bool IsBudgetedXMLPattern(const std::string& pattern);
+
   /*!
    * \brief Build the raw-string rule for a schema `pattern` inside an XML parameter value.
    *

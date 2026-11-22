@@ -13,6 +13,7 @@
 #include <climits>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <functional>
 #include <iomanip>
 #include <limits>
@@ -4037,6 +4038,71 @@ int32_t XMLToolCallingConverter::GenerateString(
   return JSONSchemaConverter::GenerateString(spec, rule_name);
 }
 
+namespace {
+
+struct CountedCharacterRepeat {
+  std::string atom;
+  int min;
+  int max;
+};
+
+/*!
+ * \brief Split a regex of the form `^?ATOM{m}`, `^?ATOM{m,}` or `^?ATOM{m,n}` with an optional
+ * trailing `$`, where ATOM matches one character: `.`, a bracket expression or a
+ * one-character escape such as `\s`. Returns std::nullopt for any other regex.
+ */
+std::optional<CountedCharacterRepeat> SplitCountedCharacterRepeat(const std::string& regex) {
+  size_t pos = 0;
+  if (pos < regex.size() && regex[pos] == '^') ++pos;
+  const size_t atom_begin = pos;
+  if (pos >= regex.size()) return std::nullopt;
+  if (regex[pos] == '.') {
+    ++pos;
+  } else if (regex[pos] == '\\') {
+    // Escapes with a payload (\u, \x, \p, \c, back-references) are left to the general path.
+    if (pos + 1 >= regex.size() || regex[pos + 1] == '\0' ||
+        std::strchr("sSdDwWtnrfv\\.-[]{}()*+?^$|/", regex[pos + 1]) == nullptr) {
+      return std::nullopt;
+    }
+    pos += 2;
+  } else if (regex[pos] == '[') {
+    ++pos;
+    if (pos < regex.size() && regex[pos] == '^') ++pos;
+    if (pos >= regex.size() || regex[pos] == ']') return std::nullopt;
+    while (pos < regex.size() && regex[pos] != ']') {
+      pos += regex[pos] == '\\' ? 2 : 1;
+    }
+    if (pos >= regex.size()) return std::nullopt;
+    ++pos;
+  } else {
+    return std::nullopt;
+  }
+  CountedCharacterRepeat result{regex.substr(atom_begin, pos - atom_begin), 0, -1};
+  auto parse_number = [&](int* value) {
+    const size_t begin = pos;
+    while (pos < regex.size() && std::isdigit(static_cast<unsigned char>(regex[pos]))) ++pos;
+    if (pos == begin || pos - begin > 9) return false;
+    *value = std::stoi(regex.substr(begin, pos - begin));
+    return true;
+  };
+  if (pos >= regex.size() || regex[pos] != '{') return std::nullopt;
+  ++pos;
+  if (!parse_number(&result.min)) return std::nullopt;
+  if (pos < regex.size() && regex[pos] == ',') {
+    ++pos;
+    if (pos < regex.size() && regex[pos] != '}' && !parse_number(&result.max)) return std::nullopt;
+  } else {
+    result.max = result.min;
+  }
+  if (pos >= regex.size() || regex[pos] != '}') return std::nullopt;
+  ++pos;
+  if (pos < regex.size() && regex[pos] == '$') ++pos;
+  if (pos != regex.size() || (result.max != -1 && result.max < result.min)) return std::nullopt;
+  return result;
+}
+
+}  // namespace
+
 bool XMLToolCallingConverter::RegexCanMatchStringContaining(
     const std::string& regex, const std::string& needle
 ) {
@@ -4137,10 +4203,36 @@ bool XMLToolCallingConverter::RegexCanMatchStringContaining(
   return false;
 }
 
+bool XMLToolCallingConverter::IsBudgetedXMLPattern(const std::string& pattern) {
+  const std::string& suffix = xml_wrapper_.parameter_suffix;
+  auto repeat = SplitCountedCharacterRepeat(pattern);
+  return repeat && !suffix.empty() &&
+         RegexCanMatchStringContaining(
+             repeat->atom + "{" + std::to_string(repeat->min) + ",}", suffix
+         );
+}
+
 int32_t XMLToolCallingConverter::XMLPatternString(
     const std::string& pattern, const std::string& rule_name
 ) {
   const std::string& suffix = xml_wrapper_.parameter_suffix;
+  // A counted repetition of one character, the usual way to bound a length with a pattern, is
+  // lowered like a length-bounded string: the minimum stays in the FSM and the maximum becomes
+  // the rule's character budget. Intersecting the unrolled repetition with the exclusion would
+  // emit one rule per position and exclusion state. FormatRawXMLValue frames it like a
+  // length-bounded string as well.
+  if (IsBudgetedXMLPattern(pattern)) {
+    auto repeat = SplitCountedCharacterRepeat(pattern);
+    std::vector<std::string> saved_excludes = std::move(excludes_);
+    excludes_ = {suffix};
+    int32_t body =
+        ExcludingString(repeat->atom + "{" + std::to_string(repeat->min) + ",}", rule_name, false);
+    excludes_ = std::move(saved_excludes);
+    if (repeat->max == -1) return body;
+    const auto bounded_rule = builder_.AddRuleWithHint(rule_name + "_bounded_xml", body);
+    builder_.UpdateMaxChars(bounded_rule, repeat->max);
+    return RuleRef(bounded_rule);
+  }
   if (suffix.empty() || !RegexCanMatchStringContaining(pattern, suffix)) {
     return RegexExpression(pattern, false, /*force_cfg_expansion=*/true);
   }
@@ -4292,8 +4384,9 @@ int32_t XMLToolCallingConverter::FormatRawXMLValue(
       return finish(Choice(choices));
     }
     if (const auto* str = std::get_if<StringSpec>(&schema->spec);
-        str && !str->pattern.has_value() && !str->format.has_value() &&
-        (str->min_length != 0 || str->max_length != -1)) {
+        str && !str->format.has_value() &&
+        (str->pattern.has_value() ? IsBudgetedXMLPattern(*str->pattern)
+                                  : str->min_length != 0 || str->max_length != -1)) {
       if (json_format_ == JSONFormat::kQwenXML) {
         // The Qwen3-Coder template writes "<parameter=k>\n" + value + "\n</parameter>", and parsers
         // strip one newline on each side, so those two are markup outside the bounded value.
