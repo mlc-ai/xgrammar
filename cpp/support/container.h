@@ -123,6 +123,11 @@ class List {
     XGRAMMAR_DCHECK(0 < node && node < node_pool_.Size());
     int next = node_pool_[node].next;
     Unlink(node);
+    // NodePool::Deallocate only recycles the slot index. Reset the value so the
+    // erased element is destroyed now, not when the slot is next reused. Without
+    // this, values evicted from an LRU built on List (e.g. RuleLevelCache token
+    // masks) stay alive after their size is subtracted from the cache budget.
+    node_pool_[node].value = Value();
     node_pool_.Deallocate(node);
     return iterator(next, *this);
   }

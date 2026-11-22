@@ -38,6 +38,7 @@ export interface AnyTextFormat {
 export interface GrammarFormat {
   type: "grammar";
   grammar: string;
+  syntax?: "ebnf" | "lark";
 }
 
 export interface RegexFormat {

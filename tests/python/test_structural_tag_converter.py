@@ -1162,6 +1162,45 @@ def test_ebnf_grammar_format(
     check_stag_with_instance(stag_format, instance, is_accepted)
 
 
+lark_grammar_stag_grammar = [
+    (
+        {
+            "type": "grammar",
+            "grammar": 'start: "Hello!" number\nnumber: /[0-9]+/',
+            "syntax": "lark",
+        },
+        r"""root_3 ::= (("Hello!" number))
+number ::= ((root_0))
+root_0 ::= ((root_1))
+root_1 ::= (([0-9] root_1) | ([0-9]))
+root ::= ((root_3))
+""",
+    )
+]
+
+
+@pytest.mark.parametrize("stag_format, expected_grammar", lark_grammar_stag_grammar)
+@pytest.mark.parametrize("instance, is_accepted", ebnf_grammar_instance_is_accepted)
+def test_lark_grammar_format(
+    stag_format: Dict[str, Any], expected_grammar: str, instance: str, is_accepted: bool
+):
+    check_stag_with_grammar(stag_format, expected_grammar)
+    check_stag_with_instance(stag_format, instance, is_accepted)
+
+
+def test_lark_grammar_format_resolves_special_tokens_with_compiler_tokenizer():
+    compiler = xgr.GrammarCompiler(xgr.TokenizerInfo(["a", "<|tool|>", "b"]))
+    structural_tag = {
+        "type": "structural_tag",
+        "format": {"type": "grammar", "grammar": 'start: <|tool|> "a"', "syntax": "lark"},
+    }
+    compiled = compiler.compile_structural_tag(json.dumps(structural_tag))
+
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert matcher.accept_token(1) and matcher.accept_token(0) and matcher.is_terminated()
+    assert not xgr.GrammarMatcher(compiled).accept_token(0)
+
+
 regex_stag_grammar = [
     (
         {"type": "regex", "pattern": "Hello![0-9]+"},
@@ -3287,6 +3326,10 @@ json_format_error_test_data = [
     (
         '{"type": "structural_tag", "format": {"type": "json_schema", "json_schema": {"type": "string"}, "style": "not_string"}}',
         'style must be "json", "qwen_xml", "minimax_xml", "minimax_m3_xml", "deepseek_xml", "glm_xml", "cohere_xml", "kimi_k3_xml", "deepseek_v4_1_xml", or "gemma"',
+    ),
+    (
+        '{"type": "structural_tag", "format": {"type": "grammar", "grammar": "start: \\"a\\"", "syntax": "regex"}}',
+        'Grammar format\'s syntax must be "ebnf" or "lark"',
     ),
     # RepeatFormat Errors - illegal min/max
     (

@@ -4,6 +4,7 @@ import sys
 import pytest
 
 from xgrammar import Grammar
+from xgrammar.builtin_structural_tag import get_model_structural_tag
 from xgrammar.structural_tag import JSONSchemaFormat, StructuralTag
 from xgrammar.testing import (
     _get_matcher_from_grammar,
@@ -4285,6 +4286,117 @@ def test_gemma_structural_tag_excludes():
     assert _is_grammar_accept_string(grammar, '{s:<|"|>fine<|"|>}')
     assert not _is_grammar_accept_string(grammar, '{s:<|"|>a<channel|>b<|"|>}')
     assert not _is_grammar_accept_string(grammar, '{s:<|"|>a<|"|>b<|"|>}')
+
+
+# ---------- Pattern values must not consume the parameter's closing delimiter (issue #1019) ----------
+
+# (json_format, text before the value, text closing the parameter), i.e. the parameter suffix.
+_XML_PATTERN_PARAMETER_CASES = (
+    ("qwen_xml", "<parameter=code>", "</parameter>"),
+    ("minimax_xml", '<parameter name="code">', "</parameter>"),
+    ("deepseek_xml", '<｜DSML｜parameter name="code" string="true">', "</｜DSML｜parameter>"),
+    (
+        "deepseek_v4_1_xml",
+        '<｜DSML｜ parameter name="code" string="true">',
+        "</｜DSML｜ parameter>",
+    ),
+    ("glm_xml", "<arg_key>code</arg_key><arg_value>", "</arg_value>"),
+    ("kimi_k3_xml", '<|open|>argument key="code" type="string"<|sep|>', "<|close|>argument<|sep|>"),
+    ("cohere_xml", '<cofl:value name="code" type="raw">', "</cofl:value>"),
+)
+
+
+@pytest.mark.parametrize("json_format,parameter_begin,parameter_end", _XML_PATTERN_PARAMETER_CASES)
+def test_xml_pattern_string_cannot_contain_parameter_suffix(
+    json_format: str, parameter_begin: str, parameter_end: str
+):
+    """A pattern value must not consume the XML delimiter that closes its parameter.
+
+    The delimiter is XML framing, not part of the schema's string content. If a pattern can
+    match it, the value closes the parameter early and the rest of the first tool call can be
+    swallowed, so a second call fits inside the first parameter (issue #1019).
+    """
+    schema = {
+        "type": "object",
+        "properties": {"code": {"type": "string", "pattern": "^.*$"}},
+        "required": ["code"],
+        "additionalProperties": False,
+    }
+    grammar = Grammar.from_ebnf(_json_schema_to_ebnf(json.dumps(schema), json_format=json_format))
+
+    assert _is_grammar_accept_string(grammar, f"{parameter_begin}print('hi'){parameter_end}")
+    # The value "a" + parameter_end would make the parameter close on the embedded delimiter.
+    assert not _is_grammar_accept_string(
+        grammar, f"{parameter_begin}a{parameter_end}{parameter_end}"
+    )
+
+
+def test_qwen_xml_pattern_parameter_cannot_swallow_second_tool_call():
+    """Issue #1019 end to end: a pattern value must not absorb a second tool call.
+
+    Parallel calls are disabled, so the grammar accepts at most one call. The text below is
+    either one ``run`` call whose ``code`` value swallows a whole second call, or two calls
+    (which this grammar forbids). Only a value that can contain ``</parameter>`` makes the
+    first parse possible.
+    """
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "run",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"code": {"type": "string", "pattern": "^[a-z<>/=\\n_]+$"}},
+                    "required": ["code"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "delete_all",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"target": {"type": "string"}},
+                    "required": ["target"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+    ]
+    structural_tag = get_model_structural_tag(
+        "qwen_3_5",
+        tools=tools,
+        tool_choice="required",
+        reasoning="disabled",
+        parallel_tool_calls=False,
+    )
+    grammar = Grammar.from_structural_tag(structural_tag)
+
+    single_call = (
+        "<tool_call>\n<function=run>\n"
+        "<parameter=code>abc</parameter>\n"
+        "</function>\n</tool_call>"
+    )
+    second_call = (
+        "<tool_call>\n<function=delete_all>\n"
+        "<parameter=target>y</parameter>\n"
+        "</function>\n</tool_call>"
+    )
+    assert _is_grammar_accept_string(grammar, single_call)
+    # Two calls are not allowed; this must not be reparsed as one call that eats the second.
+    assert not _is_grammar_accept_string(grammar, single_call + second_call)
+
+    # Same text with the first closing delimiter folded into the code value: one call whose
+    # value contains a complete second call up to that call's closing `</parameter>`.
+    smuggled = (
+        "<tool_call>\n<function=run>\n"
+        "<parameter=code>a</parameter>\n</function>\n</tool_call>\n"
+        "<tool_call>\n<function=delete_all>\n<parameter=target>y"
+        "</parameter>\n</function>\n</tool_call>"
+    )
+    assert not _is_grammar_accept_string(grammar, smuggled)
 
 
 if __name__ == "__main__":
