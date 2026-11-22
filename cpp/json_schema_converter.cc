@@ -2717,11 +2717,12 @@ int32_t JSONSchemaConverter::GenerateNumber(const NumberSpec& spec, const std::s
     exclusive_end = true;
   }
   if (start.has_value() || end.has_value()) {
-    return RegexExpression(
-        GenerateFloatRangeRegex(start, end, /*precision=*/6, exclusive_start, exclusive_end),
-        false,
-        /*force_cfg_expansion=*/true
-    );
+    std::string range_regex =
+        GenerateFloatRangeRegex(start, end, /*precision=*/6, exclusive_start, exclusive_end);
+    if (range_regex == "^()$") {
+      return Unsatisfiable();
+    }
+    return RegexExpression(range_regex, false, /*force_cfg_expansion=*/true);
   }
 
   int32_t optional_minus = Choice({Empty(), ByteString("-")});
@@ -4965,62 +4966,69 @@ std::string NumberGenerator::FloatRangeRegex(
     return "^-?\\d+(\\.\\d{1," + std::to_string(precision) + "})?$";
   }
 
-  std::vector<std::string> parts;
+  auto build_parts = [&](int prec) {
+    std::vector<std::string> parts;
 
-  // Negative values: x is in [start, end] iff -x is in [-end, -start], so the
-  // positive-range patterns are reused on the negated bounds and prefixed
-  // with '-'.
-  bool negatives_in_range = !start.has_value() || start.value() < 0;
-  if (negatives_in_range) {
-    std::string low = "0";
-    bool strict_low = true;
-    if (end.has_value() && end.value() < 0) {
-      low =
-          RoundBoundToGrid(-end.value(), precision, /*is_lower=*/true, exclusive_end, &strict_low);
-    }
-    std::optional<std::string> high;
-    bool strict_high = false;
-    if (start.has_value()) {
-      high = RoundBoundToGrid(
-          -start.value(), precision, /*is_lower=*/false, exclusive_start, &strict_high
-      );
-    }
-    for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, precision)) {
-      parts.push_back("-" + std::move(part));
-    }
-  }
-
-  bool zero_allowed =
-      (!start.has_value() || start.value() < 0 || (start.value() == 0 && !exclusive_start)) &&
-      (!end.has_value() || end.value() > 0 || (end.value() == 0 && !exclusive_end));
-  if (zero_allowed) {
-    parts.push_back("0(\\." + SomeZeros(precision) + ")?");
-    // Negative zero written with an all-zero fraction ("-0.0".."-0.000000") also
-    // denotes 0. PositiveRangeParts never emits magnitude 0, so add these forms
-    // explicitly when the range covers the negative side.
+    // Negative values: x is in [start, end] iff -x is in [-end, -start], so the
+    // positive-range patterns are reused on the negated bounds and prefixed
+    // with '-'.
+    bool negatives_in_range = !start.has_value() || start.value() < 0;
     if (negatives_in_range) {
-      parts.push_back("-0(\\." + SomeZeros(precision) + ")");
+      std::string low = "0";
+      bool strict_low = true;
+      if (end.has_value() && end.value() < 0) {
+        low = RoundBoundToGrid(-end.value(), prec, /*is_lower=*/true, exclusive_end, &strict_low);
+      }
+      std::optional<std::string> high;
+      bool strict_high = false;
+      if (start.has_value()) {
+        high = RoundBoundToGrid(
+            -start.value(), prec, /*is_lower=*/false, exclusive_start, &strict_high
+        );
+      }
+      for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, prec)) {
+        parts.push_back("-" + std::move(part));
+      }
     }
-  }
 
-  // Positive values
-  if (!end.has_value() || end.value() > 0) {
-    std::string low = "0";
-    bool strict_low = true;
-    if (start.has_value() && start.value() > 0) {
-      low = RoundBoundToGrid(
-          start.value(), precision, /*is_lower=*/true, exclusive_start, &strict_low
-      );
+    bool zero_allowed =
+        (!start.has_value() || start.value() < 0 || (start.value() == 0 && !exclusive_start)) &&
+        (!end.has_value() || end.value() > 0 || (end.value() == 0 && !exclusive_end));
+    if (zero_allowed) {
+      parts.push_back("0(\\." + SomeZeros(prec) + ")?");
+      // Negative zero written with an all-zero fraction ("-0.0".."-0.000000") also
+      // denotes 0. PositiveRangeParts never emits magnitude 0, so add these forms
+      // explicitly when the range covers the negative side.
+      if (negatives_in_range) {
+        parts.push_back("-0(\\." + SomeZeros(prec) + ")");
+      }
     }
-    std::optional<std::string> high;
-    bool strict_high = false;
-    if (end.has_value()) {
-      high =
-          RoundBoundToGrid(end.value(), precision, /*is_lower=*/false, exclusive_end, &strict_high);
+
+    // Positive values
+    if (!end.has_value() || end.value() > 0) {
+      std::string low = "0";
+      bool strict_low = true;
+      if (start.has_value() && start.value() > 0) {
+        low =
+            RoundBoundToGrid(start.value(), prec, /*is_lower=*/true, exclusive_start, &strict_low);
+      }
+      std::optional<std::string> high;
+      bool strict_high = false;
+      if (end.has_value()) {
+        high = RoundBoundToGrid(end.value(), prec, /*is_lower=*/false, exclusive_end, &strict_high);
+      }
+      for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, prec)) {
+        parts.push_back(std::move(part));
+      }
     }
-    for (auto& part : PositiveRangeParts(low, strict_low, high, strict_high, precision)) {
-      parts.push_back(std::move(part));
-    }
+
+    return parts;
+  };
+
+  constexpr int kMaxAdaptivePrecision = 18;
+  std::vector<std::string> parts = build_parts(precision);
+  for (int prec = precision + 1; prec <= kMaxAdaptivePrecision && parts.empty(); ++prec) {
+    parts = build_parts(prec);
   }
 
   std::ostringstream result;
