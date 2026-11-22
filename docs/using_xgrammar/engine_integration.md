@@ -129,6 +129,12 @@ then roll back the rejected suffix with
 with independent states, duplicate the matcher with
 [`xgr.GrammarMatcher.fork`](xgrammar.GrammarMatcher.fork).
 
+For a linear candidate sequence,
+[`xgr.GrammarMatcher.validate_tokens`](xgrammar.GrammarMatcher.validate_tokens) returns the number
+of consecutive tokens that can be accepted from the current state. It performs validation on an
+isolated matcher state, so no rollback is needed and captures, budgets, and accepted-token history
+remain unchanged.
+
 **Jump-forward decoding.**
 [`xgr.GrammarMatcher.find_jump_forward_tokens`](xgrammar.GrammarMatcher.find_jump_forward_tokens)
 returns tokens for the grammar's forced continuation without changing the matcher or already

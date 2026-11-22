@@ -97,6 +97,16 @@ class GrammarMatcher {
   bool AcceptToken(int32_t token_id, bool debug_print = false);
 
   /*!
+   * \brief Validate a sequence of tokens without changing the matcher state.
+   * \param token_ids The token ids to validate in order.
+   * \return The number of consecutive tokens accepted before the first rejection or termination.
+   *
+   * \note A returned prefix does not need to complete the grammar. If a token terminates the
+   * matcher, that token is included in the returned count and validation stops.
+   */
+  int64_t ValidateTokens(const std::vector<int32_t>& token_ids) const;
+
+  /*!
    * \brief Accept a string and update the state of the matcher. The whole string is considered
    * as one step in rollback. It is used to complement the functionality of AcceptToken, and
    * AcceptToken should always be used to accept tokens.
