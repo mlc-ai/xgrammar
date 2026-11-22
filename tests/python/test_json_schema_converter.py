@@ -3179,6 +3179,83 @@ def test_unsatisfiable_range_raises(schema):
         xgr.Grammar.from_json_schema(json.dumps(schema))
 
 
+@pytest.mark.parametrize(
+    "schema, instance, accepted",
+    [
+        # Sub-1e-6 ranges must widen precision rather than collapsing to ^()$ and accepting empty
+        (
+            {
+                "type": "object",
+                "properties": {"eps": {"type": "number", "exclusiveMinimum": 0, "maximum": 1e-7}},
+                "required": ["eps"],
+                "additionalProperties": False,
+            },
+            '{"eps":}',
+            False,
+        ),
+        (
+            {
+                "type": "object",
+                "properties": {"eps": {"type": "number", "exclusiveMinimum": 0, "maximum": 1e-7}},
+                "required": ["eps"],
+                "additionalProperties": False,
+            },
+            '{"eps":0.0000001}',
+            True,
+        ),
+        ({"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1e-7}, "", False),
+        ({"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1e-7}, "0", False),
+        ({"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1e-7}, "0.0000001", False),
+        ({"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1e-7}, "0.00000005", True),
+        ({"type": "number", "minimum": 0.1234567, "maximum": 0.1234569}, "", False),
+        ({"type": "number", "minimum": 0.1234567, "maximum": 0.1234569}, "0.1234566", False),
+        ({"type": "number", "minimum": 0.1234567, "maximum": 0.1234569}, "0.1234570", False),
+        ({"type": "number", "minimum": 0.1234567, "maximum": 0.1234569}, "0.1234568", True),
+        ({"type": "number", "minimum": 1e-8, "maximum": 5e-7}, "", False),
+        ({"type": "number", "minimum": 1e-8, "maximum": 5e-7}, "0", False),
+        ({"type": "number", "minimum": 1e-8, "maximum": 5e-7}, "0.0000001", True),
+        ({"type": "number", "minimum": -5e-7, "maximum": -1e-7}, "", False),
+        ({"type": "number", "minimum": -5e-7, "maximum": -1e-7}, "-0.0000006", False),
+        ({"type": "number", "minimum": -5e-7, "maximum": -1e-7}, "-0.0000005", True),
+        ({"type": "number", "exclusiveMinimum": 1.0, "exclusiveMaximum": 1.0000001}, "", False),
+        (
+            {"type": "number", "exclusiveMinimum": 1.0, "exclusiveMaximum": 1.0000001},
+            "1.00000005",
+            True,
+        ),
+        ({"type": "number", "minimum": 1e-7, "maximum": 1e-7}, "", False),
+        ({"type": "number", "minimum": 1e-7, "maximum": 1e-7}, "0.0000001", True),
+        (
+            {
+                "type": "object",
+                "properties": {"x": {"type": "number", "minimum": 1e-50, "maximum": 2e-50}},
+                "required": ["x"],
+                "additionalProperties": False,
+            },
+            '{"x":}',
+            False,
+        ),
+        (
+            {"anyOf": [{"type": "number", "minimum": 1e-50, "maximum": 2e-50}, {"type": "null"}]},
+            "null",
+            True,
+        ),
+    ],
+)
+def test_narrow_sub_micro_float_ranges(schema, instance, accepted):
+    check_schema_grammar_builds(schema)
+    check_schema_with_instance(schema, instance, is_accepted=accepted)
+
+
+def test_generate_float_regex_sub_micro():
+    assert re.fullmatch(_generate_float_regex(0.0, 1e-7, exclusive_start=True), "0.0000001")
+    assert re.fullmatch(_generate_float_regex(0.0, 1e-7, exclusive_start=True), "") is None
+    assert re.fullmatch(_generate_float_regex(0.1234567, 0.1234569), "0.1234568")
+    assert re.fullmatch(_generate_float_regex(0.1234567, 0.1234569), "") is None
+    assert _generate_float_regex(10.5, 2.5) == r"^()$"
+    assert _generate_float_regex(2.5, 2.5, exclusive_end=True) == r"^()$"
+
+
 integer_range_instances = [
     # minimum above 1: single-digit integers below the bound must be rejected
     ({"type": "integer", "minimum": 2}, "1", False),
