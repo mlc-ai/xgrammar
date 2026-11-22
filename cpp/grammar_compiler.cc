@@ -1036,42 +1036,82 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
         << "The token mask cache is incomplete while dynamic compilation is disabled: " << state;
     return iterator->second;
   }
+  std::shared_ptr<PendingMask> pending;
   {
-    std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
+    std::unique_lock<std::mutex> lock(adaptive_token_mask_cache_mutex);
     auto iterator = adaptive_token_mask_cache.find(state);
     if (iterator != adaptive_token_mask_cache.end()) {
       return iterator->second;
     }
+    auto active = pending_masks.find(state);
+    if (active != pending_masks.end()) {
+      pending = active->second;
+#if XGRAMMAR_BUILD_CXX_TESTS
+      if (mask_build_test_hook) {
+        mask_build_test_hook(state, false);
+      }
+#endif
+      pending->ready.wait(lock, [&] { return pending->done; });
+      if (pending->error) {
+        std::rethrow_exception(pending->error);
+      }
+      return *pending->result;
+    }
+    pending = std::make_shared<PendingMask>();
+    pending_masks.emplace(state, pending);
   }
-  std::optional<RuleLevelCache> retained_rule_level_cache;
-  if (rule_level_cache != nullptr) {
-    retained_rule_level_cache = *rule_level_cache;
+  // Everything after publishing the pending record can fail, including cache insertion.
+  try {
+#if XGRAMMAR_BUILD_CXX_TESTS
+    if (mask_build_test_hook) {
+      mask_build_test_hook(state, true);
+    }
+#endif
+    std::optional<RuleLevelCache> retained_rule_level_cache;
+    if (rule_level_cache != nullptr) {
+      retained_rule_level_cache = *rule_level_cache;
+    }
+    auto cache_state = ParserState(
+        state.rule_id,
+        state.sequence_id,
+        state.element_id,
+        ParserState::kNoPrevInputPos,
+        -1,
+        state.sub_element_id
+    );
+    auto generated_mask = GrammarMatcherForTokenMaskCache(
+                              grammar,
+                              cache_state,
+                              tag_dispatch_rule_id_to_second_slicing_bitset,
+                              tokenizer_info,
+                              retained_rule_level_cache
+    )
+                              .GetAdaptiveTokenMask(state.rule_id == grammar->GetRootRuleId());
+    // Apply the same repetition classification as eager compilation before publishing the mask.
+    // Work on a private entry: masks already used by other matchers must remain immutable.
+    decltype(adaptive_token_mask_cache) generated_cache;
+    generated_cache.try_emplace(cache_state, std::move(generated_mask));
+    PopulateRepeatInteriorBitsets(grammar, tokenizer_info, &generated_cache);
+    {
+      std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
+      pending->result = &adaptive_token_mask_cache
+                             .try_emplace(cache_state, std::move(generated_cache.begin()->second))
+                             .first->second;
+      pending->done = true;
+      pending_masks.erase(state);
+    }
+  } catch (...) {
+    {
+      std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
+      pending->error = std::current_exception();
+      pending->done = true;
+      pending_masks.erase(state);
+    }
+    pending->ready.notify_all();
+    throw;
   }
-  auto cache_state = ParserState(
-      state.rule_id,
-      state.sequence_id,
-      state.element_id,
-      ParserState::kNoPrevInputPos,
-      -1,
-      state.sub_element_id
-  );
-  auto generated_mask = GrammarMatcherForTokenMaskCache(
-                            grammar,
-                            cache_state,
-                            tag_dispatch_rule_id_to_second_slicing_bitset,
-                            tokenizer_info,
-                            retained_rule_level_cache
-  )
-                            .GetAdaptiveTokenMask(state.rule_id == grammar->GetRootRuleId());
-  // Apply the same repetition classification as eager compilation before publishing the mask.
-  // Work on a private entry: masks already used by other matchers must remain immutable.
-  decltype(adaptive_token_mask_cache) generated_cache;
-  generated_cache.try_emplace(cache_state, std::move(generated_mask));
-  PopulateRepeatInteriorBitsets(grammar, tokenizer_info, &generated_cache);
-  std::lock_guard<std::mutex> lock(adaptive_token_mask_cache_mutex);
-  return adaptive_token_mask_cache
-      .try_emplace(cache_state, std::move(generated_cache.begin()->second))
-      .first->second;
+  pending->ready.notify_all();
+  return *pending->result;
 }
 
 void CompiledGrammar::Impl::MaterializeAdaptiveTokenMaskCache() {

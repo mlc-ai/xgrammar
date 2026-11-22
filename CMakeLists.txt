@@ -116,6 +116,7 @@ if(XGRAMMAR_BUILD_PYTHON_BINDINGS)
 endif()
 
 if(XGRAMMAR_BUILD_CXX_TESTS)
+  target_compile_definitions(xgrammar PUBLIC XGRAMMAR_BUILD_CXX_TESTS=1)
   add_subdirectory(${PROJECT_SOURCE_DIR}/3rdparty/googletest)
 
   file(GLOB_RECURSE XGRAMMAR_TEST_SOURCES_PATH "${PROJECT_SOURCE_DIR}/tests/cpp/*.cc")

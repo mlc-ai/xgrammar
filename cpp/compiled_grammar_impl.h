@@ -8,6 +8,11 @@
 
 #include <xgrammar/grammar.h>
 
+#include <condition_variable>
+#include <exception>
+#if XGRAMMAR_BUILD_CXX_TESTS
+#include <functional>
+#endif
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -155,6 +160,27 @@ class CompiledGrammar::Impl {
 
   /*! \brief Protects on-demand token mask cache insertion and cache serialization. */
   mutable std::mutex adaptive_token_mask_cache_mutex;
+
+  // Transient coordination, excluded from serialization and persistent mask memory accounting.
+  // All fields and both maps are protected by adaptive_token_mask_cache_mutex.
+  struct PendingMask {
+    std::condition_variable ready;
+    bool done{false};
+    const AdaptiveTokenMask* result{nullptr};
+    std::exception_ptr error;
+  };
+  std::unordered_map<
+      ParserState,
+      std::shared_ptr<PendingMask>,
+      StateHashForCache,
+      StateEqualForCache>
+      pending_masks;
+
+#if XGRAMMAR_BUILD_CXX_TESTS
+  // Set before starting workers. Builder callbacks run outside the cache mutex; waiter callbacks
+  // run under it and must not block or throw. Absent from production builds.
+  std::function<void(const ParserState&, bool is_builder)> mask_build_test_hook;
+#endif
 
   /*! \brief Whether missing token mask cache entries should be generated on demand. */
   bool enable_dynamic_compilation{false};
