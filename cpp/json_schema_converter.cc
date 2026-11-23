@@ -934,7 +934,20 @@ Result<SchemaSpecPtr, SchemaError> SchemaParser::Parse(
     if (array_result.IsErr()) return ResultErr(std::move(array_result).UnwrapErr());
     result = SchemaSpec::Make(std::move(array_result).Unwrap(), cache_key, rule_name_hint);
   } else {
-    result = SchemaSpec::Make(AnySpec{}, cache_key, rule_name_hint);
+    AnySpec spec;
+    if (schema_obj.count("minimum") || schema_obj.count("maximum") ||
+        schema_obj.count("exclusiveMinimum") || schema_obj.count("exclusiveMaximum")) {
+      spec.constrain_number = true;
+      auto number_result = ParseNumber(schema_obj);
+      if (number_result.IsOk()) {
+        spec.numeric_schema =
+            SchemaSpec::Make(std::move(number_result).Unwrap(), "", rule_name_hint + "_number");
+      } else if (number_result.ErrRef().Type() != SchemaErrorType::kUnsatisfiableSchema) {
+        return ResultErr(std::move(number_result).UnwrapErr());
+      }
+      // An empty numeric range still permits strings, objects and other non-numbers.
+    }
+    result = SchemaSpec::Make(std::move(spec), cache_key, rule_name_hint);
   }
 
   schema_cache_[cache_key] = result;
@@ -3500,14 +3513,21 @@ int32_t JSONSchemaConverter::GenerateObject(
 }
 
 int32_t JSONSchemaConverter::GenerateAny(const AnySpec& spec, const std::string& rule_name) {
-  return Choice(
-      {RuleRef(kBasicNumber),
-       RuleRef(kBasicString),
-       RuleRef(kBasicBoolean),
-       RuleRef(kBasicNull),
-       RuleRef(kBasicArray),
-       RuleRef(kBasicObject)}
-  );
+  std::vector<int32_t> choices = {
+      RuleRef(kBasicString),
+      RuleRef(kBasicBoolean),
+      RuleRef(kBasicNull),
+      RuleRef(kBasicArray),
+      RuleRef(kBasicObject)
+  };
+  if (!spec.constrain_number) {
+    choices.insert(choices.begin(), RuleRef(kBasicNumber));
+  } else if (spec.numeric_schema) {
+    choices.insert(
+        choices.begin(), RuleRef(CreateRule(spec.numeric_schema, rule_name + "_number"))
+    );
+  }
+  return Choice(choices);
 }
 
 int32_t JSONSchemaConverter::GenerateConst(const ConstSpec& spec, const std::string& rule_name) {
