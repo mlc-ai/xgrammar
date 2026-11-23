@@ -72,7 +72,6 @@ def test_pattern_and_format_strings_are_not_filtered(style, schema, accepted, re
         assert not _is_grammar_accept_string(grammar, string_instance(value, style))
 
 
-@pytest.mark.parametrize("style", ["json", "kimi_k3_xml"])
 @pytest.mark.parametrize(
     "schema",
     [
@@ -81,9 +80,10 @@ def test_pattern_and_format_strings_are_not_filtered(style, schema, accepted, re
         {"type": "string", "minLength": 2, "maxLength": 3},
     ],
 )
-def test_excludes_drop_length_constraints(style, schema, capfd):
+def test_json_excludes_drop_length_constraints(schema, capfd):
     # Bounding the length of a filtered string multiplies the grammar by the bound, so the
-    # length constraints are dropped when exclusions are present; the exclusions still apply.
+    # JSON length constraints are dropped when exclusions are present; the exclusions still apply.
+    style = "json"
     bounded = leaf_grammar(schema, style, excludes=[])
     assert "Ignoring" not in capfd.readouterr().err
     unbounded = leaf_grammar(schema, style, excludes=["bc", "cb"])
@@ -102,6 +102,26 @@ def test_excludes_drop_length_constraints(style, schema, capfd):
         )
     for value in ("bc", "acbz", "a" * 20 + "bc"):
         assert not _is_grammar_accept_string(unbounded, string_instance(value, style))
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "string", "minLength": 2},
+        {"type": "string", "maxLength": 3},
+        {"type": "string", "minLength": 2, "maxLength": 3},
+    ],
+)
+def test_k3_excludes_preserve_length_constraints(schema, capfd):
+    # Bounded raw XML strings enforce exclusions and length limits together without a warning.
+    style = "kimi_k3_xml"
+    grammar = leaf_grammar(schema, style, excludes=["bc", "cb"])
+    assert "Ignoring" not in capfd.readouterr().err
+    for value in ("", "a", "aa", "aaa", "aaaa", "你好", "🦋🦋🦋", "ax" * 10):
+        expected = schema.get("minLength", 0) <= len(value) <= schema.get("maxLength", 10**9)
+        assert _is_grammar_accept_string(grammar, string_instance(value, style)) == expected
+    for value in ("bc", "cb", "abc", "acb", "a" * 20 + "bc"):
+        assert not _is_grammar_accept_string(grammar, string_instance(value, style))
 
 
 @pytest.mark.parametrize("style", ["json", "kimi_k3_xml"])

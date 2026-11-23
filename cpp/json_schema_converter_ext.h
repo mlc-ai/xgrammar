@@ -111,6 +111,12 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
   int32_t GenerateConst(const ConstSpec& spec, const std::string& rule_name) override;
   int32_t GenerateEnum(const EnumSpec& spec, const std::string& rule_name) override;
 
+  std::unordered_map<int32_t, int32_t> raw_xml_formatted_value_rules_;
+
+  int32_t FormatRawXMLValue(
+      const SchemaSpecPtr& schema, int32_t value_rule_id, const std::string& rule_name
+  );
+
   // Override format hooks
   int32_t FormatPropertyKey(const std::string& key, const SchemaSpecPtr& schema) override;
   int32_t FormatProperty(
@@ -153,6 +159,32 @@ class XMLToolCallingConverter : public JSONSchemaConverter {
 
   std::string XMLValue(const std::string& json_value) const;
   std::string EscapeAttrValue(const std::string& value) const;
+
+  /*! \brief Whether a pattern is a counted repetition of one character that can match the
+   * parameter suffix. Such a pattern is lowered and framed like a length-bounded string. */
+  bool IsBudgetedXMLPattern(const std::string& pattern);
+
+  /*!
+   * \brief Build the raw-string rule for a schema `pattern` inside an XML parameter value.
+   *
+   * The parameter's closing delimiter is XML framing, not part of the schema's string content:
+   * if the pattern can match a string containing `xml_wrapper_.parameter_suffix`, the value could
+   * close the parameter early and swallow the rest of the tool call (issue #1019). In that case
+   * the suffix is excluded from the pattern. Patterns that cannot contain it are emitted
+   * unchanged, preserving their existing grammar. Caller-supplied excludes_ are never applied
+   * here: a pattern is the schema's own contract for the string.
+   */
+  int32_t XMLPatternString(const std::string& pattern, const std::string& rule_name);
+
+  /*!
+   * \brief Whether some string in the language of `regex` contains `needle` contiguously.
+   *
+   * This follows the product of the regex DFA and the automaton accepting strings that avoid
+   * `needle`: a productive regex transition on a byte that has no matching avoidance transition
+   * means an accepted regex string contains `needle`. Returns false when the regex FSM cannot be
+   * built, so the caller keeps the plain expression and its own error reporting.
+   */
+  static bool RegexCanMatchStringContaining(const std::string& regex, const std::string& needle);
 
   /*!
    * \brief Return a single rendered JSON type when it can be determined without resolving
