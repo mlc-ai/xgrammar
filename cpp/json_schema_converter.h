@@ -70,6 +70,11 @@ struct NullSpec {
 };
 
 struct AnySpec {
+  // Numeric keywords apply only to numbers when no type was declared. A null
+  // numeric_schema with constrain_number set means only non-numbers are allowed.
+  bool constrain_number = false;
+  SchemaSpecPtr numeric_schema;
+
   std::string ToString() const;
 };
 
