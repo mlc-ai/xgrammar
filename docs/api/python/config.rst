@@ -14,11 +14,3 @@ Serialization Version
 ---------------------
 
 .. autofunction:: get_serialization_version
-
-Cross-Grammar Cache
--------------------
-
-.. autofunction:: get_cross_grammar_cache_max_memory
-.. autofunction:: set_cross_grammar_cache_max_memory
-.. autofunction:: clear_cross_grammar_cache
-.. autofunction:: get_cross_grammar_cache_stats

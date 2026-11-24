@@ -1,4 +1,4 @@
-"""Tests for the process-wide cross-grammar cache of converted JSON schema grammars."""
+"""Tests for the process-wide cache of grammars converted from JSON schemas."""
 
 import json
 import sys
@@ -96,24 +96,24 @@ ALL_SCHEMAS = [SIMPLE_SCHEMA, TREE_SCHEMA, MUTUAL_SCHEMA, VARIED_SCHEMA]
 @contextmanager
 def cache_budget(max_memory_bytes: int):
     """Run with the given cache budget on an empty cache, then restore the previous budget."""
-    previous = xgr.get_cross_grammar_cache_max_memory()
-    xgr.set_cross_grammar_cache_max_memory(max_memory_bytes)
-    xgr.clear_cross_grammar_cache()
+    previous = xgr.Grammar.get_json_schema_cache_max_memory()
+    xgr.Grammar.set_json_schema_cache_max_memory(max_memory_bytes)
+    xgr.Grammar.clear_json_schema_cache()
     try:
         yield
     finally:
-        xgr.set_cross_grammar_cache_max_memory(previous)
-        xgr.clear_cross_grammar_cache()
+        xgr.Grammar.set_json_schema_cache_max_memory(previous)
+        xgr.Grammar.clear_json_schema_cache()
 
 
 def uncached(fn, *args, **kwargs):
     """Run fn with the cache disabled, for a reference result."""
-    previous = xgr.get_cross_grammar_cache_max_memory()
-    xgr.set_cross_grammar_cache_max_memory(0)
+    previous = xgr.Grammar.get_json_schema_cache_max_memory()
+    xgr.Grammar.set_json_schema_cache_max_memory(0)
     try:
         return fn(*args, **kwargs)
     finally:
-        xgr.set_cross_grammar_cache_max_memory(previous)
+        xgr.Grammar.set_json_schema_cache_max_memory(previous)
 
 
 def tool_tag(name: str, schema: Dict[str, Any], **format_kwargs) -> TagFormat:
@@ -139,7 +139,7 @@ def stag_to_str(stag: StructuralTag) -> str:
 
 
 def test_default_budget_and_stats_shape():
-    stats = xgr.get_cross_grammar_cache_stats()
+    stats = xgr.Grammar.get_json_schema_cache_stats()
     assert set(stats) == {
         "hits",
         "misses",
@@ -148,19 +148,19 @@ def test_default_budget_and_stats_shape():
         "memory_bytes",
         "max_memory_bytes",
     }
-    assert xgr.get_cross_grammar_cache_max_memory() == 64 * 1024 * 1024
+    assert xgr.Grammar.get_json_schema_cache_max_memory() == 64 * 1024 * 1024
 
 
 def test_hit_across_json_schema_conversions():
     schema = json.dumps(SIMPLE_SCHEMA)
     with cache_budget(-1):
         first = str(xgr.Grammar.from_json_schema(schema))
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert (stats["hits"], stats["misses"], stats["num_entries"]) == (0, 1, 1)
         assert stats["memory_bytes"] > 0
 
         second = str(xgr.Grammar.from_json_schema(schema))
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert (stats["hits"], stats["misses"], stats["num_entries"]) == (1, 1, 1)
         assert first == second == uncached(lambda: str(xgr.Grammar.from_json_schema(schema)))
 
@@ -170,12 +170,12 @@ def test_hit_across_structural_tags():
     tools = [{"name": f"tool_{i}", "schema": s} for i, s in enumerate(ALL_SCHEMAS)]
     with cache_budget(-1):
         stag_to_str(tools_stag(tools[:3]))
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert (stats["hits"], stats["misses"]) == (0, 3)
 
         # The next request adds a tool (the deferred-tool-loading pattern).
         result = stag_to_str(tools_stag(tools))
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert (stats["hits"], stats["misses"], stats["num_entries"]) == (3, 4, 4)
         assert result == uncached(stag_to_str, tools_stag(tools))
 
@@ -187,7 +187,7 @@ def test_structural_tag_and_json_schema_share_entries():
     with cache_budget(-1):
         xgr.Grammar.from_json_schema(json.dumps(SIMPLE_SCHEMA, separators=(",", ":")))
         stag_to_str(tools_stag([{"name": "a", "schema": SIMPLE_SCHEMA}]))
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert (stats["hits"], stats["misses"], stats["num_entries"]) == (1, 1, 1)
 
 
@@ -207,7 +207,7 @@ def test_cached_grammar_identical_per_style(style: str, schema_index: int):
     with cache_budget(-1):
         cold = stag_to_str(stag)
         warm = stag_to_str(stag)
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == 1
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == 1
     assert cold == expected
     assert warm == expected
 
@@ -230,7 +230,7 @@ def test_recursive_schema_accepts_after_hit():
     with cache_budget(-1):
         stag_to_str(stag)  # fill the cache
         grammar = xgr.Grammar.from_structural_tag(stag)
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == 2
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == 2
         for text in accepted:
             assert _is_grammar_accept_string(grammar, text)
         for text in rejected:
@@ -277,7 +277,7 @@ def test_structural_tag_options_never_share_entries():
     with cache_budget(-1):
         for _ in range(2):
             assert [stag_to_str(stag) for stag in stags] == expected
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         # Variants whose converter inputs end up equal (the tag normalizes the order of excludes)
         # may share an entry; variants with different grammars never do.
         assert len(set(expected)) <= stats["num_entries"] <= len(stags)
@@ -307,7 +307,7 @@ def test_json_schema_options_never_share_entries():
     with cache_budget(-1):
         for _ in range(2):
             assert [convert(kwargs) for kwargs in JSON_SCHEMA_OPTION_VARIANTS] == expected
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert stats["num_entries"] == len(JSON_SCHEMA_OPTION_VARIANTS)
         assert stats["hits"] == len(JSON_SCHEMA_OPTION_VARIANTS)
 
@@ -319,7 +319,7 @@ def test_schema_text_is_part_of_the_key():
     with cache_budget(-1):
         ga = str(xgr.Grammar.from_json_schema(json.dumps(a)))
         gb = str(xgr.Grammar.from_json_schema(json.dumps(b)))
-        assert xgr.get_cross_grammar_cache_stats()["num_entries"] == 2
+        assert xgr.Grammar.get_json_schema_cache_stats()["num_entries"] == 2
     assert ga != gb
     assert _is_grammar_accept_string(
         xgr.Grammar.from_json_schema(json.dumps(b)), '{"y": 1, "x": "s"}'
@@ -339,7 +339,7 @@ def test_recursion_limit_is_part_of_the_key():
             with pytest.raises(RuntimeError):
                 xgr.Grammar.from_json_schema(text)
         xgr.Grammar.from_json_schema(text)
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == 1
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == 1
 
 
 def test_failed_conversion_is_not_cached():
@@ -348,7 +348,7 @@ def test_failed_conversion_is_not_cached():
         for _ in range(2):
             with pytest.raises(Exception):
                 xgr.Grammar.from_json_schema(bad)
-        assert xgr.get_cross_grammar_cache_stats()["num_entries"] == 0
+        assert xgr.Grammar.get_json_schema_cache_stats()["num_entries"] == 0
 
 
 def test_in_place_passes_do_not_touch_cached_grammar():
@@ -360,7 +360,7 @@ def test_in_place_passes_do_not_touch_cached_grammar():
         GrammarFunctor.repetition_normalizer(returned)
         GrammarFunctor.fsm_builder(returned)
         assert str(xgr.Grammar.from_json_schema(schema)) == expected
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == 2
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == 2
 
 
 def test_disabled_cache_keeps_nothing():
@@ -368,7 +368,7 @@ def test_disabled_cache_keeps_nothing():
         for _ in range(2):
             xgr.Grammar.from_json_schema(json.dumps(SIMPLE_SCHEMA))
             stag_to_str(tools_stag([{"name": "a", "schema": TREE_SCHEMA}]))
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert stats["num_entries"] == 0
         assert stats["memory_bytes"] == 0
         assert stats["hits"] == 0
@@ -389,34 +389,34 @@ def test_lru_eviction_respects_budget():
     schemas = [json.dumps(s) for s in _many_schemas(20)]
     with cache_budget(-1):
         xgr.Grammar.from_json_schema(schemas[0])
-        entry_size = xgr.get_cross_grammar_cache_stats()["memory_bytes"]
+        entry_size = xgr.Grammar.get_json_schema_cache_stats()["memory_bytes"]
     budget = entry_size * 5 + entry_size // 2  # room for five entries
     with cache_budget(budget):
         for s in schemas:
             xgr.Grammar.from_json_schema(s)
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert stats["memory_bytes"] <= budget
         assert stats["num_entries"] == 5
         assert stats["evictions"] == 15
 
         # The most recent entries are kept; touching one protects it from the next eviction.
         xgr.Grammar.from_json_schema(schemas[15])
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == 1
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == 1
         xgr.Grammar.from_json_schema(schemas[0])  # evicts the oldest, schemas[16]
         xgr.Grammar.from_json_schema(schemas[15])
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == 2
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == 2
         xgr.Grammar.from_json_schema(schemas[16])
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == 2
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == 2
 
         # Shrinking the budget evicts at once.
-        xgr.set_cross_grammar_cache_max_memory(entry_size * 2 + entry_size // 2)
-        assert xgr.get_cross_grammar_cache_stats()["num_entries"] == 2
+        xgr.Grammar.set_json_schema_cache_max_memory(entry_size * 2 + entry_size // 2)
+        assert xgr.Grammar.get_json_schema_cache_stats()["num_entries"] == 2
 
 
 def test_entry_larger_than_budget_is_skipped():
     with cache_budget(64):
         xgr.Grammar.from_json_schema(json.dumps(VARIED_SCHEMA))
-        stats = xgr.get_cross_grammar_cache_stats()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert stats["num_entries"] == 0
         assert stats["memory_bytes"] == 0
 
@@ -425,8 +425,8 @@ def test_clear_resets_entries_and_counters():
     with cache_budget(-1):
         for _ in range(2):
             xgr.Grammar.from_json_schema(json.dumps(SIMPLE_SCHEMA))
-        xgr.clear_cross_grammar_cache()
-        stats = xgr.get_cross_grammar_cache_stats()
+        xgr.Grammar.clear_json_schema_cache()
+        stats = xgr.Grammar.get_json_schema_cache_stats()
         assert (
             stats["num_entries"] == stats["hits"] == stats["misses"] == stats["memory_bytes"] == 0
         )
@@ -448,7 +448,7 @@ def test_compiled_structural_tag_unchanged():
         compiled = xgr.GrammarCompiler(tokenizer_info, cache_enabled=False).compile_structural_tag(
             stag
         )
-        assert xgr.get_cross_grammar_cache_stats()["hits"] == len(ALL_SCHEMAS)
+        assert xgr.Grammar.get_json_schema_cache_stats()["hits"] == len(ALL_SCHEMAS)
     assert str(compiled.grammar) == str(reference.grammar)
     assert compiled.serialize_json() == reference.serialize_json()
 
@@ -480,10 +480,10 @@ def test_concurrent_conversions():
     def churn():
         try:
             for r in range(rounds * 4):
-                xgr.set_cross_grammar_cache_max_memory([-1, 200_000, 50_000][r % 3])
+                xgr.Grammar.set_json_schema_cache_max_memory([-1, 200_000, 50_000][r % 3])
                 if r % 5 == 0:
-                    xgr.clear_cross_grammar_cache()
-                xgr.get_cross_grammar_cache_stats()
+                    xgr.Grammar.clear_json_schema_cache()
+                xgr.Grammar.get_json_schema_cache_stats()
         except Exception as e:  # pragma: no cover
             errors.append(repr(e))
 
@@ -494,7 +494,7 @@ def test_concurrent_conversions():
             t.start()
         for t in threads:
             t.join()
-        xgr.set_cross_grammar_cache_max_memory(-1)
+        xgr.Grammar.set_json_schema_cache_max_memory(-1)
         # After the churn, a warm pass still reproduces every grammar.
         for stag, exp in zip(requests, expected):
             assert stag_to_str(stag) == exp

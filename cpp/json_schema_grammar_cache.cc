@@ -1,21 +1,23 @@
 /*!
  *  Copyright (c) 2026 by Contributors
- * \file xgrammar/cross_grammar_cache.cc
+ * \file xgrammar/json_schema_grammar_cache.cc
  */
 
-#include "cross_grammar_cache.h"
+#include "json_schema_grammar_cache.h"
 
 #include "grammar_impl.h"
 
 namespace xgrammar {
 
-CrossGrammarCache& CrossGrammarCache::Global() {
+JSONSchemaGrammarCache& JSONSchemaGrammarCache::Global() {
   // Leaked on purpose: converters may run during static destruction of other objects.
-  static CrossGrammarCache* instance = new CrossGrammarCache();
+  static JSONSchemaGrammarCache* instance = new JSONSchemaGrammarCache();
   return *instance;
 }
 
-std::size_t CrossGrammarCache::EstimateEntrySize(const std::string& key, const Grammar& grammar) {
+std::size_t JSONSchemaGrammarCache::EstimateEntrySize(
+    const std::string& key, const Grammar& grammar
+) {
   // Count what a converted (normalized, not yet optimized) grammar holds: rules with their
   // generated names, and the flat expression storage (two header ints plus data per expression,
   // and one index entry). MemorySize(Grammar::Impl) is not used because it also walks the FSM
@@ -36,7 +38,7 @@ std::size_t CrossGrammarCache::EstimateEntrySize(const std::string& key, const G
   return size + size * 2 / 5;
 }
 
-std::optional<Grammar> CrossGrammarCache::Get(const std::string& key) {
+std::optional<Grammar> JSONSchemaGrammarCache::Get(const std::string& key) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (max_memory_bytes_ == 0) return std::nullopt;
   auto it = index_.find(std::string_view(key));
@@ -49,7 +51,7 @@ std::optional<Grammar> CrossGrammarCache::Get(const std::string& key) {
   return it->second->grammar;
 }
 
-void CrossGrammarCache::Put(const std::string& key, const Grammar& grammar) {
+void JSONSchemaGrammarCache::Put(const std::string& key, const Grammar& grammar) {
   std::size_t size = EstimateEntrySize(key, grammar);
   std::lock_guard<std::mutex> lock(mutex_);
   if (max_memory_bytes_ == 0) return;
@@ -67,7 +69,7 @@ void CrossGrammarCache::Put(const std::string& key, const Grammar& grammar) {
   EvictToFit();
 }
 
-void CrossGrammarCache::EvictToFit() {
+void JSONSchemaGrammarCache::EvictToFit() {
   if (max_memory_bytes_ < 0) return;
   while (!lru_list_.empty() && memory_bytes_ > static_cast<std::size_t>(max_memory_bytes_)) {
     auto& victim = lru_list_.back();
@@ -78,13 +80,13 @@ void CrossGrammarCache::EvictToFit() {
   }
 }
 
-void CrossGrammarCache::SetMaxMemoryBytes(int64_t max_memory_bytes) {
+void JSONSchemaGrammarCache::SetMaxMemoryBytes(int64_t max_memory_bytes) {
   std::lock_guard<std::mutex> lock(mutex_);
   max_memory_bytes_ = max_memory_bytes < 0 ? kUnlimited : max_memory_bytes;
   EvictToFit();
 }
 
-void CrossGrammarCache::Clear() {
+void JSONSchemaGrammarCache::Clear() {
   std::lock_guard<std::mutex> lock(mutex_);
   index_.clear();
   lru_list_.clear();
@@ -94,7 +96,7 @@ void CrossGrammarCache::Clear() {
   evictions_ = 0;
 }
 
-CrossGrammarCache::Stats CrossGrammarCache::GetStats() const {
+JSONSchemaGrammarCache::Stats JSONSchemaGrammarCache::GetStats() const {
   std::lock_guard<std::mutex> lock(mutex_);
   Stats stats;
   stats.hits = hits_;

@@ -10,6 +10,7 @@
 #include <xgrammar/object.h>
 #include <xgrammar/tokenizer_info.h>
 
+#include <cstdint>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -201,6 +202,36 @@ class Grammar {
    * error with the error message.
    */
   static std::variant<Grammar, SerializationError> DeserializeJSON(const std::string& json_string);
+
+  /*! \brief Counters of the JSON schema grammar cache. */
+  struct JSONSchemaCacheStats {
+    int64_t hits;
+    int64_t misses;
+    int64_t evictions;
+    int64_t num_entries;
+    int64_t memory_bytes;
+    int64_t max_memory_bytes;
+  };
+
+  /*!
+   * \brief Set the memory budget of the JSON schema grammar cache.
+   * \details The cache keeps the grammar converted from each JSON schema with its conversion
+   * options, so a later conversion of the same schema (FromJSONSchema, the json_schema nodes of
+   * FromStructuralTag, and the GrammarCompiler methods that use them) reuses it. There is one
+   * cache per process. It is separate from the GrammarCompiler caches and is not affected by
+   * their settings. Least recently used entries are evicted when the budget is exceeded.
+   * \param max_memory_bytes The budget in bytes. 0 disables the cache; -1 removes the bound.
+   */
+  static void SetJSONSchemaCacheMaxMemory(int64_t max_memory_bytes);
+
+  /*! \brief Get the memory budget of the JSON schema grammar cache (-1 means unbounded). */
+  static int64_t GetJSONSchemaCacheMaxMemory();
+
+  /*! \brief Remove all entries of the JSON schema grammar cache and reset its counters. */
+  static void ClearJSONSchemaCache();
+
+  /*! \brief Get the counters of the JSON schema grammar cache. */
+  static JSONSchemaCacheStats GetJSONSchemaCacheStats();
 
   // Allow the builder to bind to this grammar's impl for in-place editing (FromMutableGrammar).
   friend class GrammarBuilder;

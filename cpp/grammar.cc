@@ -14,6 +14,7 @@
 #include "grammar_parser.h"
 #include "grammar_printer.h"
 #include "json_schema_converter.h"
+#include "json_schema_grammar_cache.h"
 #include "lark_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
@@ -65,6 +66,28 @@ Grammar Grammar::FromJSONSchema(
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
   }
   return grammar;
+}
+
+void Grammar::SetJSONSchemaCacheMaxMemory(int64_t max_memory_bytes) {
+  JSONSchemaGrammarCache::Global().SetMaxMemoryBytes(max_memory_bytes);
+}
+
+int64_t Grammar::GetJSONSchemaCacheMaxMemory() {
+  return JSONSchemaGrammarCache::Global().GetMaxMemoryBytes();
+}
+
+void Grammar::ClearJSONSchemaCache() { JSONSchemaGrammarCache::Global().Clear(); }
+
+Grammar::JSONSchemaCacheStats Grammar::GetJSONSchemaCacheStats() {
+  auto stats = JSONSchemaGrammarCache::Global().GetStats();
+  return JSONSchemaCacheStats{
+      stats.hits,
+      stats.misses,
+      stats.evictions,
+      stats.num_entries,
+      stats.memory_bytes,
+      stats.max_memory_bytes
+  };
 }
 
 Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) {

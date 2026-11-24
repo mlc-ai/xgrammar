@@ -599,7 +599,7 @@ Grammar JSONSchemaToGrammar(
 );
 
 /*!
- * \brief The cross-grammar cache key of a JSON schema conversion. It encodes every input of
+ * \brief The JSON schema grammar cache key of a JSON schema conversion. It encodes every input of
  * JSONSchemaToGrammar plus the process recursion limit, so equal keys always convert to equal
  * grammars.
  */
@@ -617,7 +617,7 @@ std::string JSONSchemaCacheKey(
 
 /*!
  * \brief GrammarNormalizer::Apply(JSONSchemaToGrammar(...)), served from the process-wide
- * CrossGrammarCache when an identical conversion was done before.
+ * JSONSchemaGrammarCache when an identical conversion was done before.
  * \note The returned grammar may be shared with the cache and with other callers. It must not be
  * modified; splice it with SubGrammarAdder or copy it before running in-place passes. Warnings the
  * conversion logs (e.g. ignored keywords) are only logged when the grammar is actually converted,

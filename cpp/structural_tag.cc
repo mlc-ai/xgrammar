@@ -1980,8 +1980,8 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
   // The whitespace cap comes from the JSONSchemaFormat node (per-tag). The converted grammar comes
-  // from the cross-grammar cache when another conversion (e.g. an earlier request with the same
-  // tool) already built it; SubGrammarAdder copies all of its rules into this grammar.
+  // from the JSON schema grammar cache when another conversion (e.g. an earlier request with the
+  // same tool) already built it; SubGrammarAdder copies all of its rules into this grammar.
   auto sub_grammar = JSONSchemaToNormalizedGrammar(
       format.json_schema,
       /*any_whitespace=*/true,

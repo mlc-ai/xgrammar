@@ -28,11 +28,11 @@
 #include <variant>
 #include <vector>
 
-#include "cross_grammar_cache.h"
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
 #include "json_schema_converter_ext.h"
+#include "json_schema_grammar_cache.h"
 #include "regex_converter.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
@@ -5261,7 +5261,7 @@ Grammar JSONSchemaToNormalizedGrammar(
         excludes
     ));
   };
-  auto& cache = CrossGrammarCache::Global();
+  auto& cache = JSONSchemaGrammarCache::Global();
   if (!cache.Enabled()) return convert();
   auto key = JSONSchemaCacheKey(
       schema,

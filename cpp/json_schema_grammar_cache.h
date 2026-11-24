@@ -1,11 +1,11 @@
 /*!
  *  Copyright (c) 2026 by Contributors
- * \file xgrammar/cross_grammar_cache.h
- * \brief A process-wide cache of converted sub-grammars that outlives a single conversion.
+ * \file xgrammar/json_schema_grammar_cache.h
+ * \brief A process-wide cache of the grammars converted from JSON schemas.
  */
 
-#ifndef XGRAMMAR_CROSS_GRAMMAR_CACHE_H_
-#define XGRAMMAR_CROSS_GRAMMAR_CACHE_H_
+#ifndef XGRAMMAR_JSON_SCHEMA_GRAMMAR_CACHE_H_
+#define XGRAMMAR_JSON_SCHEMA_GRAMMAR_CACHE_H_
 
 #include <xgrammar/grammar.h>
 
@@ -22,27 +22,42 @@
 namespace xgrammar {
 
 /*!
- * \brief A thread-safe LRU cache from a conversion key to the normalized grammar it produces.
+ * \brief A thread-safe LRU cache from a JSON schema conversion key to the normalized grammar it
+ * produces.
  *
- * \details Converting a JSON schema produces several rules that reference each other (the root
+ * \details
+ * What it skips. Converting a JSON schema to grammar rules (JSONSchemaToGrammar plus
+ * normalization). Every path that converts a schema goes through JSONSchemaToNormalizedGrammar,
+ * which consults this cache: Grammar::FromJSONSchema, the json_schema nodes of
+ * Grammar::FromStructuralTag, and the GrammarCompiler methods that call them.
+ *
+ * Lifecycle. There is one instance per process (Global()). It is created on first use and is
+ * never destroyed. Entries are added after a successful conversion and removed by LRU eviction,
+ * by lowering the budget, or by Grammar::ClearJSONSchemaCache. It belongs to no Grammar or
+ * GrammarCompiler, and the compiler's caches (the grammar-level cache of compiled grammars and
+ * the rule-level cache of token masks) are separate: GrammarCompiler::ClearCache and
+ * cache_limit_bytes do not affect it.
+ *
+ * Contents. Converting one schema produces several rules that reference each other (the root
  * rule, one rule per sub-schema, `$defs`/`$ref` targets that may be recursive, and helper rules
- * such as `basic_string`). Caching single rule ids cannot outlive the builder they index into,
- * so this cache stores the whole converted sub-grammar as a standalone, self-contained Grammar.
- * Callers splice it into the grammar they are building with SubGrammarAdder, which copies every
- * rule the root reaches and remaps all rule references in one pass, so recursion and shared
- * helper rules stay consistent in the copy.
+ * such as `basic_string`). Rule ids cannot outlive the builder they index into, so an entry is the
+ * whole converted sub-grammar as a standalone Grammar. Callers splice it into the grammar they
+ * are building with SubGrammarAdder, which copies every rule the root reaches and remaps all rule
+ * references in one pass, so recursion and shared helper rules stay consistent in the copy. The
+ * per-conversion rule caches inside the converters still handle reuse and recursion within one
+ * schema; this cache only decides whether that conversion runs at all.
  *
  * A cached Grammar is shared between all readers and must never be modified. Callers that hand
  * the grammar out to users (who may run in-place passes on it) must copy it first.
  *
- * The key must encode every input that can change the converted grammar; see
- * JSONSchemaToNormalizedGrammar for the JSON schema key. Equal keys must always produce
- * equivalent grammars. Failed conversions are never cached.
+ * Key. It must encode every input that can change the converted grammar; see
+ * JSONSchemaCacheKey. Equal keys must always produce equivalent grammars. Failed conversions are
+ * never cached.
  *
- * Memory is bounded by an estimate of each entry's size (grammar plus key). The least recently
- * used entries are evicted first. A budget of 0 disables the cache, and -1 removes the bound.
+ * Memory. It is bounded by an estimate of each entry's size (grammar plus key), with the least
+ * recently used entries evicted first. A budget of 0 disables the cache, and -1 removes the bound.
  */
-class CrossGrammarCache {
+class JSONSchemaGrammarCache {
  public:
   /*! \brief The default memory budget of the process-wide cache, in bytes. */
   static constexpr int64_t kDefaultMaxMemoryBytes = 64LL * 1024 * 1024;
@@ -58,14 +73,14 @@ class CrossGrammarCache {
     int64_t max_memory_bytes = 0;
   };
 
-  explicit CrossGrammarCache(int64_t max_memory_bytes = kDefaultMaxMemoryBytes)
+  explicit JSONSchemaGrammarCache(int64_t max_memory_bytes = kDefaultMaxMemoryBytes)
       : max_memory_bytes_(max_memory_bytes) {}
 
-  CrossGrammarCache(const CrossGrammarCache&) = delete;
-  CrossGrammarCache& operator=(const CrossGrammarCache&) = delete;
+  JSONSchemaGrammarCache(const JSONSchemaGrammarCache&) = delete;
+  JSONSchemaGrammarCache& operator=(const JSONSchemaGrammarCache&) = delete;
 
   /*! \brief The process-wide instance used by the grammar converters. */
-  static CrossGrammarCache& Global();
+  static JSONSchemaGrammarCache& Global();
 
   /*! \brief Whether lookups can hit. Callers may skip building a key when this is false. */
   bool Enabled() const {
@@ -133,4 +148,4 @@ class CrossGrammarCache {
 
 }  // namespace xgrammar
 
-#endif  // XGRAMMAR_CROSS_GRAMMAR_CACHE_H_
+#endif  // XGRAMMAR_JSON_SCHEMA_GRAMMAR_CACHE_H_

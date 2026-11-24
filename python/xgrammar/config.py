@@ -1,7 +1,6 @@
 """Global configuration for XGrammar."""
 
 from contextlib import contextmanager
-from typing import Dict
 
 from .base import _core
 
@@ -63,52 +62,3 @@ def get_serialization_version() -> str:
         The serialization version number.
     """
     return str(_core.config.get_serialization_version())
-
-
-def get_cross_grammar_cache_max_memory() -> int:
-    """Get the memory budget of the cross-grammar cache, in bytes.
-
-    The cross-grammar cache is shared per process. It keeps the grammar converted from each JSON
-    schema (together with its conversion options, such as the style, ``any_order``,
-    ``excludes`` and whitespace settings), so a later conversion of the same schema reuses it.
-    This mostly speeds up building structural tags whose tools repeat across requests, and
-    :py:meth:`Grammar.from_json_schema`. Converted grammars are identical with and without the
-    cache.
-
-    Returns
-    -------
-    max_memory_bytes : int
-        The budget in bytes. 0 means the cache is disabled, and -1 means it is unbounded.
-    """
-    return int(_core.config.get_cross_grammar_cache_max_memory())
-
-
-def set_cross_grammar_cache_max_memory(max_memory_bytes: int) -> None:
-    """Set the memory budget of the cross-grammar cache. Least recently used entries are evicted
-    once the budget is exceeded. The default budget is 64 MiB. This method is thread-safe.
-
-    Parameters
-    ----------
-    max_memory_bytes : int
-        The budget in bytes. 0 disables the cache, and -1 removes the bound.
-    """
-    _core.config.set_cross_grammar_cache_max_memory(max_memory_bytes)
-
-
-def clear_cross_grammar_cache() -> None:
-    """Remove every entry from the cross-grammar cache and reset its counters."""
-    _core.config.clear_cross_grammar_cache()
-
-
-def get_cross_grammar_cache_stats() -> Dict[str, int]:
-    """Get the counters of the cross-grammar cache.
-
-    Returns
-    -------
-    stats : Dict[str, int]
-        ``hits``, ``misses``, ``evictions``, ``num_entries``, ``memory_bytes`` (estimated) and
-        ``max_memory_bytes``.
-    """
-    names = ("hits", "misses", "evictions", "num_entries", "memory_bytes", "max_memory_bytes")
-    values = _core.config.get_cross_grammar_cache_stats()
-    return {name: int(value) for name, value in zip(names, values)}
