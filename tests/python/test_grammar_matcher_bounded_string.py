@@ -247,6 +247,13 @@ def test_tokens_that_leave_the_string_respect_the_bound(schema: dict[str, object
         ('root ::= "<" s{1,2} ">"\ns ::= [^<>]{2,3}', ["<", "<a", "<aa", "<aaaa"]),
         # Repetitions of one class followed by different bytes.
         ('root ::= "(" [^()]{2,} ")" | "<" [^()]{0,3} "("', ["(", "(aa", "<", "<a"]),
+        # Large regex repetitions ending their rule under various caller contexts.
+        ('root ::= "(" r ")" | "[" r "a"\nr ::= Regex("[a-z]{1,130}")', ["(", "[" + "a" * 129]),
+        ('root ::= "(" r ")" | "[" r "]"\nr ::= Regex("[a-z]{1,130}")', ["(", "[" + "a" * 130]),
+        ('root ::= "(" r\nr ::= Regex("[a-z]{1,130}")', ["(", "(" + "a" * 130]),
+        ('root ::= "(" s ")"\ns ::= r\nr ::= Regex("[a-z]{1,130}")', ["(", "(" + "a" * 129]),
+        ('root ::= "(" r ")"\nr ::= Regex("[a-z]{129,}")', ["(", "(" + "a" * 128, "(" + "a" * 150]),
+        ('root ::= [^x]{2,3} "ba"', ["", "a", "aa", "aaa", "ab", "aab"]),
     ],
 )
 def test_counted_repetitions_in_ebnf_match_the_replay(grammar: str, prefixes: list[str]) -> None:
@@ -403,3 +410,176 @@ def test_character_budget_grammar_keeps_the_expanded_repetition() -> None:
     assert "{0, 3}" not in str(compiled.grammar)
     for consumed in range(4):
         _assert_mask_matches_replay(compiled, tokenizer_info, '"' + "a" * consumed)
+
+
+REGEX_REPEAT_VOCAB = [
+    b"a",
+    b"b",
+    b"c",
+    b"d",
+    b"Z",
+    b"0",
+    b"9",
+    b"aa",
+    b"ab",
+    b"abc",
+    b"hello",
+    b"a" * 8,
+    b"aZ",
+    b"Za",
+    b"ZZ",
+    b'aZ"',
+    b'Z"',
+    b"a0",
+    b"0a",
+    b"00",
+    b'0"',
+    b'"',
+    b'a"',
+    b'aa"',
+    b'a",',
+    b",",
+    b"{",
+    b"}",
+    b" ",
+    b"\n",
+    b"\\",
+    b"\xe4",
+    b"a\xe4",
+    b"\xe4\xb8\xad",
+    b"\xb8\xad",
+    b'\xe4\xb8\xad"',
+    b"9x",
+    b"ca",
+]
+
+
+@pytest.mark.parametrize(
+    ("compile_args", "prefixes", "max_uncertain"),
+    [
+        (
+            {"schema": {"type": "string", "pattern": "^.{1,129}$"}},
+            ['"' + "a" * n for n in (0, 1, 128, 129)],
+            2,
+        ),
+        (
+            {"schema": {"type": "string", "pattern": '^[^"\\\\]{1,200}$'}},
+            ['"' + "a" * n for n in (0, 1, 199, 200)],
+            2,
+        ),
+        (
+            {"schema": {"type": "string", "pattern": "^[a-zA-Z0-9 ,.]{1,200}$"}},
+            ['"' + "a" * n for n in (0, 1, 199, 200)],
+            2,
+        ),
+        (
+            {"schema": {"type": "string", "pattern": "^.{129,}$"}},
+            ['"' + "a" * n for n in (0, 1, 128, 129, 150)],
+            2,
+        ),
+        (
+            {"schema": {"type": "string", "pattern": "^.{200}$"}},
+            ['"' + "a" * n for n in (0, 1, 199, 200)],
+            2,
+        ),
+        (
+            {"schema": {"type": "string", "pattern": "^.{0,200}$"}},
+            ['"' + "a" * n for n in (0, 1, 199, 200)],
+            2,
+        ),
+        (
+            {"schema": {"type": "string", "pattern": "^[a-z]{1,200}[0-9]{1,200}$"}},
+            ['"' + "a" * n for n in (0, 1, 199, 200)] + ['"abc' + "0" * n for n in (1, 199, 200)],
+            3,
+        ),
+        (
+            {"schema": {"type": "string", "pattern": "^.{1,200}Z$"}},
+            ['"' + "a" * n for n in (0, 1, 199, 200)] + ['"' + "Z" * 199, '"' + "a" * 199 + "Z"],
+            5,
+        ),
+        (
+            {"grammar": 'root ::= "\\"" Regex("[a-z0-9_-]{1,200}") "\\""'},
+            ['"' + "a" * n for n in (0, 1, 199, 200)],
+            2,
+        ),
+        (
+            {"grammar": 'root ::= "\\"" r "\\""\nr ::= Regex("[a-z0-9_-]{1,200}")'},
+            ['"' + "a" * n for n in (0, 1, 199, 200)],
+            2,
+        ),
+    ],
+)
+def test_large_regex_repetitions_use_counted_fast_path(
+    compile_args: dict[str, object], prefixes: list[str], max_uncertain: int
+) -> None:
+    """Large regex repetitions (finite, unbounded, adjacent, and with overlapping follow bytes)
+    stay on the counted-repetition fast path and match token-by-token replay."""
+    tokenizer_info = xgr.TokenizerInfo(list(REGEX_REPEAT_VOCAB))
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    if "schema" in compile_args:
+        compiled = compiler.compile_json_schema(compile_args["schema"])
+    else:
+        compiled = compiler.compile_grammar(compile_args["grammar"])
+    cache = json.loads(compiled.serialize_json())["adaptive_token_mask_cache"]
+    worst_uncertain = max((len(mask.get("uncertain_indices", [])) for _, mask in cache), default=0)
+    assert worst_uncertain <= max_uncertain
+    for text in prefixes:
+        _assert_mask_matches_replay(compiled, tokenizer_info, text)
+    restored = xgr.CompiledGrammar.deserialize_json(compiled.serialize_json(), tokenizer_info)
+    _assert_mask_matches_replay(restored, tokenizer_info, prefixes[-1])
+
+
+@pytest.mark.parametrize(
+    ("pattern", "accepted", "rejected"),
+    [
+        ("^(a|aa){129,}$", ['"' + "a" * 129 + '"', '"' + "a" * 260 + '"'], ['"' + "a" * 128 + '"']),
+        (
+            "^(ab){129,}$",
+            ['"' + "ab" * 129 + '"', '"' + "ab" * 140 + '"'],
+            ['"' + "ab" * 128 + '"'],
+        ),
+        ("^(a?){129,}$", ['""', '"' + "a" * 129 + '"', '"' + "a" * 150 + '"'], ['"b"']),
+        (
+            "^[a-z]{129,}[0-9]{129,}$",
+            ['"' + "a" * 129 + "0" * 129 + '"'],
+            ['"' + "a" * 128 + "0" * 129 + '"', '"' + "a" * 129 + "0f" + "0" * 129 + '"'],
+        ),
+    ],
+)
+def test_unbounded_large_regex_repeats_enforce_bounds(
+    pattern: str, accepted: list[str], rejected: list[str]
+) -> None:
+    """Unbounded {n,} repeats above 128 enforce the lower bound, merge states for ambiguous bodies,
+    and do not leak across adjacent repeats."""
+    tokenizer_info = xgr.TokenizerInfo(list(REGEX_REPEAT_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
+        {"type": "string", "pattern": pattern}
+    )
+    for text in accepted:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert matcher.accept_string(text) and matcher.is_terminated(), text
+    for text in rejected:
+        matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+        assert not (matcher.accept_string(text) and matcher.is_terminated()), text
+    for n in (0, 128, 129):
+        prefix = '"' + ("ab" if "ab" in pattern else "a") * n
+        _assert_mask_matches_replay(compiled, tokenizer_info, prefix)
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    [
+        "^[a-z]{1,130}$|^[0-9]{1,140}$",
+        "^[a-z]{1,130}[0-9]{0,130}$",
+        "^[a-z]{1,130}[a-z0-9]{1,130}$",
+    ],
+)
+def test_disqualified_large_regex_repeats_match_replay(pattern: str) -> None:
+    """Merged union repeat states, optional adjacent repeats, and overlapping adjacent classes
+    fall back safely and keep masks identical to replay."""
+    tokenizer_info = xgr.TokenizerInfo(list(REGEX_REPEAT_VOCAB))
+    compiled = xgr.GrammarCompiler(tokenizer_info).compile_json_schema(
+        {"type": "string", "pattern": pattern}
+    )
+    for text in ('"', '"a', '"' + "a" * 129, '"' + "a" * 130):
+        _assert_mask_matches_replay(compiled, tokenizer_info, text)
