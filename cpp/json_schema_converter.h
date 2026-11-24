@@ -598,6 +598,43 @@ Grammar JSONSchemaToGrammar(
     std::vector<std::string> excludes = {}
 );
 
+/*!
+ * \brief The cross-grammar cache key of a JSON schema conversion. It encodes every input of
+ * JSONSchemaToGrammar plus the process recursion limit, so equal keys always convert to equal
+ * grammars.
+ */
+std::string JSONSchemaCacheKey(
+    const std::string& schema,
+    bool any_whitespace,
+    std::optional<int> indent,
+    const std::optional<std::pair<std::string, std::string>>& separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    bool any_order,
+    JSONFormat json_format,
+    const std::vector<std::string>& excludes
+);
+
+/*!
+ * \brief GrammarNormalizer::Apply(JSONSchemaToGrammar(...)), served from the process-wide
+ * CrossGrammarCache when an identical conversion was done before.
+ * \note The returned grammar may be shared with the cache and with other callers. It must not be
+ * modified; splice it with SubGrammarAdder or copy it before running in-place passes. Warnings the
+ * conversion logs (e.g. ignored keywords) are only logged when the grammar is actually converted,
+ * not on a cache hit.
+ */
+Grammar JSONSchemaToNormalizedGrammar(
+    const std::string& schema,
+    bool any_whitespace = true,
+    std::optional<int> indent = std::nullopt,
+    std::optional<std::pair<std::string, std::string>> separators = std::nullopt,
+    bool strict_mode = true,
+    std::optional<int> max_whitespace_cnt = std::nullopt,
+    bool any_order = false,
+    JSONFormat json_format = JSONFormat::kJSON,
+    std::vector<std::string> excludes = {}
+);
+
 // ==================== Public API functions (backward compatible) ====================
 
 /*!

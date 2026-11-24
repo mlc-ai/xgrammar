@@ -1979,8 +1979,10 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
   if (!json_format.has_value()) {
     return ResultErr<ISTError>("Unsupported parsing type: " + format.style);
   }
-  // The whitespace cap comes from the JSONSchemaFormat node (per-tag).
-  auto sub_grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
+  // The whitespace cap comes from the JSONSchemaFormat node (per-tag). The converted grammar comes
+  // from the cross-grammar cache when another conversion (e.g. an earlier request with the same
+  // tool) already built it; SubGrammarAdder copies all of its rules into this grammar.
+  auto sub_grammar = JSONSchemaToNormalizedGrammar(
       format.json_schema,
       /*any_whitespace=*/true,
       /*indent=*/std::nullopt,
@@ -1990,7 +1992,7 @@ Result<int, ISTError> StructuralTagGrammarConverter::VisitSub(const JSONSchemaFo
       /*any_order=*/format.any_order,
       /*json_format=*/*json_format,
       /*excludes=*/format.excludes
-  ));
+  );
   auto added_root_rule_id = SubGrammarAdder().Apply(&grammar_builder_, sub_grammar);
   return ResultOk(added_root_rule_id);
 }

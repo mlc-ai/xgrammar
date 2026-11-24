@@ -28,6 +28,7 @@
 #include <variant>
 #include <vector>
 
+#include "cross_grammar_cache.h"
 #include "fsm_builder.h"
 #include "grammar_builder.h"
 #include "grammar_functor.h"
@@ -35,6 +36,7 @@
 #include "regex_converter.h"
 #include "support/json_parse.h"
 #include "support/logging.h"
+#include "support/recursion_guard.h"
 
 namespace xgrammar {
 
@@ -5178,6 +5180,101 @@ Grammar JSONSchemaToGrammar(
       XGRAMMAR_LOG(FATAL) << "Invalid JSON format: " << static_cast<int>(json_format);
   }
   XGRAMMAR_UNREACHABLE();
+}
+
+namespace {
+
+void AppendKeyField(std::string* key, std::string_view field) {
+  // Length-prefixed, so no field value can be confused with a field boundary.
+  *key += std::to_string(field.size());
+  *key += ':';
+  key->append(field.data(), field.size());
+}
+
+void AppendKeyField(std::string* key, const std::optional<int>& field) {
+  AppendKeyField(key, field.has_value() ? std::to_string(*field) : std::string("none"));
+}
+
+}  // namespace
+
+std::string JSONSchemaCacheKey(
+    const std::string& schema,
+    bool any_whitespace,
+    std::optional<int> indent,
+    const std::optional<std::pair<std::string, std::string>>& separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    bool any_order,
+    JSONFormat json_format,
+    const std::vector<std::string>& excludes
+) {
+  std::string key;
+  key.reserve(schema.size() + 64);
+  // Bump the tag whenever the converter's output for the same inputs changes in a way that
+  // matters to a process holding a long-lived cache (it never outlives the process today).
+  AppendKeyField(&key, "json_schema/v1");
+  AppendKeyField(&key, std::to_string(static_cast<int>(json_format)));
+  AppendKeyField(&key, any_whitespace ? "ws" : "no_ws");
+  AppendKeyField(&key, indent);
+  if (separators.has_value()) {
+    AppendKeyField(&key, "sep");
+    AppendKeyField(&key, separators->first);
+    AppendKeyField(&key, separators->second);
+  } else {
+    AppendKeyField(&key, "no_sep");
+  }
+  AppendKeyField(&key, strict_mode ? "strict" : "loose");
+  AppendKeyField(&key, max_whitespace_cnt);
+  AppendKeyField(&key, any_order ? "any_order" : "fixed_order");
+  AppendKeyField(&key, std::to_string(excludes.size()));
+  for (const auto& exclude : excludes) {
+    AppendKeyField(&key, exclude);
+  }
+  // The recursion limit decides whether deep schemas convert or fail, so a grammar converted
+  // under one limit must not be served under another.
+  AppendKeyField(&key, std::to_string(RecursionGuard::GetMaxRecursionDepth()));
+  AppendKeyField(&key, schema);
+  return key;
+}
+
+Grammar JSONSchemaToNormalizedGrammar(
+    const std::string& schema,
+    bool any_whitespace,
+    std::optional<int> indent,
+    std::optional<std::pair<std::string, std::string>> separators,
+    bool strict_mode,
+    std::optional<int> max_whitespace_cnt,
+    bool any_order,
+    JSONFormat json_format,
+    std::vector<std::string> excludes
+) {
+  auto convert = [&]() {
+    return GrammarNormalizer::Apply(JSONSchemaToGrammar(
+        schema,
+        any_whitespace,
+        indent,
+        separators,
+        strict_mode,
+        max_whitespace_cnt,
+        any_order,
+        json_format,
+        excludes
+    ));
+  };
+  auto& cache = CrossGrammarCache::Global();
+  if (!cache.Enabled()) return convert();
+  auto key = JSONSchemaCacheKey(
+      schema,
+      any_whitespace,
+      indent,
+      separators,
+      strict_mode,
+      max_whitespace_cnt,
+      any_order,
+      json_format,
+      excludes
+  );
+  return cache.GetOrCompute(key, convert);
 }
 
 std::string JSONSchemaToEBNF(

@@ -56,9 +56,11 @@ Grammar Grammar::FromJSONSchema(
     bool print_converted_ebnf,
     bool any_order
 ) {
-  auto grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
+  const Grammar shared = JSONSchemaToNormalizedGrammar(
       schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
-  ));
+  );
+  // The cached grammar is shared; give the caller a private copy it may run in-place passes on.
+  Grammar grammar(std::make_shared<Grammar::Impl>(*shared.operator->()));
   if (print_converted_ebnf) {
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
   }

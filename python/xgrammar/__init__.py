@@ -7,9 +7,13 @@ from .builtin_structural_tag import (
 )
 from .compiler import CompiledGrammar, GrammarCompiler
 from .config import (
+    clear_cross_grammar_cache,
+    get_cross_grammar_cache_max_memory,
+    get_cross_grammar_cache_stats,
     get_max_recursion_depth,
     get_serialization_version,
     max_recursion_depth,
+    set_cross_grammar_cache_max_memory,
     set_max_recursion_depth,
 )
 from .contrib import hf
@@ -38,9 +42,13 @@ __all__ = [
     "testing",
     "CompiledGrammar",
     "GrammarCompiler",
+    "clear_cross_grammar_cache",
+    "get_cross_grammar_cache_max_memory",
+    "get_cross_grammar_cache_stats",
     "get_max_recursion_depth",
     "get_serialization_version",
     "max_recursion_depth",
+    "set_cross_grammar_cache_max_memory",
     "set_max_recursion_depth",
     "hf",
     "DeserializeFormatError",

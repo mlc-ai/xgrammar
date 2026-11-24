@@ -1058,6 +1058,33 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           []() { return static_cast<int64_t>(GetMaxRecursionDepth()); }
       )
       .def(
+          "xgrammar.tvm_ffi_binding.config.set_cross_grammar_cache_max_memory",
+          [](int64_t max_memory_bytes) { SetCrossGrammarCacheMaxMemory(max_memory_bytes); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.config.get_cross_grammar_cache_max_memory",
+          []() { return GetCrossGrammarCacheMaxMemory(); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.config.clear_cross_grammar_cache",
+          []() { ClearCrossGrammarCache(); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.config.get_cross_grammar_cache_stats",
+          []() {
+            auto stats = GetCrossGrammarCacheStats();
+            // [hits, misses, evictions, num_entries, memory_bytes, max_memory_bytes]
+            return std::vector<int64_t>{
+                stats.hits,
+                stats.misses,
+                stats.evictions,
+                stats.num_entries,
+                stats.memory_bytes,
+                stats.max_memory_bytes
+            };
+          }
+      )
+      .def(
           "xgrammar.tvm_ffi_binding.config.get_serialization_version",
           []() { return ffi::String(GetSerializationVersion()); }
       )
