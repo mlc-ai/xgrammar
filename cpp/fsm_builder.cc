@@ -1475,18 +1475,17 @@ Result<RegexIR> ParseRegexToIR(
             builder->AddRuleWithHint(name_hint, builder->AddRegex(inner_regex, json_string));
         builder->UpdateLookaheadExact(inner_rule_id, true);
         if (upper_bound == RegexIR::kRepeatNoUpperBound) {
-          // {n,} == {n}{0,}: a repeat edge for the mandatory part, then a starred rule
-          // reference.
-          RegexIR::Symbol star_symbol;
-          star_symbol.symbol = RegexIR::RegexSymbol::star;
-          star_symbol.state.push_back(RegexIR::RuleRefNode{inner_rule_id});
           if (lower_bound > 0) {
-            RegexIR::Bracket bracket;
-            bracket.states.push_back(RegexIR::RepeatSubrule{inner_rule_id, lower_bound, lower_bound}
+            // lower_bound > 0 implies non-nullable atom_state, so INT32_MAX cannot spin in one row.
+            stack.push_back(
+                {RegexIR::RepeatSubrule{inner_rule_id, lower_bound, INT32_MAX},
+                 atom.span_begin,
+                 i + 1}
             );
-            bracket.states.push_back(std::move(star_symbol));
-            stack.push_back({std::move(bracket), atom.span_begin, i + 1});
           } else {
+            RegexIR::Symbol star_symbol;
+            star_symbol.symbol = RegexIR::RegexSymbol::star;
+            star_symbol.state.push_back(RegexIR::RuleRefNode{inner_rule_id});
             stack.push_back({std::move(star_symbol), atom.span_begin, i + 1});
           }
         } else {

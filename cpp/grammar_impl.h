@@ -98,6 +98,11 @@ class Grammar::Impl {
     bool is_lazy = false;
     /*! \brief The sampling temperature to use while matching this rule. */
     std::optional<float> temperature = std::nullopt;
+
+    bool HasRuleAttributes() const {
+      return max_tokens >= 0 || max_chars >= 0 || !capture_name.empty() || is_lazy ||
+             temperature.has_value();
+    }
   };
 
   /*! \brief Sparse per-rule metadata used to materialize suffix and stop captures. */

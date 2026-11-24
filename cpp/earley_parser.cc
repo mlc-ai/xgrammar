@@ -220,7 +220,10 @@ void EarleyParser::Complete(const ParserState& state, bool debug_print, bool mar
       auto info = grammar_->complete_fsm.GetRepeatEdgeInfo(edge.GetAuxIndex());
       if (info.RuleId() != ref_id) continue;
       handled_as_repeat = true;
-      int32_t new_count = parent_state.repeat_count + 1;
+      // Clamp unbounded repeats at Lower() so ambiguous bodies like (a|aa){n,} merge states.
+      int32_t new_count = info.Upper() == INT32_MAX
+                              ? std::min(parent_state.repeat_count + 1, info.Lower())
+                              : parent_state.repeat_count + 1;
       if (new_count >= info.Lower()) {
         Enqueue(ParserState{
             parent_state.rule_id,
