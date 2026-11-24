@@ -130,6 +130,9 @@ MODEL_CONFIGS = [
     ("muse", "meta-models/Muse-Spark-Open-816B-A42B", True, {}),
     ("muse", "meta-models/Muse-Spark-Open-816B-A42B", False, {}),
     ("muse", "meta-models/Muse-Spark-Open-816B-A42B", "auto", {}),
+    ("inkling_2", "thinkingmachines/Inkling-2-Mini", True, {}),
+    ("inkling_2", "thinkingmachines/Inkling-2-Mini", False, {"reasoning_effort": "none"}),
+    ("inkling_2", "thinkingmachines/Inkling-2-Mini", "auto", {}),
 ]
 
 # Models whose renderer cannot produce a turn with an empty reasoning block: the DeepSeek
@@ -142,6 +145,8 @@ SKIP_EMPTY_REASONING = {
     "google/gemma-4-31B-it",
     # The template renders no to=self message for empty reasoning.
     "meta-models/Muse-Spark-Open-816B-A42B",
+    # The template renders no thinking block for empty reasoning.
+    "thinkingmachines/Inkling-2-Mini",
 }
 
 # Templates that pre-render an empty thought block in the generation prompt when thinking
@@ -191,6 +196,8 @@ EOS_SUFFIXES = {
     "gemma_4": ["<turn|>", "<|tool_response>"],
     # <|eot|> is a stop token; the structural tag ends before it.
     "muse": ["<|eot|>"],
+    # <|content_model_end_sampling|> is the stop token; the structural tag ends before it.
+    "inkling_2": ["<|content_model_end_sampling|>"],
 }
 
 
@@ -918,6 +925,109 @@ def test_muse_official_tokenizer_masks(token_markers, reasoning, policy, schema_
             calls_done += 1
             # Another call may follow unless the tool choice forces exactly one.
             assert allowed(bitmask, _MUSE_EOM) == (policy != "forced")
+        assert allowed(bitmask, token_id), (index, token_id, tokenizer.decode([token_id]))
+        assert matcher.accept_token(token_id), (index, token_id)
+    assert calls_done == len(message["tool_calls"])
+    assert matcher.is_terminated()
+
+
+_INKLING_2_MINI = ("thinkingmachines/Inkling-2-Mini", "c9d028302cd0f035fdf8e7e91f089a4ce94d2195")
+_INKLING_2_MESSAGE, _INKLING_2_END_SAMPLING = 200001, 200006
+
+
+@pytest.mark.hf_token_required
+@pytest.mark.parametrize("token_markers", [False, True])
+@pytest.mark.parametrize("reasoning", [False, True])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize("schema_kind", ["typed", "union", "unconstrained"])
+def test_inkling_2_official_tokenizer_masks(token_markers, reasoning, policy, schema_kind):
+    """Replay actual template completions, which the model opens without a generation prompt."""
+    model_id, revision = _INKLING_2_MINI
+    tokenizer = load_tokenizer(model_id, revision=revision)
+    # The model's padded vocabulary is larger than the tokenizer's.
+    info = xgr.TokenizerInfo.from_huggingface(tokenizer, vocab_size=201024)
+    assert info.vocab_type == xgr.VocabType.BYTE_LEVEL
+    assert info.stop_token_ids == [_INKLING_2_END_SAMPLING]
+    for text, token_id in [
+        ("<|message_model|>", _INKLING_2_MESSAGE),
+        ("<|content_text|>", 200004),
+        ("<|content_model_end_sampling|>", _INKLING_2_END_SAMPLING),
+        ("<|content_thinking|>", 200008),
+        ("<|end_message|>", 200010),
+        ("<|content_invoke_tool_json|>", 200049),
+    ]:
+        assert tokenizer.encode(text, add_special_tokens=False) == [token_id]
+
+    arguments = {"query": '北京 "quoted"\n<b>', "limit": 2}
+    schema = {
+        "type": "object",
+        "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+        "required": ["query", "limit"],
+        "additionalProperties": False,
+    }
+    if schema_kind == "union":
+        schema["properties"]["limit"] = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+        arguments["limit"] = None
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": "",
+                "parameters": schema,
+                "strict": schema_kind != "unconstrained",
+            },
+        }
+        for name in ("search", "web.find")
+    ]
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    tag = get_model_structural_tag(
+        "inkling_2",
+        tools=tools,
+        reasoning=reasoning,
+        tool_choice=choice,
+        token_markers=token_markers,
+    )
+    matcher = xgr.GrammarMatcher(xgr.GrammarCompiler(info).compile_structural_tag(tag))
+    message = {
+        "role": "assistant",
+        "content": "Searching.",
+        "tool_calls": [
+            {"type": "function", "function": {"name": name, "arguments": arguments}}
+            for name in (["search"] if policy == "forced" else ["search", "web.find"])
+        ],
+    }
+    if reasoning:
+        message["reasoning_content"] = "Plan."
+    kwargs = {"tools": tools, "tokenize": False}
+    prompt = tokenizer.apply_chat_template([USER_MSG], add_generation_prompt=True, **kwargs)
+    full = tokenizer.apply_chat_template([USER_MSG, message], **kwargs)
+    assert prompt.endswith("<|end_message|>")
+    assert full.startswith(prompt)
+    output = full[len(prompt) :]
+    # The template sorts the top-level argument keys, unlike the schema's declared order.
+    assert '"args":{"limit":' in output
+    token_ids = tokenizer.encode(output, add_special_tokens=False)
+    assert tokenizer.decode(token_ids) == output
+    assert token_ids[-1] == _INKLING_2_END_SAMPLING
+
+    def allowed(bitmask, token_id):
+        return bool((int(bitmask[0, token_id // 32]) >> (token_id % 32)) & 1)
+
+    bitmask = xgr.allocate_token_bitmask(1, info.vocab_size)
+    calls_done = 0
+    for index, token_id in enumerate(token_ids):
+        matcher.fill_next_token_bitmask(bitmask)
+        text = tokenizer.decode(token_ids[:index])
+        answer_complete = text.endswith("Searching.<|end_message|>")
+        call_complete = text.endswith("}<|end_message|>")
+        # The turn may stop after a complete tool call, or after the answer when calls are optional.
+        can_stop = call_complete or (answer_complete and policy == "auto")
+        assert allowed(bitmask, _INKLING_2_END_SAMPLING) == can_stop, (index, token_id)
+        if call_complete:
+            calls_done += 1
+            # Another call may follow unless the tool choice forces exactly one.
+            assert allowed(bitmask, _INKLING_2_MESSAGE) == (policy != "forced")
         assert allowed(bitmask, token_id), (index, token_id, tokenizer.decode([token_id]))
         assert matcher.accept_token(token_id), (index, token_id)
     assert calls_done == len(message["tool_calls"])

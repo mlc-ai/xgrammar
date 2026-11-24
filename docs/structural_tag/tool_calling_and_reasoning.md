@@ -23,7 +23,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 
 ### Parameters
 
-- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`, `"deepseek_v4_1"`, `"mimo"`, `"cohere"`, `"exaone"`, `"gemma_4"`, `"muse"`.
+- **model** (`str`): The structural-tag style. Valid values are `"llama"`, `"qwen_3"`, `"qwen_3_5"`, `"qwen_3_coder"`, `"kimi"`, `"kimi_k3"`, `"deepseek_r1"`, `"deepseek_v3_1"`, `"harmony"`, `"deepseek_v3_2"`, `"minimax"`, `"minimax_m3"`, `"glm_4_7"`, `"deepseek_v4"`, `"deepseek_v4_1"`, `"mimo"`, `"cohere"`, `"exaone"`, `"gemma_4"`, `"muse"`, `"inkling_2"`.
 - **tools** (`List[ToolParam | dict]`, optional): Function and builtin tools available to the model. The list can contain two kinds of tools:
   - **Function tools** use the OpenAI Chat Completions shape:
     ```json
@@ -51,7 +51,7 @@ Use it when you need to constrain the model to output in a fixed pattern such as
 - **reasoning** (`"enabled" | "disabled" | "auto" | bool`, optional): Controls the model-specific reasoning section. The string modes are recommended. The boolean aliases `True` and `False` are deprecated but remain supported as `"enabled"` and `"disabled"`, respectively. For models with a leading reasoning block, `"auto"` means that the prompt does not prefill its opener, and the model may emit one complete block or answer/call a tool directly. Default `"enabled"` in `get_model_structural_tag`; the model-specific `get_minimax_m3_structural_tag` defaults to `"auto"`. For MiniMax M3, these modes must be paired with the chat template's `enabled`, `disabled`, and `adaptive` thinking modes; adaptive output may start with `</mm:think>` when skipping reasoning. Boolean aliases are supported only by `get_model_structural_tag`; model-specific builders take the three explicit string modes.
 - **any_order** (`bool`, optional): When `True`, applies `any_order=True` to every `JSONSchemaFormat` in the generated structural tag, so each tool's arguments may be emitted in any property order (see [`JSONSchemaFormat`](structural_tag) for the exact semantics). Default `False`, which keeps the declared property order with full validation.
 - **parallel_tool_calls** (`bool`, optional): Whether the model may emit more than one tool call in a single response, following the OpenAI Chat Completions parameter of the same name. Default `True`, which keeps the multi-call grammar. When `False`, the structural tag allows at most one tool call: exactly zero or one under `tool_choice="auto"`, exactly one under `"required"` or a forced tool. Free text is still allowed before the call, but generation must end once the call is closed, since a second call is no longer reachable.
-- **token_markers** (`bool`, optional): Match control markers (`<tool_call>`, `</think>`, ...) as their dedicated tokens instead of as strings; see [Token-level markers](#token-level-markers). Supported for `glm_4_7`, `muse`, `qwen_3`, `qwen_3_5` and `qwen_3_coder`. Default `False`.
+- **token_markers** (`bool`, optional): Match control markers (`<tool_call>`, `</think>`, ...) as their dedicated tokens instead of as strings; see [Token-level markers](#token-level-markers). Supported for `glm_4_7`, `inkling_2`, `muse`, `qwen_3`, `qwen_3_5` and `qwen_3_coder`. Default `False`.
 - **max_whitespace_cnt** (`Optional[int]`, optional): Caps the number of consecutive whitespace characters. Setting it (e.g. `2`) bounds runs of whitespace, which avoids the unbounded-whitespace outputs some models emit in bad cases that would otherwise blow up grammar compilation/matching.
 
 Passing an unsupported `model`, invalid `tool_choice`, or invalid `reasoning` mode will raise `ValueError`.
@@ -249,6 +249,7 @@ The `model` argument of `get_model_structural_tag` accepts the style names below
 | `"exaone"` | EXAONE-4.0-32B, EXAONE-4.0-1.2B |
 | `"gemma_4"` | Gemma 4 (gemma-4-E2B-it, gemma-4-12b-it, gemma-4-26b-a4b-it, gemma-4-31b-it); arguments use the `"gemma"` JSON-schema style |
 | `"muse"` | Muse Spark Open; arguments use the `"muse_xml"` JSON-schema style. The structural tag starts after the `<|start|>assistant` generation prompt and ends before the `<|eot|>` stop token |
+| `"inkling_2"` | Inkling-2-Mini, Inkling-2-Small. The chat template renders no generation prompt, so the structural tag starts with the header of the model's first block (`<|message_model|>`) and ends before the `<|content_model_end_sampling|>` stop token. As in the template, top-level argument keys are sorted by name |
 
 ## Extending with custom models
 
