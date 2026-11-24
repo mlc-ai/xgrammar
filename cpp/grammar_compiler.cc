@@ -1036,13 +1036,27 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
         << "The token mask cache is incomplete while dynamic compilation is disabled: " << state;
     return iterator->second;
   }
+  std::unique_lock<std::mutex> lock(adaptive_token_mask_cache_mutex);
+  auto iterator = adaptive_token_mask_cache.find(state);
+  if (iterator != adaptive_token_mask_cache.end()) {
+    return iterator->second;
+  }
+  return GetAdaptiveTokenMaskOnCacheMiss(state, std::move(lock));
+}
+
+// LTO otherwise inlines the construction and wait paths into the lookup, making every warm
+// hit pay their register-save and stack-frame costs even though it returns before construction.
+#if defined(_MSC_VER)
+__declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline))
+#endif
+const AdaptiveTokenMask&
+CompiledGrammar::Impl::GetAdaptiveTokenMaskOnCacheMiss(
+    const ParserState& state, std::unique_lock<std::mutex> lock
+) {
   std::shared_ptr<PendingMask> pending;
   {
-    std::unique_lock<std::mutex> lock(adaptive_token_mask_cache_mutex);
-    auto iterator = adaptive_token_mask_cache.find(state);
-    if (iterator != adaptive_token_mask_cache.end()) {
-      return iterator->second;
-    }
     auto active = pending_masks.find(state);
     if (active != pending_masks.end()) {
       pending = active->second;
@@ -1060,6 +1074,7 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
     pending = std::make_shared<PendingMask>();
     pending_masks.emplace(state, pending);
   }
+  lock.unlock();
   // Everything after publishing the pending record can fail, including cache insertion.
   try {
 #if XGRAMMAR_BUILD_CXX_TESTS

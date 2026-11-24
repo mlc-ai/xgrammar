@@ -194,6 +194,12 @@ class CompiledGrammar::Impl {
   /*! \brief Get an existing token mask or generate and cache it on demand. */
   const AdaptiveTokenMask& GetAdaptiveTokenMask(const ParserState& state);
 
+  // Called only after a dynamic cache miss, with the cache mutex still held. Keep cold-build
+  // state and exception cleanup out of the frequently executed completed-cache lookup.
+  const AdaptiveTokenMask& GetAdaptiveTokenMaskOnCacheMiss(
+      const ParserState& state, std::unique_lock<std::mutex> lock
+  );
+
   /*! \brief Generate every token mask before serialization. */
   void MaterializeAdaptiveTokenMaskCache();
 
