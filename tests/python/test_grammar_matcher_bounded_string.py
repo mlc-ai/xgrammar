@@ -583,3 +583,56 @@ def test_disqualified_large_regex_repeats_match_replay(pattern: str) -> None:
     )
     for text in ('"', '"a', '"' + "a" * 129, '"' + "a" * 130):
         _assert_mask_matches_replay(compiled, tokenizer_info, text)
+
+
+@pytest.mark.parametrize(
+    ("compile_args", "prefixes"),
+    [
+        # Direct self-loop on start (`a*b` returns to start on `a`): must not misclassify `bac`.
+        ({"grammar": 'root ::= Regex("(a*b){1,130}c")'}, ["", "b", "ba", "b" * 129, "b" * 130]),
+        (
+            {"schema": {"type": "string", "pattern": "^(a*b){1,130}$"}},
+            ['"', '"b', '"ba', '"' + "b" * 129, '"' + "b" * 130],
+        ),
+        # Multi-byte cycle back to start (`(ab)*c` returns to start on `ab`).
+        ({"grammar": 'root ::= Regex("((ab)*c){1,130}d")'}, ["", "c", "cab", "c" * 129]),
+        # Interior cycle not targeting start (`a+b`): stays on fast path and matches replay.
+        (
+            {"schema": {"type": "string", "pattern": "^(a+b){1,130}$"}},
+            ['"', '"a', '"ab', '"aba', '"' + "ab" * 129, '"' + "ab" * 130],
+        ),
+    ],
+)
+def test_regex_repeat_bodies_with_cycles_match_replay(
+    compile_args: dict[str, object], prefixes: list[str]
+) -> None:
+    vocab = [
+        "a",
+        "b",
+        "c",
+        "d",
+        "aa",
+        "ab",
+        "ba",
+        "bc",
+        "bac",
+        "cab",
+        "cabd",
+        "cd",
+        "aba",
+        "abb",
+        "abaa",
+        '"',
+        'b"',
+        'ba"',
+        'ab"',
+        'aba"',
+    ]
+    tokenizer_info = xgr.TokenizerInfo(vocab)
+    compiler = xgr.GrammarCompiler(tokenizer_info)
+    if "schema" in compile_args:
+        compiled = compiler.compile_json_schema(compile_args["schema"])
+    else:
+        compiled = compiler.compile_grammar(compile_args["grammar"])
+    for text in prefixes:
+        _assert_mask_matches_replay(compiled, tokenizer_info, text)

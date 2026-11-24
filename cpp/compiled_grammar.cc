@@ -67,8 +67,9 @@ bool HasRuleSemantics(const Grammar& grammar, int32_t rule_id) {
 
 /*!
  * \brief Whether rule `rule_id` matches exactly one codepoint of a character class, or one match
- * of a regex, through a deterministic byte FSM whose accepting states have no outgoing edges, with
- * no rule-level semantics attached. Sets `first_bytes` to the bytes such a match can start with.
+ * of a regex, through a deterministic byte FSM whose accepting states have no outgoing edges and
+ * whose start state has no incoming edges, with no rule-level semantics attached. Sets
+ * `first_bytes` to the bytes such a match can start with.
  */
 bool IsSingleMatchByteRule(const Grammar& grammar, int32_t rule_id, ByteSet* first_bytes) {
   const auto& rule = grammar->GetRule(rule_id);
@@ -92,7 +93,10 @@ bool IsSingleMatchByteRule(const Grammar& grammar, int32_t rule_id, ByteSet* fir
   for (int state : reachable_states) {
     ByteSet seen;
     for (const auto& edge : fsm.GetFsm().GetEdges(state)) {
-      if (!edge.IsCharRange() || edge.max > 0xFF || fsm.IsEndState(state)) {
+      // An edge back to start lets an unfinished match look like a match boundary in
+      // ClassifyRepetitionToken (e.g. `a*b` looping on `a`).
+      if (!edge.IsCharRange() || edge.max > 0xFF || fsm.IsEndState(state) ||
+          edge.target == fsm.GetStart()) {
         return false;
       }
       for (int byte = edge.min; byte <= edge.max; ++byte) {
