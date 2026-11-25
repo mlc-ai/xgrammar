@@ -91,6 +91,19 @@ struct AdaptiveTokenMask {
   std::vector<DynamicBitset> repeat_interior_bitsets;
   std::vector<std::pair<int32_t, int32_t>> repeat_exit_tokens;
 
+  /*!
+   * \brief Hints for a state inside the body rule of a counted repetition. Derived JIT-only
+   * data; never serialized, and a mask without it behaves the same, only slower.
+   *
+   * `repeat_stay_bitsets[i]` holds uncertain tokens that can be consumed entirely by this body
+   * and further repetitions of it, when the repetition that predicted the state still allows
+   * `repeat_stay_needs[i]` repetitions counting the current one. The needs are strictly
+   * increasing and the bitsets cumulative. The matcher accepts the fitting bitset and replays
+   * only the other uncertain tokens.
+   */
+  std::vector<int32_t> repeat_stay_needs;
+  std::vector<DynamicBitset> repeat_stay_bitsets;
+
   /*! \brief Default constructor. Only for deserialization. */
   AdaptiveTokenMask() = default;
 
@@ -115,7 +128,8 @@ struct AdaptiveTokenMask {
     return MemorySize(mask.uncertain_indices) + MemorySize(mask.accepted_indices) +
            MemorySize(mask.rejected_indices) + MemorySize(mask.accepted_bitset) +
            MemorySize(mask.repeat_interior_char_counts) + MemorySize(mask.repeat_interior_bitsets) +
-           MemorySize(mask.repeat_exit_tokens);
+           MemorySize(mask.repeat_exit_tokens) + MemorySize(mask.repeat_stay_needs) +
+           MemorySize(mask.repeat_stay_bitsets);
   }
 };
 
@@ -155,6 +169,10 @@ class CompiledGrammar::Impl {
 
   /*! \brief Protects on-demand token mask cache insertion and cache serialization. */
   mutable std::mutex adaptive_token_mask_cache_mutex;
+
+  /*! \brief Whether each rule is the body of a counted repetition; filled with the first mask. */
+  std::vector<bool> repeat_body_rules;
+  std::once_flag repeat_body_rules_once;
 
   /*! \brief Whether missing token mask cache entries should be generated on demand. */
   bool enable_dynamic_compilation{false};
