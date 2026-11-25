@@ -42,11 +42,7 @@ std::optional<Grammar> JSONSchemaGrammarCache::Get(const std::string& key) {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!enabled_ || max_memory_bytes_ == 0) return std::nullopt;
   auto it = index_.find(std::string_view(key));
-  if (it == index_.end()) {
-    ++misses_;
-    return std::nullopt;
-  }
-  ++hits_;
+  if (it == index_.end()) return std::nullopt;
   lru_list_.splice(lru_list_.begin(), lru_list_, it->second);
   return it->second->grammar;
 }
@@ -76,7 +72,6 @@ void JSONSchemaGrammarCache::EvictToFit() {
     memory_bytes_ -= victim.size;
     index_.erase(std::string_view(victim.key));
     lru_list_.pop_back();
-    ++evictions_;
   }
 }
 
@@ -101,21 +96,6 @@ void JSONSchemaGrammarCache::Clear() {
   index_.clear();
   lru_list_.clear();
   memory_bytes_ = 0;
-  hits_ = 0;
-  misses_ = 0;
-  evictions_ = 0;
-}
-
-JSONSchemaGrammarCache::Stats JSONSchemaGrammarCache::GetStats() const {
-  std::lock_guard<std::mutex> lock(mutex_);
-  Stats stats;
-  stats.hits = hits_;
-  stats.misses = misses_;
-  stats.evictions = evictions_;
-  stats.num_entries = static_cast<int64_t>(lru_list_.size());
-  stats.memory_bytes = static_cast<int64_t>(memory_bytes_);
-  stats.max_memory_bytes = max_memory_bytes_;
-  return stats;
 }
 
 }  // namespace xgrammar

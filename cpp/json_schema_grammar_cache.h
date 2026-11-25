@@ -66,15 +66,6 @@ class JSONSchemaGrammarCache {
   /*! \brief The budget value meaning "no bound". */
   static constexpr int64_t kUnlimited = -1;
 
-  struct Stats {
-    int64_t hits = 0;
-    int64_t misses = 0;
-    int64_t evictions = 0;
-    int64_t num_entries = 0;
-    int64_t memory_bytes = 0;
-    int64_t max_memory_bytes = 0;
-  };
-
   explicit JSONSchemaGrammarCache(int64_t max_memory_bytes = kUnlimited)
       : max_memory_bytes_(max_memory_bytes) {}
 
@@ -101,10 +92,10 @@ class JSONSchemaGrammarCache {
     return enabled_;
   }
 
-  /*! \brief Look up a key. Counts a hit or a miss and refreshes the entry's LRU position. */
+  /*! \brief Look up a key. A hit refreshes the entry's LRU position. */
   std::optional<Grammar> Get(const std::string& key);
 
-  /*! \brief Insert or replace an entry, then evict to fit the budget. */
+  /*! \brief Insert an entry (a key already present keeps its entry), then evict to fit. */
   void Put(const std::string& key, const Grammar& grammar);
 
   /*!
@@ -128,10 +119,14 @@ class JSONSchemaGrammarCache {
     return max_memory_bytes_;
   }
 
-  /*! \brief Remove every entry and reset the hit/miss/eviction counters. */
+  /*! \brief Remove every entry. */
   void Clear();
 
-  Stats GetStats() const;
+  /*! \brief The estimated memory of all entries, in bytes. */
+  std::size_t MemorySize() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return memory_bytes_;
+  }
 
   /*! \brief The estimated memory of one entry, in bytes. */
   static std::size_t EstimateEntrySize(const std::string& key, const Grammar& grammar);
@@ -155,9 +150,6 @@ class JSONSchemaGrammarCache {
   // Keys are views into Entry::key; list nodes never move, so the views stay valid.
   std::unordered_map<std::string_view, EntryList::iterator> index_;
   std::size_t memory_bytes_ = 0;
-  int64_t hits_ = 0;
-  int64_t misses_ = 0;
-  int64_t evictions_ = 0;
 };
 
 }  // namespace xgrammar

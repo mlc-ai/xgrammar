@@ -86,19 +86,22 @@ struct Options {
 };
 
 /*! \brief Convert through the cache. */
-std::string Cached(const std::string& schema, const Options& o = {}) {
+Grammar CachedGrammar(const std::string& schema, const Options& o = {}) {
   return JSONSchemaToNormalizedGrammar(
-             schema,
-             o.any_whitespace,
-             o.indent,
-             o.separators,
-             o.strict_mode,
-             o.max_whitespace_cnt,
-             o.any_order,
-             o.format,
-             o.excludes
-  )
-      .ToString();
+      schema,
+      o.any_whitespace,
+      o.indent,
+      o.separators,
+      o.strict_mode,
+      o.max_whitespace_cnt,
+      o.any_order,
+      o.format,
+      o.excludes
+  );
+}
+
+std::string Cached(const std::string& schema, const Options& o = {}) {
+  return CachedGrammar(schema, o).ToString();
 }
 
 /*! \brief Convert without the cache: what JSONSchemaToNormalizedGrammar computes on a miss. */
@@ -116,6 +119,23 @@ std::string Uncached(const std::string& schema, const Options& o = {}) {
                                   ))
       .ToString();
 }
+
+std::string Key(const std::string& schema, const Options& o = {}) {
+  return JSONSchemaCacheKey(
+      schema,
+      o.any_whitespace,
+      o.indent,
+      o.separators,
+      o.strict_mode,
+      o.max_whitespace_cnt,
+      o.any_order,
+      o.format,
+      o.excludes
+  );
+}
+
+/*! \brief A hit returns the stored grammar itself, so two conversions share one Impl. */
+bool SameStoredGrammar(const Grammar& a, const Grammar& b) { return a.ImplPtr() == b.ImplPtr(); }
 
 std::string StructuralTagToString(const std::string& stag_json) {
   auto result = StructuralTagToGrammar(stag_json);
@@ -153,7 +173,9 @@ class JSONSchemaGrammarCacheTest : public ::testing::Test {
     Cache().Clear();
   }
   static JSONSchemaGrammarCache& Cache() { return JSONSchemaGrammarCache::Global(); }
-  static JSONSchemaGrammarCache::Stats Stats() { return Cache().GetStats(); }
+  static bool InCache(const std::string& schema, const Options& o = {}) {
+    return Cache().Get(Key(schema, o)).has_value();
+  }
 
  private:
   bool saved_enabled_ = true;
@@ -165,22 +187,19 @@ Grammar SmallGrammar(int i) {
   return Grammar::FromEBNF("root ::= \"value_" + std::to_string(i) + "\"");
 }
 
-TEST_F(JSONSchemaGrammarCacheTest, DefaultBudget) {
+TEST_F(JSONSchemaGrammarCacheTest, DefaultHasNoLimit) {
   EXPECT_EQ(JSONSchemaGrammarCache().GetMaxMemoryBytes(), JSONSchemaGrammarCache::kUnlimited);
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, HitAcrossConversions) {
-  std::string first = Cached(kSimpleSchema);
-  EXPECT_EQ(Stats().misses, 1);
-  EXPECT_EQ(Stats().hits, 0);
-  EXPECT_EQ(Stats().num_entries, 1);
-  EXPECT_GT(Stats().memory_bytes, 0);
+  EXPECT_FALSE(InCache(kSimpleSchema));
+  Grammar first = CachedGrammar(kSimpleSchema);
+  EXPECT_TRUE(InCache(kSimpleSchema));
+  EXPECT_GT(Cache().MemorySize(), 0u);
 
-  std::string second = Cached(kSimpleSchema);
-  EXPECT_EQ(Stats().misses, 1);
-  EXPECT_EQ(Stats().hits, 1);
-  EXPECT_EQ(first, second);
-  EXPECT_EQ(first, Uncached(kSimpleSchema));
+  Grammar second = CachedGrammar(kSimpleSchema);
+  EXPECT_TRUE(SameStoredGrammar(first, second));
+  EXPECT_EQ(second.ToString(), Uncached(kSimpleSchema));
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, IdenticalToUncachedForEveryStyle) {
@@ -195,30 +214,38 @@ TEST_F(JSONSchemaGrammarCacheTest, IdenticalToUncachedForEveryStyle) {
           std::string("format=") + std::to_string(static_cast<int>(format)) + " " + schema
       );
       std::string expected = Uncached(schema, options);
-      EXPECT_EQ(Cached(schema, options), expected);  // miss
-      EXPECT_EQ(Cached(schema, options), expected);  // hit
+      Grammar miss = CachedGrammar(schema, options);
+      Grammar hit = CachedGrammar(schema, options);
+      EXPECT_EQ(miss.ToString(), expected);
+      EXPECT_EQ(hit.ToString(), expected);
+      EXPECT_TRUE(SameStoredGrammar(miss, hit));
     }
   }
-  EXPECT_EQ(Stats().hits, Stats().misses);
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, StructuralTagsShareToolEntries) {
-  std::string first = ToolsTag({kSimpleSchema, kTreeSchema, kMutualSchema}, "muse_xml");
+  std::vector<std::string> first_tools = {kSimpleSchema, kTreeSchema, kMutualSchema};
+  std::string first = ToolsTag(first_tools, "muse_xml");
   // The next request adds a tool, as in deferred tool loading.
   std::string second =
       ToolsTag({kSimpleSchema, kTreeSchema, kMutualSchema, kVariedSchema}, "muse_xml");
+  // The options a muse_xml json_schema node converts with.
+  Options muse;
+  muse.format = JSONFormat::kMuseXML;
 
-  Cache().SetMaxMemoryBytes(0);
+  Cache().SetEnabled(false);
   std::string expected = StructuralTagToString(second);
-  Cache().SetMaxMemoryBytes(JSONSchemaGrammarCache::kUnlimited);
+  Cache().SetEnabled(true);
 
   StructuralTagToString(first);
-  EXPECT_EQ(Stats().misses, 3);
-  EXPECT_EQ(Stats().hits, 0);
+  for (const auto& schema : first_tools) EXPECT_TRUE(InCache(schema, muse));
+  EXPECT_FALSE(InCache(kVariedSchema, muse));
 
+  // The first three tools come from the cache; their stored grammars are reused, not rebuilt.
+  Grammar stored = CachedGrammar(kTreeSchema, muse);
   EXPECT_EQ(StructuralTagToString(second), expected);
-  EXPECT_EQ(Stats().misses, 4);
-  EXPECT_EQ(Stats().hits, 3);
+  EXPECT_TRUE(InCache(kVariedSchema, muse));
+  EXPECT_TRUE(SameStoredGrammar(stored, CachedGrammar(kTreeSchema, muse)));
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, DifferentOptionsNeverShareAnEntry) {
@@ -247,16 +274,20 @@ TEST_F(JSONSchemaGrammarCacheTest, DifferentOptionsNeverShareAnEntry) {
   variants[15].format = JSONFormat::kKimiK3XML;
   variants[15].any_order = true;
 
+  // Every variant has its own key.
+  std::vector<std::string> keys;
+  for (const auto& v : variants) keys.push_back(Key(kVariedSchema, v));
+  for (size_t i = 0; i < keys.size(); ++i) {
+    for (size_t j = 0; j < i; ++j) EXPECT_NE(keys[i], keys[j]) << i << " vs " << j;
+  }
+
+  // Each variant converts to its own grammar, before and after all of them are cached.
   for (int round = 0; round < 2; ++round) {
     for (size_t i = 0; i < variants.size(); ++i) {
-      SCOPED_TRACE("variant " + std::to_string(i));
+      SCOPED_TRACE("round " + std::to_string(round) + " variant " + std::to_string(i));
       EXPECT_EQ(Cached(kVariedSchema, variants[i]), Uncached(kVariedSchema, variants[i]));
     }
   }
-  // Every variant has its own key, so each converted once and hit once.
-  EXPECT_EQ(Stats().num_entries, static_cast<int64_t>(variants.size()));
-  EXPECT_EQ(Stats().misses, static_cast<int64_t>(variants.size()));
-  EXPECT_EQ(Stats().hits, static_cast<int64_t>(variants.size()));
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, SchemaTextIsPartOfTheKey) {
@@ -265,8 +296,10 @@ TEST_F(JSONSchemaGrammarCacheTest, SchemaTextIsPartOfTheKey) {
       R"({"type":"object","properties":{"x":{"type":"string"},"y":{"type":"integer"}}})";
   std::string b =
       R"({"type":"object","properties":{"y":{"type":"integer"},"x":{"type":"string"}}})";
+  EXPECT_NE(Key(a), Key(b));
   EXPECT_NE(Cached(a), Cached(b));
-  EXPECT_EQ(Stats().num_entries, 2);
+  EXPECT_TRUE(InCache(a));
+  EXPECT_TRUE(InCache(b));
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, RecursionLimitIsPartOfTheKey) {
@@ -275,61 +308,58 @@ TEST_F(JSONSchemaGrammarCacheTest, RecursionLimitIsPartOfTheKey) {
     schema = R"({"type":"object","properties":{"a":)" + schema + R"(},"required":["a"]})";
   }
   int saved_depth = RecursionGuard::GetMaxRecursionDepth();
-  Cached(schema);
+  Grammar first = CachedGrammar(schema);
   RecursionGuard::SetMaxRecursionDepth(10);
   EXPECT_THROW(Cached(schema), std::exception);
   RecursionGuard::SetMaxRecursionDepth(saved_depth);
-  Cached(schema);
-  EXPECT_EQ(Stats().hits, 1);
+  EXPECT_TRUE(SameStoredGrammar(first, CachedGrammar(schema)));
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, FailedConversionIsNotCached) {
   std::string bad = R"({"type":"object","properties":{"a":{"$ref":"#/$defs/missing"}}})";
   EXPECT_THROW(Cached(bad), std::exception);
   EXPECT_THROW(Cached(bad), std::exception);
-  EXPECT_EQ(Stats().num_entries, 0);
+  EXPECT_FALSE(InCache(bad));
+  EXPECT_EQ(Cache().MemorySize(), 0u);
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, FromJSONSchemaReturnsAPrivateCopy) {
   Grammar returned = Grammar::FromJSONSchema(kTreeSchema);
   std::string expected = returned.ToString();
+  EXPECT_FALSE(SameStoredGrammar(returned, CachedGrammar(kTreeSchema)));
   // In-place passes on the returned grammar must not reach the cached one.
   RepetitionNormalizer::Apply(&returned);
   GrammarFSMBuilder::Apply(&returned);
   EXPECT_EQ(Grammar::FromJSONSchema(kTreeSchema).ToString(), expected);
-  EXPECT_EQ(Stats().hits, 1);
 }
 
-TEST_F(JSONSchemaGrammarCacheTest, DisabledCacheKeepsNothing) {
+TEST_F(JSONSchemaGrammarCacheTest, ZeroLimitKeepsNothing) {
   Cache().SetMaxMemoryBytes(0);
   EXPECT_FALSE(Cache().Enabled());
-  Cached(kSimpleSchema);
-  Cached(kSimpleSchema);
-  EXPECT_EQ(Stats().num_entries, 0);
-  EXPECT_EQ(Stats().memory_bytes, 0);
-  EXPECT_EQ(Stats().hits, 0);
+  Grammar first = CachedGrammar(kSimpleSchema);
+  Grammar second = CachedGrammar(kSimpleSchema);
+  EXPECT_FALSE(SameStoredGrammar(first, second));
+  EXPECT_EQ(Cache().MemorySize(), 0u);
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, TurningOffRemovesEntriesAndKeepsTheLimit) {
   SetJSONSchemaCacheLimitBytes(1 << 20);
   Cached(kSimpleSchema);
-  EXPECT_EQ(Stats().num_entries, 1);
+  EXPECT_TRUE(InCache(kSimpleSchema));
 
   SetJSONSchemaCacheEnabled(false);
   EXPECT_FALSE(GetJSONSchemaCacheEnabled());
   EXPECT_FALSE(Cache().Enabled());
-  EXPECT_EQ(Stats().num_entries, 0);
-  EXPECT_EQ(Stats().memory_bytes, 0);
+  EXPECT_EQ(Cache().MemorySize(), 0u);
   // Still converts correctly, without storing anything.
   EXPECT_EQ(Cached(kTreeSchema), Uncached(kTreeSchema));
-  EXPECT_EQ(Stats().num_entries, 0);
+  EXPECT_EQ(Cache().MemorySize(), 0u);
 
   SetJSONSchemaCacheEnabled(true);
   EXPECT_EQ(GetJSONSchemaCacheLimitBytes(), 1 << 20);
-  Cached(kTreeSchema);
-  Cached(kTreeSchema);
-  EXPECT_EQ(Stats().num_entries, 1);
-  EXPECT_GE(Stats().hits, 1);
+  EXPECT_FALSE(InCache(kSimpleSchema));
+  Grammar first = CachedGrammar(kTreeSchema);
+  EXPECT_TRUE(SameStoredGrammar(first, CachedGrammar(kTreeSchema)));
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, LimitThroughTheConfigAPI) {
@@ -337,13 +367,14 @@ TEST_F(JSONSchemaGrammarCacheTest, LimitThroughTheConfigAPI) {
   EXPECT_EQ(GetJSONSchemaCacheLimitBytes(), -1);
   Cached(kSimpleSchema);
   Cached(kTreeSchema);
-  EXPECT_EQ(Stats().num_entries, 2);
+  EXPECT_TRUE(InCache(kSimpleSchema));
+  EXPECT_TRUE(InCache(kTreeSchema));
 
   // A limit too small for any entry empties the cache and keeps it empty.
   SetJSONSchemaCacheLimitBytes(64);
-  EXPECT_EQ(Stats().num_entries, 0);
+  EXPECT_EQ(Cache().MemorySize(), 0u);
   EXPECT_EQ(Cached(kSimpleSchema), Uncached(kSimpleSchema));
-  EXPECT_EQ(Stats().num_entries, 0);
+  EXPECT_EQ(Cache().MemorySize(), 0u);
 
   EXPECT_THROW(SetJSONSchemaCacheLimitBytes(-2), std::exception);
   EXPECT_EQ(GetJSONSchemaCacheLimitBytes(), 64);
@@ -386,14 +417,16 @@ TEST_F(JSONSchemaGrammarCacheTest, ConcurrentConversionsWhileTheBudgetChanges) {
     const int64_t budgets[] = {JSONSchemaGrammarCache::kUnlimited, 200000, 50000, 0};
     for (int round = 0; round < 200; ++round) {
       Cache().SetMaxMemoryBytes(budgets[round % 4]);
+      Cache().SetEnabled(round % 5 != 0);
       if (round % 7 == 0) Cache().Clear();
-      Cache().GetStats();
+      Cache().MemorySize();
     }
   });
   for (auto& thread : threads) thread.join();
   EXPECT_FALSE(failed);
   EXPECT_EQ(mismatches, 0);
 
+  Cache().SetEnabled(true);
   Cache().SetMaxMemoryBytes(JSONSchemaGrammarCache::kUnlimited);
   for (size_t i = 0; i < expected.size(); ++i) {
     EXPECT_EQ(Cached(schemas[i / styles.size()], styles[i % styles.size()]), expected[i]);
@@ -406,16 +439,12 @@ TEST(JSONSchemaGrammarCacheLRU, EvictsLeastRecentlyUsedWithinBudget) {
   Grammar sample = SmallGrammar(0);
   // Keys of equal length, so every entry has the same estimated size.
   auto key = [](int i) { return "key_" + std::to_string(100 + i); };
-  int64_t entry_size =
-      static_cast<int64_t>(JSONSchemaGrammarCache::EstimateEntrySize(key(0), sample));
-  JSONSchemaGrammarCache cache(entry_size * 5 + entry_size / 2);  // room for five entries
+  std::size_t entry_size = JSONSchemaGrammarCache::EstimateEntrySize(key(0), sample);
+  JSONSchemaGrammarCache cache(static_cast<int64_t>(entry_size * 5 + entry_size / 2));
 
+  // Room for five entries: the five most recent (15..19) are kept.
   for (int i = 0; i < 20; ++i) cache.Put(key(i), SmallGrammar(0));
-  EXPECT_EQ(cache.GetStats().num_entries, 5);
-  EXPECT_EQ(cache.GetStats().evictions, 15);
-  EXPECT_LE(cache.GetStats().memory_bytes, cache.GetMaxMemoryBytes());
-
-  // The five most recent entries (15..19) are kept.
+  EXPECT_EQ(cache.MemorySize(), entry_size * 5);
   EXPECT_FALSE(cache.Get(key(14)).has_value());
   EXPECT_TRUE(cache.Get(key(15)).has_value());  // now the most recently used
   cache.Put(key(0), SmallGrammar(0));           // evicts the oldest, 16
@@ -423,36 +452,32 @@ TEST(JSONSchemaGrammarCacheLRU, EvictsLeastRecentlyUsedWithinBudget) {
   EXPECT_FALSE(cache.Get(key(16)).has_value());
 
   // Shrinking the budget evicts at once.
-  cache.SetMaxMemoryBytes(entry_size * 2 + entry_size / 2);
-  EXPECT_EQ(cache.GetStats().num_entries, 2);
+  cache.SetMaxMemoryBytes(static_cast<int64_t>(entry_size * 2 + entry_size / 2));
+  EXPECT_EQ(cache.MemorySize(), entry_size * 2);
 }
 
 TEST(JSONSchemaGrammarCacheLRU, EntryLargerThanTheBudgetIsSkipped) {
   JSONSchemaGrammarCache cache(64);
   cache.Put("key", SmallGrammar(0));
-  EXPECT_EQ(cache.GetStats().num_entries, 0);
-  EXPECT_EQ(cache.GetStats().memory_bytes, 0);
+  EXPECT_FALSE(cache.Get("key").has_value());
+  EXPECT_EQ(cache.MemorySize(), 0u);
 }
 
 TEST(JSONSchemaGrammarCacheLRU, SecondPutOfAKeyKeepsTheFirstEntry) {
   JSONSchemaGrammarCache cache(JSONSchemaGrammarCache::kUnlimited);
   cache.Put("key", SmallGrammar(1));
+  std::size_t one_entry = cache.MemorySize();
   cache.Put("key", SmallGrammar(2));
-  EXPECT_EQ(cache.GetStats().num_entries, 1);
+  EXPECT_EQ(cache.MemorySize(), one_entry);
   EXPECT_EQ(cache.Get("key")->ToString(), SmallGrammar(1).ToString());
 }
 
-TEST(JSONSchemaGrammarCacheLRU, ClearResetsEntriesAndCounters) {
+TEST(JSONSchemaGrammarCacheLRU, ClearRemovesEverything) {
   JSONSchemaGrammarCache cache(JSONSchemaGrammarCache::kUnlimited);
   cache.Put("key", SmallGrammar(0));
-  cache.Get("key");
-  cache.Get("other");
   cache.Clear();
-  auto stats = cache.GetStats();
-  EXPECT_EQ(stats.num_entries, 0);
-  EXPECT_EQ(stats.memory_bytes, 0);
-  EXPECT_EQ(stats.hits, 0);
-  EXPECT_EQ(stats.misses, 0);
+  EXPECT_FALSE(cache.Get("key").has_value());
+  EXPECT_EQ(cache.MemorySize(), 0u);
 }
 
 }  // namespace
