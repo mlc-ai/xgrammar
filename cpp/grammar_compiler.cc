@@ -1043,6 +1043,9 @@ const AdaptiveTokenMask& CompiledGrammar::Impl::GetAdaptiveTokenMask(const Parse
       return iterator->second;
     }
   }
+  if (fsm_hashes_pending) {
+    std::call_once(fsm_hashes_once, [this]() { GrammarFSMHasher().Apply(&grammar); });
+  }
   std::optional<RuleLevelCache> retained_rule_level_cache;
   if (rule_level_cache != nullptr) {
     retained_rule_level_cache = *rule_level_cache;
@@ -1202,8 +1205,13 @@ CompiledGrammar GrammarCompilerSub::MultiThreadCompileGrammar(Grammar grammar_un
   TagDispatchOptimization(compiled_grammar_impl, &tag_dispatch_rule_id_to_second_slicing_bitset);
 
   // If the compiler is cache-enabled, then we hash the grammars for crossing-grammar caching.
+  // Masks are the only users of the hashes, so dynamic compilation computes them with the first.
   if (rule_level_cache_.has_value()) {
-    GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
+    if (enable_dynamic_compilation_) {
+      compiled_grammar_impl->fsm_hashes_pending = true;
+    } else {
+      GrammarFSMHasher().Apply(&compiled_grammar_impl->grammar);
+    }
   }
   if (enable_dynamic_compilation_) {
     compiled_grammar_impl->tag_dispatch_rule_id_to_second_slicing_bitset =
