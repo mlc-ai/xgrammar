@@ -32,11 +32,12 @@ namespace xgrammar {
  * Grammar::FromStructuralTag, and the GrammarCompiler methods that call them.
  *
  * Lifecycle. There is one instance per process (Global()). It is created on first use and is
- * never destroyed. Entries are added after a successful conversion and removed by LRU eviction,
- * by lowering the budget, or by Grammar::ClearJSONSchemaCache. It belongs to no Grammar or
+ * never destroyed. Entries are added after a successful conversion and removed by LRU eviction
+ * (or by Clear() and SetMaxMemoryBytes(), which only tests use). It belongs to no Grammar or
  * GrammarCompiler, and the compiler's caches (the grammar-level cache of compiled grammars and
  * the rule-level cache of token masks) are separate: GrammarCompiler::ClearCache and
- * cache_limit_bytes do not affect it.
+ * cache_limit_bytes do not affect it. Like the rule-level cache, it has no user-facing
+ * configuration; its budget is kDefaultMaxMemoryBytes.
  *
  * Contents. Converting one schema produces several rules that reference each other (the root
  * rule, one rule per sub-schema, `$defs`/`$ref` targets that may be recursive, and helper rules

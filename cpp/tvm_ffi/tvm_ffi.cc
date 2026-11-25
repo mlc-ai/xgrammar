@@ -21,6 +21,7 @@
 
 #include "../grammar_functor.h"
 #include "../json_schema_converter.h"
+#include "../json_schema_grammar_cache.h"
 #include "../regex_converter.h"
 #include "../support/encoding.h"
 #include "../support/utils.h"
@@ -473,30 +474,6 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           "serialize_json",
           [](const GrammarObj* o) { return ffi::String(o->value.SerializeJSON()); }
       )
-      .def_static(
-          "set_json_schema_cache_max_memory",
-          [](int64_t max_memory_bytes) { Grammar::SetJSONSchemaCacheMaxMemory(max_memory_bytes); }
-      )
-      .def_static(
-          "get_json_schema_cache_max_memory",
-          []() { return Grammar::GetJSONSchemaCacheMaxMemory(); }
-      )
-      .def_static("clear_json_schema_cache", []() { Grammar::ClearJSONSchemaCache(); })
-      .def_static(
-          "get_json_schema_cache_stats",
-          []() {
-            auto stats = Grammar::GetJSONSchemaCacheStats();
-            // [hits, misses, evictions, num_entries, memory_bytes, max_memory_bytes]
-            return std::vector<int64_t>{
-                stats.hits,
-                stats.misses,
-                stats.evictions,
-                stats.num_entries,
-                stats.memory_bytes,
-                stats.max_memory_bytes
-            };
-          }
-      )
       .def_static("deserialize_json", [](ffi::String json_string) {
         XGRAMMAR_FFI_TRY_BEGIN();
         Grammar grammar = Grammar_DeserializeJSON(json_string);
@@ -845,6 +822,35 @@ TVM_FFI_STATIC_INIT_BLOCK() {
 
   // ----- Global functions: testing, kernels, config, exceptions -----
   refl::GlobalDef()
+      .def(
+          "xgrammar.tvm_ffi_binding.testing._set_json_schema_cache_max_memory",
+          [](int64_t max_memory_bytes) {
+            JSONSchemaGrammarCache::Global().SetMaxMemoryBytes(max_memory_bytes);
+          }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.testing._get_json_schema_cache_max_memory",
+          []() { return JSONSchemaGrammarCache::Global().GetMaxMemoryBytes(); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.testing._clear_json_schema_cache",
+          []() { JSONSchemaGrammarCache::Global().Clear(); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.testing._get_json_schema_cache_stats",
+          []() {
+            auto stats = JSONSchemaGrammarCache::Global().GetStats();
+            // [hits, misses, evictions, num_entries, memory_bytes, max_memory_bytes]
+            return std::vector<int64_t>{
+                stats.hits,
+                stats.misses,
+                stats.evictions,
+                stats.num_entries,
+                stats.memory_bytes,
+                stats.max_memory_bytes
+            };
+          }
+      )
       .def(
           "xgrammar.tvm_ffi_binding.testing._json_schema_to_ebnf",
           [](ffi::String schema,

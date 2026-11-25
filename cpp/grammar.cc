@@ -68,28 +68,6 @@ Grammar Grammar::FromJSONSchema(
   return grammar;
 }
 
-void Grammar::SetJSONSchemaCacheMaxMemory(int64_t max_memory_bytes) {
-  JSONSchemaGrammarCache::Global().SetMaxMemoryBytes(max_memory_bytes);
-}
-
-int64_t Grammar::GetJSONSchemaCacheMaxMemory() {
-  return JSONSchemaGrammarCache::Global().GetMaxMemoryBytes();
-}
-
-void Grammar::ClearJSONSchemaCache() { JSONSchemaGrammarCache::Global().Clear(); }
-
-Grammar::JSONSchemaCacheStats Grammar::GetJSONSchemaCacheStats() {
-  auto stats = JSONSchemaGrammarCache::Global().GetStats();
-  return JSONSchemaCacheStats{
-      stats.hits,
-      stats.misses,
-      stats.evictions,
-      stats.num_entries,
-      stats.memory_bytes,
-      stats.max_memory_bytes
-  };
-}
-
 Grammar Grammar::FromRegex(const std::string& regex, bool print_converted_ebnf) {
   auto ebnf_string = RegexToEBNF(regex);
   if (print_converted_ebnf) {

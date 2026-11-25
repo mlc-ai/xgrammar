@@ -466,3 +466,27 @@ class GrammarFunctor:
         return Grammar._create_from_handle(
             _core.testing.grammar_functor.repetition_normalizer(grammar._handle)
         )
+
+
+def _set_json_schema_cache_max_memory(max_memory_bytes: int) -> None:
+    """Set the memory budget of the process-wide cache of grammars converted from JSON schemas.
+    0 disables (and empties) it, and -1 removes the bound. The default is 64 MiB."""
+    _core.testing._set_json_schema_cache_max_memory(max_memory_bytes)
+
+
+def _get_json_schema_cache_max_memory() -> int:
+    """Get the memory budget of the JSON schema grammar cache, in bytes (-1 means unbounded)."""
+    return int(_core.testing._get_json_schema_cache_max_memory())
+
+
+def _clear_json_schema_cache() -> None:
+    """Remove every entry from the JSON schema grammar cache and reset its counters."""
+    _core.testing._clear_json_schema_cache()
+
+
+def _get_json_schema_cache_stats() -> Dict[str, int]:
+    """Get the counters of the JSON schema grammar cache: hits, misses, evictions, num_entries,
+    memory_bytes (estimated) and max_memory_bytes."""
+    names = ("hits", "misses", "evictions", "num_entries", "memory_bytes", "max_memory_bytes")
+    values = _core.testing._get_json_schema_cache_stats()
+    return {name: int(value) for name, value in zip(names, values)}
