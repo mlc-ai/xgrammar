@@ -537,6 +537,8 @@ class JSONSchemaConverter {
   void AddHelperRules();
 
   std::unordered_map<std::string, int32_t> uri_to_rule_id_;  // For circular reference handling
+  // References whose chain of pure $ref hops is known to end in schema content.
+  std::unordered_set<std::string> acyclic_ref_uris_;
   RefResolver ref_resolver_;  // Resolves $ref URI to SchemaSpecPtr at generate time
 
   // Trie over property names, for key patterns that exclude specific properties

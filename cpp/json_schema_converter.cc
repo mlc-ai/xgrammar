@@ -3552,9 +3552,12 @@ SchemaSpecPtr JSONSchemaConverter::ResolveRefRejectingCycles(
   // rules (R ::= R), i.e. a grammar that accepts nothing, so reject it as a schema error instead.
   SchemaSpecPtr resolved = ResolveRefSchema(spec, rule_name);
   std::vector<std::string> chain{spec.uri};
+  std::unordered_set<std::string> on_chain{spec.uri};
   SchemaSpecPtr target = resolved;
   while (const auto* next_ref = std::get_if<RefSpec>(&target->spec)) {
-    bool seen = std::find(chain.begin(), chain.end(), next_ref->uri) != chain.end();
+    // The rest of the chain was walked before and ends in schema content.
+    if (acyclic_ref_uris_.count(next_ref->uri)) break;
+    bool seen = !on_chain.insert(next_ref->uri).second;
     chain.push_back(next_ref->uri);
     if (seen) {
       std::string chain_str;
@@ -3563,6 +3566,7 @@ SchemaSpecPtr JSONSchemaConverter::ResolveRefRejectingCycles(
     }
     target = ResolveRefSchema(*next_ref, rule_name);
   }
+  acyclic_ref_uris_.insert(chain.begin(), chain.end());
   return resolved;
 }
 
