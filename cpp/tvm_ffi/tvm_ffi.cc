@@ -1058,6 +1058,22 @@ TVM_FFI_STATIC_INIT_BLOCK() {
           []() { return static_cast<int64_t>(GetMaxRecursionDepth()); }
       )
       .def(
+          "xgrammar.tvm_ffi_binding.config.set_json_schema_cache_enabled",
+          [](bool enabled) { SetJSONSchemaCacheEnabled(enabled); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.config.get_json_schema_cache_enabled",
+          []() { return GetJSONSchemaCacheEnabled(); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.config.set_json_schema_cache_limit_bytes",
+          [](int64_t limit_bytes) { SetJSONSchemaCacheLimitBytes(limit_bytes); }
+      )
+      .def(
+          "xgrammar.tvm_ffi_binding.config.get_json_schema_cache_limit_bytes",
+          []() { return GetJSONSchemaCacheLimitBytes(); }
+      )
+      .def(
           "xgrammar.tvm_ffi_binding.config.get_serialization_version",
           []() { return ffi::String(GetSerializationVersion()); }
       )

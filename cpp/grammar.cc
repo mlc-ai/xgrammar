@@ -14,6 +14,7 @@
 #include "grammar_parser.h"
 #include "grammar_printer.h"
 #include "json_schema_converter.h"
+#include "json_schema_grammar_cache.h"
 #include "lark_converter.h"
 #include "regex_converter.h"
 #include "structural_tag.h"
@@ -56,9 +57,10 @@ Grammar Grammar::FromJSONSchema(
     bool print_converted_ebnf,
     bool any_order
 ) {
-  auto grammar = GrammarNormalizer::Apply(JSONSchemaToGrammar(
+  auto shared = JSONSchemaToNormalizedGrammar(
       schema, any_whitespace, indent, separators, strict_mode, max_whitespace_cnt, any_order
-  ));
+  );
+  Grammar grammar(std::make_shared<Grammar::Impl>(*shared.operator->()));
   if (print_converted_ebnf) {
     XGRAMMAR_LOG(INFO) << "Converted EBNF: " << grammar.ToString() << std::endl;
   }
