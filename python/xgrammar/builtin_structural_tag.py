@@ -1,4 +1,6 @@
+import json
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple, Union
+from urllib.parse import unquote
 
 from pydantic import TypeAdapter
 
@@ -214,7 +216,7 @@ def get_model_structural_tag(
         free-text spans constrained to exclude those tokens. Set to ``False``
         to allow them to appear as plain text. For models that have no special
         tokens to exclude (such as ``"harmony"``), this has no effect.
-        For Kimi-K3, this also applies to tool-argument string values without
+        For Kimi-K3, Gemma 4, Muse and Inkling 2, this also applies to tool-argument string values without
         ``pattern``/``format`` and to property names, nested JSON strings included;
         ``minLength``/``maxLength`` on such strings are dropped with a warning.
     max_whitespace_cnt : Optional[int]
@@ -235,7 +237,7 @@ def get_model_structural_tag(
     token_markers : bool
         Whether to match the control markers (``<tool_call>``, ``</think>``, ...) as their
         dedicated tokens instead of as strings, for output parsers that recognise the markers by
-        token ID. Supported for ``"glm_4_7"``, ``"qwen_3"``,
+        token ID. Supported for ``"glm_4_7"``, ``"inkling_2"``, ``"muse"``, ``"qwen_3"``,
         ``"qwen_3_5"`` and ``"qwen_3_coder"``. Default: ``False``.
 
     Notes
@@ -3457,6 +3459,229 @@ def get_muse_structural_tag(
     if reasoning == "enabled":
         elements.insert(0, _text_message("self"))
     return StructuralTag(format=SequenceFormat(elements=elements))
+
+
+_INKLING_2_MARKER_TOKENS = [
+    "<|message_model|>",
+    "<|message_user|>",
+    "<|message_system|>",
+    "<|message_tool|>",
+    "<|content_text|>",
+    "<|content_thinking|>",
+    "<|content_image|>",
+    "<|content_xml|>",
+    "<|content_tool_error|>",
+    "<|content_invoke_tool_json|>",
+    "<|content_invoke_tool_text|>",
+    "<|end_message|>",
+    "<|content_model_end_sampling|>",
+    "<|begin_of_text|>",
+    "<|endoftext|>",
+]
+
+
+_SCHEMA_ANNOTATIONS = {"$defs", "definitions", "$schema", "$id", "$comment", "title", "description"}
+
+
+def _inkling_2_arguments_schema(
+    parameters: Union[Dict[str, Any], bool]
+) -> Union[Dict[str, Any], bool]:
+    """Match the chat template, which renders ``args`` as an object with sorted top-level keys.
+
+    Only the top-level object is changed: a root ``$ref`` and the members of a root
+    ``anyOf``/``oneOf``/``allOf`` are resolved and their ``properties`` sorted. Nested schemas,
+    including the ``$defs`` that nested properties refer to, keep their order.
+    """
+    if parameters is True or parameters == {}:
+        return {"type": "object"}
+    if not isinstance(parameters, dict):
+        return parameters
+    schema = _inkling_2_sorted_object(parameters, parameters)
+    for key in ("anyOf", "oneOf", "allOf"):
+        members = schema.get(key)
+        if isinstance(members, list):
+            sorted_members = [_inkling_2_sorted_object(member, parameters) for member in members]
+            schema = {**schema, key: sorted_members}
+    return schema
+
+
+def _inkling_2_sorted_object(schema: Any, root: Dict[str, Any]) -> Any:
+    # Inline a $ref only when its siblings are annotations, so no keyword changes meaning,
+    # and only when the target has properties to sort.
+    resolved = schema
+    for _ in range(8):
+        if not isinstance(resolved, dict) or not isinstance(resolved.get("$ref"), str):
+            break
+        if set(resolved) - {"$ref"} - _SCHEMA_ANNOTATIONS:
+            break
+        target = _resolve_json_pointer(root, resolved["$ref"])
+        if not isinstance(target, dict):
+            break
+        own = {key: value for key, value in target.items() if key not in ("$defs", "definitions")}
+        resolved = {**own, **{key: value for key, value in resolved.items() if key != "$ref"}}
+    if isinstance(resolved, dict) and isinstance(resolved.get("properties"), dict):
+        return {**resolved, "properties": dict(sorted(resolved["properties"].items()))}
+    return schema
+
+
+def _resolve_json_pointer(root: Dict[str, Any], ref: str) -> Any:
+    """Resolve a local ``$ref`` the way the JSON schema converter does."""
+    if not ref.startswith("#"):
+        return None
+    pointer = unquote(ref[1:])
+    if not pointer:
+        return root
+    if not pointer.startswith("/"):
+        return None
+    node: Any = root
+    for part in pointer[1:].split("/"):
+        part = part.replace("~1", "/").replace("~0", "~")
+        if isinstance(node, dict) and part in node:
+            node = node[part]
+        elif isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        else:
+            return None
+    return node
+
+
+@register_model_structural_tag("inkling_2", marker_tokens=_INKLING_2_MARKER_TOKENS)
+def get_inkling_2_structural_tag(
+    tools: Optional[List[FunctionToolParam]] = None,
+    builtin_tools: Optional[List[BuiltinToolParam]] = None,
+    tool_choice: Literal["auto", "required", "forced"] = "auto",
+    reasoning: Literal["enabled", "disabled", "auto"] = "enabled",
+    any_order: bool = False,
+    exclude_special_tokens: bool = True,
+    max_whitespace_cnt: Optional[int] = None,
+    parallel_tool_calls: bool = True,
+    **kwargs: Any,
+) -> StructuralTag:
+    """Get Inkling 2 style structural tag format.
+
+    Corresponding model key: ``"inkling_2"``.
+
+    Reference: https://huggingface.co/thinkingmachines/Inkling-2-Mini/blob/main/chat_template.jinja
+
+    An Inkling 2 turn is a sequence of blocks. The chat template renders no
+    generation prompt, so the model opens every block itself::
+
+        <|message_model|><|content_thinking|>REASONING<|end_message|>
+        <|message_model|><|content_text|>ANSWER<|end_message|>
+        <|message_model|>NAME<|content_invoke_tool_json|>{"name":"NAME","args":{...}}<|end_message|>
+
+    (shown one block per line; there is no newline between blocks). The
+    thinking block comes first, then at most one text block, then one block per
+    tool call. The template writes one text block per text part of list
+    content; several text blocks in one turn are not accepted.
+    ``<|content_model_end_sampling|>`` ends the turn; it is the stop token and
+    therefore not part of the structural tag.
+
+    Arguments are a JSON object. As in the template, its top-level keys are
+    sorted by code point, also through a root ``$ref`` or ``anyOf``/``oneOf``/
+    ``allOf``, while nested keys keep the schema's order. Extra keys that
+    ``additionalProperties`` or ``patternProperties`` allow must follow the
+    declared keys; set ``any_order`` to accept them in sorted order too. With
+    ``exclude_special_tokens``, the Inkling 2 special tokens cannot appear in
+    the thinking text, the answer text or argument strings.
+
+    ``reasoning="enabled"`` requires the thinking block, ``"auto"`` makes it
+    optional, and ``"disabled"`` forbids it. The model may open the thinking
+    block even with ``reasoning_effort="none"``, so ``"disabled"`` can force it
+    away from its usual output.
+
+    Parameters are normalized by :func:`get_model_structural_tag` before this
+    function is called:
+
+    - ``tools``: a list of function tools. Each tool should have a ``function``
+      object containing ``name`` and ``parameters`` fields.
+    - ``reasoning``: selects ``"enabled"``, ``"disabled"``, or optional
+      ``"auto"`` reasoning.
+
+    Supported models:
+
+    - Inkling-2-Mini
+    - Inkling-2-Small
+
+    Returns
+    -------
+    StructuralTag
+        A structural tag for Inkling 2 reasoning and function calling.
+    """
+    if builtin_tools:
+        raise ValueError("Inkling 2 does not support builtin tools.")
+
+    MESSAGE = "<|message_model|>"
+    END_OF_MESSAGE = "<|end_message|>"
+    text_excludes = _text_excludes(exclude_special_tokens, _INKLING_2_MARKER_TOKENS)
+
+    def _call_block(tool: FunctionToolParam) -> TagFormat:
+        name = tool.function.name
+        return TagFormat(
+            begin=(
+                f"{MESSAGE}{name}<|content_invoke_tool_json|>"
+                f'{{"name":{json.dumps(name, ensure_ascii=False)},"args":'
+            ),
+            content=JSONSchemaFormat(
+                json_schema=_inkling_2_arguments_schema(_get_function_parameters(tool.function)),
+                any_order=any_order,
+                excludes=text_excludes,
+                max_whitespace_cnt=max_whitespace_cnt,
+            ),
+            end="}" + END_OF_MESSAGE,
+        )
+
+    tools = tools or []
+
+    def _calls(at_least_one: bool) -> TagsWithSeparatorFormat:
+        return TagsWithSeparatorFormat(
+            tags=[_call_block(tool) for tool in tools],
+            separator="",
+            at_least_one=at_least_one,
+            stop_after_first=not parallel_tool_calls,
+        )
+
+    text_block = TagFormat(
+        begin=MESSAGE + "<|content_text|>",
+        content=AnyTextFormat(excludes=text_excludes),
+        end=END_OF_MESSAGE,
+    )
+    suffix_tag: Format
+    if tool_choice == "forced":
+        if not tools:
+            raise ValueError("Forced tool choice must resolve to exactly one tool.")
+        suffix_tag = SequenceFormat(
+            elements=[OptionalFormat(content=text_block), _call_block(tools[0])]
+        )
+    elif tool_choice == "required":
+        if not tools:
+            raise ValueError("Required tool choice needs at least one function tool.")
+        suffix_tag = SequenceFormat(
+            elements=[OptionalFormat(content=text_block), _calls(at_least_one=True)]
+        )
+    elif tool_choice == "auto":
+        if tools:
+            # The answer, optionally followed by tool calls, or tool calls alone.
+            suffix_tag = OrFormat(
+                elements=[
+                    SequenceFormat(elements=[text_block, _calls(at_least_one=False)]),
+                    _calls(at_least_one=True),
+                ]
+            )
+        else:
+            suffix_tag = text_block
+    else:
+        raise ValueError(f"Unsupported tool choice: {tool_choice}")
+
+    prefix_tag = _build_reasoning_prefix(
+        reasoning_mode=reasoning,
+        think_tag_begin=MESSAGE + "<|content_thinking|>",
+        think_tag_end=END_OF_MESSAGE,
+        exclude_special_tokens=exclude_special_tokens,
+        reasoning_exclude_tokens=_INKLING_2_MARKER_TOKENS,
+        prompt_end_with_think=False,
+    )
+    return _assemble_structural_tag(prefix_tag, suffix_tag)
 
 
 # Backward-compatible alias

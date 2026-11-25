@@ -49,6 +49,7 @@ tokenizer_path__vocab_type__prepend_space = [
     ("XiaomiMiMo/MiMo-V2.6-Pro-RL", xgr.VocabType.BYTE_LEVEL, False),
     ("XiaomiMiMo/MiMo-V2.6-Flash-RL", xgr.VocabType.BYTE_LEVEL, False),
     ("meta-models/Muse-Spark-Open-816B-A42B", xgr.VocabType.BYTE_LEVEL, False),
+    ("thinkingmachines/Inkling-2-Mini", xgr.VocabType.BYTE_LEVEL, False),
     ("deepseek-ai/DeepSeek-R1-Distill-Qwen-7B", xgr.VocabType.BYTE_LEVEL, False),
     ("deepseek-ai/DeepSeek-R1-Distill-Llama-8B", xgr.VocabType.BYTE_LEVEL, False),
     ("openGPT-X/Teuken-7B-instruct-v0.6", xgr.VocabType.BYTE_FALLBACK, True),

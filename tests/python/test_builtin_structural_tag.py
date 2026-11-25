@@ -294,6 +294,7 @@ def test_reasoning_boolean_aliases(boolean_value: bool, mode: Literal["enabled",
         "deepseek_v4_1",
         "cohere",
         "exaone",
+        "inkling_2",
     ],
 )
 def test_reasoning_auto_builds_for_every_model(model: str):
@@ -319,6 +320,7 @@ def test_reasoning_auto_builds_for_every_model(model: str):
         "deepseek_v4_1",
         "cohere",
         "exaone",
+        "inkling_2",
     ],
 )
 def test_reasoning_auto_uses_an_optional_complete_prefix(model: str):
@@ -1532,8 +1534,12 @@ _EXCLUDE_TOKEN_MODELS = [
     "glm_4_7",
     "cohere",
     "exaone",
+    "inkling_2",
 ]
-_EXPECTED_EXCLUDE_TOKENS = {"cohere": ["<|START_THINKING|>", "<|END_THINKING|>"]}
+_EXPECTED_EXCLUDE_TOKENS = {
+    "cohere": ["<|START_THINKING|>", "<|END_THINKING|>"],
+    "inkling_2": ["<|message_model|>", "<|content_text|>", "<|end_message|>"],
+}
 
 
 @pytest.mark.parametrize("model", _EXCLUDE_TOKEN_MODELS)
@@ -2557,6 +2563,7 @@ _ANY_ORDER_MODELS = [
     "glm_4_7",
     "harmony",
     "exaone",
+    "inkling_2",
 ]
 
 
@@ -3615,6 +3622,346 @@ def test_muse_argument_markers_follow_exclude_special_tokens():
     assert _muse_e2e_accepts(grammar, response)
 
 
+# ---------- Test: Inkling 2 ----------
+
+_INKLING_2_SCHEMA = {
+    "type": "object",
+    "properties": {"query": {"type": "string"}, "limit": {"type": "integer", "minimum": 1}},
+    "required": ["query", "limit"],
+    "additionalProperties": False,
+}
+_INKLING_2_TOOLS = [
+    {"type": "function", "function": {"name": name, "parameters": _INKLING_2_SCHEMA}}
+    for name in ("search", "web.find")
+]
+_INKLING_2_THINKING = "<|message_model|><|content_thinking|>Plan.\n<|end_message|>"
+_INKLING_2_ANSWER = "<|message_model|><|content_text|>Answer.<|end_message|>"
+# The chat template renders the top-level argument keys sorted by name.
+_INKLING_2_ARGS = '{"limit":2,"query":"北京 \\"quoted\\"\\n"}'
+
+
+def _inkling_2_call(name: str = "search", args: str = _INKLING_2_ARGS) -> str:
+    return (
+        f"<|message_model|>{name}<|content_invoke_tool_json|>"
+        f'{{"name":"{name}","args":{args}}}<|end_message|>'
+    )
+
+
+def _inkling_2_accepts(output: str, tools: Any = _INKLING_2_TOOLS, **kwargs: Any) -> bool:
+    tag = get_model_structural_tag("inkling_2", tools=tools, **kwargs)
+    return _is_grammar_accept_string(xgr.Grammar.from_structural_tag(tag), output)
+
+
+@pytest.mark.parametrize("reasoning", ["enabled", "disabled", "auto"])
+@pytest.mark.parametrize("policy", ["auto", "required", "forced", "none"])
+def test_inkling_2_reasoning_and_tool_choice(reasoning, policy):
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    grammar = xgr.Grammar.from_structural_tag(
+        get_model_structural_tag(
+            "inkling_2", tools=_INKLING_2_TOOLS, reasoning=reasoning, tool_choice=choice
+        )
+    )
+
+    def accepts(output: str) -> bool:
+        return _is_grammar_accept_string(grammar, output)
+
+    prefix = _INKLING_2_THINKING if reasoning != "disabled" else ""
+    call = _inkling_2_call()
+    assert accepts(prefix + _INKLING_2_ANSWER) == (policy in ("auto", "none"))
+    assert accepts(prefix + call) == (policy != "none")
+    # The template renders the text block before the tool calls.
+    assert accepts(prefix + _INKLING_2_ANSWER + call) == (policy != "none")
+    assert accepts(prefix + call + call) == (policy in ("auto", "required"))
+    assert accepts(prefix + _inkling_2_call("web.find")) == (policy in ("auto", "required"))
+    # A turn has at most one text block, nothing follows the tool calls, and it is not empty.
+    assert not accepts(prefix + _INKLING_2_ANSWER + _INKLING_2_ANSWER)
+    assert not accepts(prefix + call + _INKLING_2_ANSWER)
+    assert not accepts(prefix)
+    # The model opens the thinking block itself: required when enabled, optional when auto
+    # and forbidden when disabled.
+    body = _INKLING_2_ANSWER if policy in ("auto", "none") else call
+    assert accepts(body) == (reasoning != "enabled")
+    assert accepts(_INKLING_2_THINKING + body) == (reasoning != "disabled")
+    assert not accepts(_INKLING_2_THINKING * 2 + body)
+    assert not accepts("Plan.\n<|end_message|>" + body)
+
+
+@pytest.mark.parametrize("policy", ["auto", "required", "forced"])
+@pytest.mark.parametrize(
+    "output",
+    [
+        _inkling_2_call("unknown"),
+        # The header and the body must name the same tool.
+        _inkling_2_call().replace("<|message_model|>search", "<|message_model|>web.find"),
+        _inkling_2_call().replace("<|message_model|>search", "<|message_model|>"),
+        _inkling_2_call().replace("<|message_model|>", ""),
+        _inkling_2_call().replace("<|content_invoke_tool_json|>", "<|content_invoke_tool_text|>"),
+        _inkling_2_call().replace('"args"', '"arguments"'),
+        _inkling_2_call(args='{"limit":0,"query":"x"}'),
+        _inkling_2_call(args='{"limit":"2","query":"x"}'),
+        _inkling_2_call(args='{"limit":2}'),
+        _inkling_2_call(args='{"limit":2,"query":"x","extra":1}'),
+        _inkling_2_call().replace("<|end_message|>", ""),
+        # <|content_model_end_sampling|> is the stop token, not part of the structural tag.
+        _inkling_2_call() + "<|content_model_end_sampling|>",
+        _inkling_2_call() + "trailing text",
+    ],
+)
+def test_inkling_2_rejects_invalid_calls(policy, output):
+    choice = {"type": "function", "function": {"name": "search"}} if policy == "forced" else policy
+    assert not _inkling_2_accepts(output, reasoning="disabled", tool_choice=choice)
+
+
+@pytest.mark.parametrize("any_order", [False, True])
+def test_inkling_2_argument_key_order(any_order):
+    """Top-level keys follow the template's sorted order; nested keys keep the declared order."""
+    schema = {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string"},
+            "filter": {
+                "type": "object",
+                "properties": {"unit": {"type": "string"}, "days": {"type": "integer"}},
+                "required": ["unit", "days"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["query", "filter"],
+        "additionalProperties": False,
+    }
+    tools = [{"type": "function", "function": {"name": "search", "parameters": schema}}]
+    original = copy.deepcopy(tools)
+
+    def accepts(args: str) -> bool:
+        return _inkling_2_accepts(
+            _inkling_2_call(args=args),
+            tools=tools,
+            reasoning="disabled",
+            tool_choice="required",
+            any_order=any_order,
+        )
+
+    assert accepts('{"filter":{"unit":"C","days":2},"query":"x"}')
+    assert accepts('{"query":"x","filter":{"unit":"C","days":2}}') == any_order
+    assert accepts('{"filter":{"days":2,"unit":"C"},"query":"x"}') == any_order
+    # The caller's schema is not reordered in place.
+    assert tools == original
+    assert list(tools[0]["function"]["parameters"]["properties"]) == ["query", "filter"]
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "<|message_model|>",
+        "<|message_user|>",
+        "<|content_text|>",
+        "<|content_thinking|>",
+        "<|content_invoke_tool_json|>",
+        "<|end_message|>",
+        "<|content_model_end_sampling|>",
+    ],
+)
+def test_inkling_2_free_text_excludes_markers(marker):
+    answer = f"<|message_model|><|content_text|>before {marker} after<|end_message|>"
+    thinking = (
+        f"<|message_model|><|content_thinking|>before {marker} after<|end_message|>"
+        + _INKLING_2_ANSWER
+    )
+    assert not _inkling_2_accepts(answer, reasoning="disabled")
+    assert not _inkling_2_accepts(thinking, reasoning="enabled")
+    # <|end_message|> still closes a block when markers are otherwise allowed.
+    allowed = marker != "<|end_message|>"
+    assert _inkling_2_accepts(answer, reasoning="disabled", exclude_special_tokens=False) == allowed
+    assert (
+        _inkling_2_accepts(thinking, reasoning="enabled", exclude_special_tokens=False) == allowed
+    )
+
+
+def test_inkling_2_argument_strings_follow_exclude_special_tokens():
+    output = _inkling_2_call(args='{"limit":2,"query":"a <|end_message|> b"}')
+    kwargs: Dict[str, Any] = {"reasoning": "disabled", "tool_choice": "required"}
+    assert not _inkling_2_accepts(output, **kwargs)
+    assert _inkling_2_accepts(output, exclude_special_tokens=False, **kwargs)
+
+
+@pytest.mark.parametrize(
+    "parameters", [None, {}, {"type": "object", "properties": {}, "additionalProperties": False}]
+)
+def test_inkling_2_empty_arguments(parameters):
+    tools = [{"type": "function", "function": {"name": "run", "parameters": parameters}}]
+    output = _inkling_2_call("run", "{}")
+    assert _inkling_2_accepts(output, tools=tools, reasoning="disabled", tool_choice="required")
+
+
+@pytest.mark.parametrize(
+    "function",
+    [
+        {"name": "search"},
+        {"name": "search", "parameters": {}},
+        {"name": "search", "parameters": _INKLING_2_SCHEMA, "strict": False},
+    ],
+)
+def test_inkling_2_unconstrained_parameters(function):
+    tools = [{"type": "function", "function": function}]
+
+    def accepts(args: str) -> bool:
+        return _inkling_2_accepts(
+            _inkling_2_call(args=args), tools=tools, reasoning="disabled", tool_choice="required"
+        )
+
+    assert accepts('{"extra":["free",1]}')
+    # The template renders arguments only as an object.
+    for args in ("null", '"text"', "[1]", "2"):
+        assert not accepts(args)
+
+
+_INKLING_2_ZA = {
+    "type": "object",
+    "properties": {"z": {"type": "string"}, "a": {"type": "string"}},
+    "required": ["z", "a"],
+    "additionalProperties": False,
+}
+_INKLING_2_Q = {
+    "type": "object",
+    "properties": {"q": {"type": "integer"}},
+    "required": ["q"],
+    "additionalProperties": False,
+}
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        pytest.param({"$ref": "#/$defs/ZA", "$defs": {"ZA": _INKLING_2_ZA}}, id="ref"),
+        pytest.param({"anyOf": [_INKLING_2_ZA, _INKLING_2_Q]}, id="anyOf"),
+        pytest.param(
+            {
+                "oneOf": [{"$ref": "#/$defs/ZA"}, {"$ref": "#/$defs/Q"}],
+                "$defs": {"ZA": _INKLING_2_ZA, "Q": _INKLING_2_Q},
+            },
+            id="oneOf-refs",
+        ),
+        pytest.param({"allOf": [_INKLING_2_ZA]}, id="allOf"),
+        pytest.param({"$ref": "#/$defs/Z%20A", "$defs": {"Z A": _INKLING_2_ZA}}, id="ref-percent"),
+        pytest.param(
+            {"$ref": "#/$defs/U/anyOf/0", "$defs": {"U": {"anyOf": [_INKLING_2_ZA]}}},
+            id="ref-array-index",
+        ),
+        pytest.param(
+            {
+                "$ref": "#/$defs/Root",
+                "$defs": {
+                    # The target's own $defs must not hide the root's.
+                    "Root": {
+                        **_INKLING_2_ZA,
+                        "$defs": {},
+                        "properties": {"z": {"$ref": "#/$defs/Shared"}, "a": {"type": "string"}},
+                    },
+                    "Shared": {"type": "string"},
+                },
+            },
+            id="ref-target-with-defs",
+        ),
+    ],
+)
+def test_inkling_2_top_level_key_order_through_root_ref_and_combinators(schema):
+    tools = [{"type": "function", "function": {"name": "search", "parameters": schema}}]
+    original = copy.deepcopy(tools)
+
+    def accepts(args: str) -> bool:
+        return _inkling_2_accepts(
+            _inkling_2_call(args=args), tools=tools, reasoning="disabled", tool_choice="required"
+        )
+
+    assert accepts('{"a":"1","z":"2"}')
+    assert not accepts('{"z":"2","a":"1"}')
+    assert tools == original
+
+
+def test_inkling_2_root_ref_keeps_nested_key_order():
+    schema = {
+        "$ref": "#/$defs/Root",
+        "$defs": {
+            "Root": {
+                "type": "object",
+                "properties": {"z": {"type": "string"}, "n": {"$ref": "#/$defs/Nested"}},
+                "required": ["z", "n"],
+                "additionalProperties": False,
+            },
+            "Nested": {
+                "type": "object",
+                "properties": {"y": {"type": "string"}, "b": {"type": "string"}},
+                "required": ["y", "b"],
+                "additionalProperties": False,
+            },
+        },
+    }
+    tools = [{"type": "function", "function": {"name": "search", "parameters": schema}}]
+
+    def accepts(args: str) -> bool:
+        return _inkling_2_accepts(
+            _inkling_2_call(args=args), tools=tools, reasoning="disabled", tool_choice="required"
+        )
+
+    assert accepts('{"n":{"y":"1","b":"2"},"z":"3"}')
+    assert not accepts('{"n":{"b":"2","y":"1"},"z":"3"}')
+
+
+def test_inkling_2_root_ref_with_sibling_keywords_keeps_required_keys():
+    schema = {
+        "$ref": "#/$defs/A",
+        "properties": {"b": {"type": "string"}},
+        "required": ["b"],
+        "$defs": {
+            "A": {
+                "type": "object",
+                "properties": {"z": {"type": "string"}, "c": {"type": "string"}},
+            }
+        },
+    }
+    tools = [{"type": "function", "function": {"name": "search", "parameters": schema}}]
+    output = _inkling_2_call(args='{"c":"2","z":"3"}')
+    assert not _inkling_2_accepts(output, tools=tools, reasoning="disabled", tool_choice="required")
+
+
+def test_inkling_2_shared_refs_do_not_expand_the_schema():
+    branches = [{"$ref": "#/$defs/A"}] * 8
+    schema = {"anyOf": branches, "$defs": {"A": {"anyOf": branches}}}
+    tools = [{"type": "function", "function": {"name": "search", "parameters": schema}}]
+    tag = get_model_structural_tag("inkling_2", tools=tools, tool_choice="required")
+    [node] = _collect_json_schema_nodes(tag)
+    assert len(json.dumps(node.json_schema)) < 4 * len(json.dumps(schema))
+
+
+def test_inkling_2_top_level_keys_sort_by_code_point():
+    """The template's dictsort is case-sensitive, so uppercase keys come first."""
+    schema = {
+        "type": "object",
+        "properties": {"b": {"type": "string"}, "B": {"type": "string"}},
+        "required": ["b", "B"],
+        "additionalProperties": False,
+    }
+    tools = [{"type": "function", "function": {"name": "search", "parameters": schema}}]
+    kwargs: Dict[str, Any] = {"tools": tools, "reasoning": "disabled", "tool_choice": "required"}
+    assert _inkling_2_accepts(_inkling_2_call(args='{"B":"1","b":"2"}'), **kwargs)
+    assert not _inkling_2_accepts(_inkling_2_call(args='{"b":"2","B":"1"}'), **kwargs)
+
+
+def test_inkling_2_tool_name_is_json_encoded_in_the_call_body():
+    name = 'say"天气'
+    tools = [{"type": "function", "function": {"name": name, "parameters": None}}]
+    output = (
+        f"<|message_model|>{name}<|content_invoke_tool_json|>"
+        '{"name":"say\\"天气","args":{}}<|end_message|>'
+    )
+    assert _inkling_2_accepts(output, tools=tools, reasoning="disabled", tool_choice="required")
+
+
+def test_inkling_2_rejects_builtin_tools():
+    with pytest.raises(ValueError, match="does not support builtin tools"):
+        get_model_structural_tag("inkling_2", tools=[{"type": "web_search"}])
+
+
 # ---------- Test: parallel_tool_calls ----------
 
 _PARALLEL_TOOLS = make_tools(["t1", "t2"])
@@ -3647,6 +3994,12 @@ _parallel_tool_calls_cases = [
         _MUSE_T_CALL.format(n="t1"),
         _MUSE_T_CALL.format(n="t1") + "<|eom|><|start|>assistant" + _MUSE_T_CALL.format(n="t2"),
         id="muse",
+    ),
+    pytest.param(
+        "inkling_2",
+        _inkling_2_call("t1", '{"q":"v"}'),
+        _inkling_2_call("t1", '{"q":"v"}') + _inkling_2_call("t2", '{"q":"v"}'),
+        id="inkling_2",
     ),
     pytest.param(
         "mimo",
