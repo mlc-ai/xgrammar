@@ -4126,9 +4126,12 @@ bool XMLToolCallingConverter::RegexCanMatchStringContaining(
 int32_t XMLToolCallingConverter::XMLPatternString(
     const std::string& pattern, const std::string& rule_name
 ) {
+  // Preserve the strict validation of the CFG path before the FSM parser can discard
+  // unsupported assertions such as lookahead. Reuse the expansion if exclusion is unnecessary.
+  const std::string pattern_ebnf = RegexToEBNF(pattern);
   const std::string& suffix = xml_wrapper_.parameter_suffix;
   if (suffix.empty() || !RegexCanMatchStringContaining(pattern, suffix)) {
-    return RegexExpression(pattern, false, /*force_cfg_expansion=*/true);
+    return AddSubGrammar(Grammar::FromEBNF(pattern_ebnf));
   }
   // Exclude only the XML framing delimiter. Caller-supplied excludes_ deliberately do not apply
   // to a pattern: the pattern is the schema's own contract for the string's content.

@@ -4331,6 +4331,42 @@ def test_xml_pattern_string_cannot_contain_parameter_suffix(
     )
 
 
+@pytest.mark.parametrize("json_format,parameter_begin,parameter_end", _XML_PATTERN_PARAMETER_CASES)
+@pytest.mark.parametrize("pattern", ["(?=a).*", "(?!a).*", "(?:x|(?=a).*)"])
+def test_xml_pattern_string_rejects_lookahead(
+    json_format: str, parameter_begin: str, parameter_end: str, pattern: str
+):
+    schema = {
+        "type": "object",
+        "properties": {"code": {"type": "string", "pattern": pattern}},
+        "required": ["code"],
+        "additionalProperties": False,
+    }
+    with pytest.raises(RuntimeError, match="Lookahead is not supported yet"):
+        _json_schema_to_ebnf(json.dumps(schema), json_format=json_format)
+
+
+@pytest.mark.parametrize("json_format,parameter_begin,parameter_end", _XML_PATTERN_PARAMETER_CASES)
+@pytest.mark.parametrize(
+    "pattern,value",
+    [(r"^\(\?=a\).*$", "(?=a)hello"), (r"^[()?=!a].*$", "!hello")],
+)
+def test_xml_pattern_string_accepts_literal_lookahead_characters(
+    json_format: str, parameter_begin: str, parameter_end: str, pattern: str, value: str
+):
+    schema = {
+        "type": "object",
+        "properties": {"code": {"type": "string", "pattern": pattern}},
+        "required": ["code"],
+        "additionalProperties": False,
+    }
+    grammar = Grammar.from_ebnf(_json_schema_to_ebnf(json.dumps(schema), json_format=json_format))
+    assert _is_grammar_accept_string(grammar, f"{parameter_begin}{value}{parameter_end}")
+    assert not _is_grammar_accept_string(
+        grammar, f"{parameter_begin}{value}{parameter_end}{parameter_end}"
+    )
+
+
 def test_qwen_xml_pattern_parameter_cannot_swallow_second_tool_call():
     """Issue #1019 end to end: a pattern value must not absorb a second tool call.
 
