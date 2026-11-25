@@ -14,3 +14,11 @@ Serialization Version
 ---------------------
 
 .. autofunction:: get_serialization_version
+
+JSON Schema Grammar Cache
+-------------------------
+
+.. autofunction:: set_json_schema_cache_enabled
+.. autofunction:: get_json_schema_cache_enabled
+.. autofunction:: set_json_schema_cache_limit_bytes
+.. autofunction:: get_json_schema_cache_limit_bytes

@@ -7,9 +7,13 @@ from .builtin_structural_tag import (
 )
 from .compiler import CompiledGrammar, GrammarCompiler
 from .config import (
+    get_json_schema_cache_enabled,
+    get_json_schema_cache_limit_bytes,
     get_max_recursion_depth,
     get_serialization_version,
     max_recursion_depth,
+    set_json_schema_cache_enabled,
+    set_json_schema_cache_limit_bytes,
     set_max_recursion_depth,
 )
 from .contrib import hf
@@ -38,9 +42,13 @@ __all__ = [
     "testing",
     "CompiledGrammar",
     "GrammarCompiler",
+    "get_json_schema_cache_enabled",
+    "get_json_schema_cache_limit_bytes",
     "get_max_recursion_depth",
     "get_serialization_version",
     "max_recursion_depth",
+    "set_json_schema_cache_enabled",
+    "set_json_schema_cache_limit_bytes",
     "set_max_recursion_depth",
     "hf",
     "DeserializeFormatError",

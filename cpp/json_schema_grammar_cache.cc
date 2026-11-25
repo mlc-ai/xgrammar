@@ -40,7 +40,7 @@ std::size_t JSONSchemaGrammarCache::EstimateEntrySize(
 
 std::optional<Grammar> JSONSchemaGrammarCache::Get(const std::string& key) {
   std::lock_guard<std::mutex> lock(mutex_);
-  if (max_memory_bytes_ == 0) return std::nullopt;
+  if (!enabled_ || max_memory_bytes_ == 0) return std::nullopt;
   auto it = index_.find(std::string_view(key));
   if (it == index_.end()) {
     ++misses_;
@@ -54,7 +54,7 @@ std::optional<Grammar> JSONSchemaGrammarCache::Get(const std::string& key) {
 void JSONSchemaGrammarCache::Put(const std::string& key, const Grammar& grammar) {
   std::size_t size = EstimateEntrySize(key, grammar);
   std::lock_guard<std::mutex> lock(mutex_);
-  if (max_memory_bytes_ == 0) return;
+  if (!enabled_ || max_memory_bytes_ == 0) return;
   // An entry larger than the whole budget would only evict everything else and then itself.
   if (max_memory_bytes_ > 0 && size > static_cast<std::size_t>(max_memory_bytes_)) return;
   auto it = index_.find(std::string_view(key));
@@ -84,6 +84,16 @@ void JSONSchemaGrammarCache::SetMaxMemoryBytes(int64_t max_memory_bytes) {
   std::lock_guard<std::mutex> lock(mutex_);
   max_memory_bytes_ = max_memory_bytes < 0 ? kUnlimited : max_memory_bytes;
   EvictToFit();
+}
+
+void JSONSchemaGrammarCache::SetEnabled(bool enabled) {
+  std::lock_guard<std::mutex> lock(mutex_);
+  enabled_ = enabled;
+  if (!enabled_) {
+    index_.clear();
+    lru_list_.clear();
+    memory_bytes_ = 0;
+  }
 }
 
 void JSONSchemaGrammarCache::Clear() {

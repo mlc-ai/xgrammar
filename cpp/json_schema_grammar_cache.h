@@ -32,19 +32,21 @@ namespace xgrammar {
  * Grammar::FromStructuralTag, and the GrammarCompiler methods that call them.
  *
  * Lifecycle. There is one instance per process (Global()). It is created on first use and is
- * never destroyed. Entries are added after a successful conversion and removed by LRU eviction
- * (or by Clear() and SetMaxMemoryBytes(), which only tests use). It belongs to no Grammar or
+ * never destroyed. Entries are added after a successful conversion and removed by LRU eviction,
+ * by lowering the budget, by disabling the cache, or by Clear(). It belongs to no Grammar or
  * GrammarCompiler, and the compiler's caches (the grammar-level cache of compiled grammars and
  * the rule-level cache of token masks) are separate: GrammarCompiler::ClearCache and
- * cache_limit_bytes do not affect it. Like the rule-level cache, it has no user-facing
- * configuration; its budget is kDefaultMaxMemoryBytes.
+ * cache_limit_bytes do not affect it. Users turn it on or off and set its budget through
+ * SetJSONSchemaCacheEnabled and SetJSONSchemaCacheLimitBytes (xgrammar/config.h). It is enabled
+ * with no memory limit by default, like the rule-level cache.
  *
  * Contents. Converting one schema produces several rules that reference each other (the root
  * rule, one rule per sub-schema, `$defs`/`$ref` targets that may be recursive, and helper rules
  * such as `basic_string`). Rule ids cannot outlive the builder they index into, so an entry is the
  * whole converted sub-grammar as a standalone Grammar. Callers splice it into the grammar they
- * are building with SubGrammarAdder, which copies every rule the root reaches and remaps all rule
- * references in one pass, so recursion and shared helper rules stay consistent in the copy. The
+ * are building with SubGrammarAdder, which first allocates a new id for every rule and then copies
+ * every body with its references remapped, so recursion and shared helper rules stay consistent in
+ * the copy. The
  * per-conversion rule caches inside the converters still handle reuse and recursion within one
  * schema; this cache only decides whether that conversion runs at all.
  *
@@ -56,12 +58,11 @@ namespace xgrammar {
  * never cached.
  *
  * Memory. It is bounded by an estimate of each entry's size (grammar plus key), with the least
- * recently used entries evicted first. A budget of 0 disables the cache, and -1 removes the bound.
+ * recently used entries evicted first. A budget of -1 removes the bound; a budget of 0 keeps
+ * nothing.
  */
 class JSONSchemaGrammarCache {
  public:
-  /*! \brief The default memory budget of the process-wide cache, in bytes. */
-  static constexpr int64_t kDefaultMaxMemoryBytes = 64LL * 1024 * 1024;
   /*! \brief The budget value meaning "no bound". */
   static constexpr int64_t kUnlimited = -1;
 
@@ -74,7 +75,7 @@ class JSONSchemaGrammarCache {
     int64_t max_memory_bytes = 0;
   };
 
-  explicit JSONSchemaGrammarCache(int64_t max_memory_bytes = kDefaultMaxMemoryBytes)
+  explicit JSONSchemaGrammarCache(int64_t max_memory_bytes = kUnlimited)
       : max_memory_bytes_(max_memory_bytes) {}
 
   JSONSchemaGrammarCache(const JSONSchemaGrammarCache&) = delete;
@@ -86,7 +87,18 @@ class JSONSchemaGrammarCache {
   /*! \brief Whether lookups can hit. Callers may skip building a key when this is false. */
   bool Enabled() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    return max_memory_bytes_ != 0;
+    return enabled_ && max_memory_bytes_ != 0;
+  }
+
+  /*!
+   * \brief Turn the cache on or off. Turning it off removes every entry, so a disabled cache holds
+   * no memory; the budget is kept for when it is turned on again.
+   */
+  void SetEnabled(bool enabled);
+
+  bool GetEnabled() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return enabled_;
   }
 
   /*! \brief Look up a key. Counts a hit or a miss and refreshes the entry's LRU position. */
@@ -108,7 +120,7 @@ class JSONSchemaGrammarCache {
     return grammar;
   }
 
-  /*! \brief Set the memory budget in bytes (0 disables, -1 unbounded) and evict to fit it. */
+  /*! \brief Set the memory budget in bytes (-1 unbounded, 0 keeps nothing) and evict to fit it. */
   void SetMaxMemoryBytes(int64_t max_memory_bytes);
 
   int64_t GetMaxMemoryBytes() const {
@@ -136,6 +148,7 @@ class JSONSchemaGrammarCache {
   void EvictToFit();
 
   mutable std::mutex mutex_;
+  bool enabled_ = true;
   int64_t max_memory_bytes_;
   // Most recently used at the front.
   EntryList lru_list_;

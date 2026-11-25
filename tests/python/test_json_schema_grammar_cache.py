@@ -1,8 +1,8 @@
 """Behavior of JSON schema conversion when schemas repeat across conversions.
 
 Converted JSON schema grammars are cached per process and reused by later conversions. These tests
-only check observable behavior: repeated conversions give the same grammars and the grammars stay
-correct. The cache internals (hits, keys, eviction, budget) are tested in
+check observable behavior (repeated conversions give the same grammars and the grammars stay
+correct) and the user settings. The cache internals (hits, keys, eviction, budget) are tested in
 tests/cpp/test_json_schema_grammar_cache.cc.
 """
 
@@ -216,6 +216,49 @@ def test_concurrent_conversions():
     for t in threads:
         t.join()
     assert errors == []
+
+
+@pytest.mark.thread_unsafe
+def test_settings_defaults_and_round_trip():
+    assert xgr.get_json_schema_cache_enabled() is True
+    assert xgr.get_json_schema_cache_limit_bytes() == -1
+    try:
+        xgr.set_json_schema_cache_limit_bytes(0)
+        assert xgr.get_json_schema_cache_limit_bytes() == 0
+        xgr.set_json_schema_cache_limit_bytes(1024 * 1024)
+        assert xgr.get_json_schema_cache_limit_bytes() == 1024 * 1024
+        xgr.set_json_schema_cache_enabled(False)
+        assert xgr.get_json_schema_cache_enabled() is False
+    finally:
+        xgr.set_json_schema_cache_enabled(True)
+        xgr.set_json_schema_cache_limit_bytes(-1)
+
+
+@pytest.mark.thread_unsafe
+def test_invalid_limit_is_rejected():
+    with pytest.raises(RuntimeError):
+        xgr.set_json_schema_cache_limit_bytes(-2)
+    assert xgr.get_json_schema_cache_limit_bytes() == -1
+
+
+@pytest.mark.thread_unsafe
+@pytest.mark.parametrize("setting", ["disabled", "zero_limit", "small_limit"])
+def test_grammars_identical_under_every_setting(setting: str):
+    stag = tools_stag([{"name": f"t{i}", "schema": s} for i, s in enumerate(ALL_SCHEMAS)])
+    expected = stag_to_str(stag)
+    try:
+        if setting == "disabled":
+            xgr.set_json_schema_cache_enabled(False)
+        elif setting == "zero_limit":
+            xgr.set_json_schema_cache_limit_bytes(0)
+        else:
+            # Room for about one tool, so converting the tag evicts as it goes.
+            xgr.set_json_schema_cache_limit_bytes(32 * 1024)
+        assert stag_to_str(stag) == expected
+        assert stag_to_str(stag) == expected
+    finally:
+        xgr.set_json_schema_cache_enabled(True)
+        xgr.set_json_schema_cache_limit_bytes(-1)
 
 
 if __name__ == "__main__":

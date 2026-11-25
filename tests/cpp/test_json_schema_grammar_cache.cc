@@ -141,11 +141,14 @@ std::string ToolsTag(const std::vector<std::string>& schemas, const std::string&
 class JSONSchemaGrammarCacheTest : public ::testing::Test {
  protected:
   void SetUp() override {
+    saved_enabled_ = Cache().GetEnabled();
     saved_budget_ = Cache().GetMaxMemoryBytes();
+    Cache().SetEnabled(true);
     Cache().SetMaxMemoryBytes(JSONSchemaGrammarCache::kUnlimited);
     Cache().Clear();
   }
   void TearDown() override {
+    Cache().SetEnabled(saved_enabled_);
     Cache().SetMaxMemoryBytes(saved_budget_);
     Cache().Clear();
   }
@@ -153,6 +156,7 @@ class JSONSchemaGrammarCacheTest : public ::testing::Test {
   static JSONSchemaGrammarCache::Stats Stats() { return Cache().GetStats(); }
 
  private:
+  bool saved_enabled_ = true;
   int64_t saved_budget_ = 0;
 };
 
@@ -162,7 +166,7 @@ Grammar SmallGrammar(int i) {
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, DefaultBudget) {
-  EXPECT_EQ(JSONSchemaGrammarCache().GetMaxMemoryBytes(), 64LL * 1024 * 1024);
+  EXPECT_EQ(JSONSchemaGrammarCache().GetMaxMemoryBytes(), JSONSchemaGrammarCache::kUnlimited);
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, HitAcrossConversions) {
@@ -304,6 +308,45 @@ TEST_F(JSONSchemaGrammarCacheTest, DisabledCacheKeepsNothing) {
   EXPECT_EQ(Stats().num_entries, 0);
   EXPECT_EQ(Stats().memory_bytes, 0);
   EXPECT_EQ(Stats().hits, 0);
+}
+
+TEST_F(JSONSchemaGrammarCacheTest, TurningOffRemovesEntriesAndKeepsTheLimit) {
+  SetJSONSchemaCacheLimitBytes(1 << 20);
+  Cached(kSimpleSchema);
+  EXPECT_EQ(Stats().num_entries, 1);
+
+  SetJSONSchemaCacheEnabled(false);
+  EXPECT_FALSE(GetJSONSchemaCacheEnabled());
+  EXPECT_FALSE(Cache().Enabled());
+  EXPECT_EQ(Stats().num_entries, 0);
+  EXPECT_EQ(Stats().memory_bytes, 0);
+  // Still converts correctly, without storing anything.
+  EXPECT_EQ(Cached(kTreeSchema), Uncached(kTreeSchema));
+  EXPECT_EQ(Stats().num_entries, 0);
+
+  SetJSONSchemaCacheEnabled(true);
+  EXPECT_EQ(GetJSONSchemaCacheLimitBytes(), 1 << 20);
+  Cached(kTreeSchema);
+  Cached(kTreeSchema);
+  EXPECT_EQ(Stats().num_entries, 1);
+  EXPECT_GE(Stats().hits, 1);
+}
+
+TEST_F(JSONSchemaGrammarCacheTest, LimitThroughTheConfigAPI) {
+  SetJSONSchemaCacheLimitBytes(-1);
+  EXPECT_EQ(GetJSONSchemaCacheLimitBytes(), -1);
+  Cached(kSimpleSchema);
+  Cached(kTreeSchema);
+  EXPECT_EQ(Stats().num_entries, 2);
+
+  // A limit too small for any entry empties the cache and keeps it empty.
+  SetJSONSchemaCacheLimitBytes(64);
+  EXPECT_EQ(Stats().num_entries, 0);
+  EXPECT_EQ(Cached(kSimpleSchema), Uncached(kSimpleSchema));
+  EXPECT_EQ(Stats().num_entries, 0);
+
+  EXPECT_THROW(SetJSONSchemaCacheLimitBytes(-2), std::exception);
+  EXPECT_EQ(GetJSONSchemaCacheLimitBytes(), 64);
 }
 
 TEST_F(JSONSchemaGrammarCacheTest, ConcurrentConversionsWhileTheBudgetChanges) {

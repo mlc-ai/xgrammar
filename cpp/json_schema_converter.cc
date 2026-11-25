@@ -5230,8 +5230,6 @@ std::string JSONSchemaCacheKey(
   for (const auto& exclude : excludes) {
     AppendKeyField(&key, exclude);
   }
-  // The recursion limit decides whether deep schemas convert or fail, so a grammar converted
-  // under one limit must not be served under another.
   AppendKeyField(&key, std::to_string(RecursionGuard::GetMaxRecursionDepth()));
   AppendKeyField(&key, schema);
   return key;
