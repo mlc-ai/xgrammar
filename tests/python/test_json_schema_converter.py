@@ -2,6 +2,8 @@ import copy
 import json
 import re
 import sys
+import threading
+import time
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type, Union
 
@@ -1151,6 +1153,40 @@ def test_reference_decodes_json_pointer_escapes(key, ref):
 def test_reference_circular_chain_raises(schema):
     with pytest.raises(RuntimeError, match=r"Circular \$ref chain"):
         xgr.Grammar.from_json_schema(json.dumps(schema))
+
+
+def test_reference_long_alias_chain_converts_quickly():
+    """A long chain of pure $ref aliases converts in linear time.
+
+    The cycle check used to walk the rest of the chain again at every hop, so
+    this chain took minutes. The converter recurses once per hop, so it runs on
+    a thread with a stack the chain fits in.
+    """
+    hops = 5000
+    defs = {f"d{i}": {"$ref": f"#/$defs/d{i + 1}"} for i in range(hops)}
+    defs[f"d{hops}"] = {"type": "string"}
+    schema = {
+        "type": "object",
+        "properties": {"s": {"$ref": "#/$defs/d0"}},
+        "required": ["s"],
+        "$defs": defs,
+    }
+    result = {}
+
+    def convert():
+        start = time.monotonic()
+        result["grammar"] = xgr.Grammar.from_json_schema(json.dumps(schema))
+        result["seconds"] = time.monotonic() - start
+
+    previous_stack_size = threading.stack_size(64 * 1024 * 1024)
+    try:
+        thread = threading.Thread(target=convert)
+        thread.start()
+    finally:
+        threading.stack_size(previous_stack_size)
+    thread.join()
+    assert "grammar" in result
+    assert result["seconds"] < 10
 
 
 def test_union():
