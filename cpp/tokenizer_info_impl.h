@@ -40,6 +40,9 @@ class TokenizerInfo::Impl {
   const std::vector<int32_t>& GetTokenIdToSortedVocabIndex() const {
     return token_id_to_sorted_vocab_index_;
   }
+  const std::vector<int32_t>& GetSortedVocabLCPWithPrevious() const {
+    return sorted_vocab_lcp_with_previous_;
+  }
   const std::vector<int32_t>& GetTokenCharCounts() const;
   int32_t GetMaxTokenChars() const;
   void BuildTokenIdToSortedVocabIndex();
@@ -83,6 +86,8 @@ class TokenizerInfo::Impl {
   /*! \brief A pesudo-trie. trie_subtree_nodes_range[i] stores how many nodes there are in the
    * subtree. */
   std::vector<int32_t> trie_subtree_nodes_range_;
+  /*! \brief Length of the common prefix of sorted token i and sorted token i - 1. */
+  std::vector<int32_t> sorted_vocab_lcp_with_previous_;
   /*! \brief The stop tokens. When the GrammarMatcher can reach the end of the grammar,
    * stop tokens can be accepted. */
   std::vector<int32_t> stop_token_ids_;
