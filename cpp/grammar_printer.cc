@@ -139,12 +139,14 @@ std::string GrammarPrinter::PrintCharacterClass(const GrammarExpr& grammar_expr)
     result += "^";
   }
   for (auto i = 1; i < grammar_expr.data_len; i += 2) {
-    result += EscapeString(grammar_expr[i], kCustomEscapeMap);
+    auto next = i + 2 < grammar_expr.data_len ? grammar_expr[i + 2] : 0;
     if (grammar_expr[i] == grammar_expr[i + 1]) {
+      result += EscapeString(grammar_expr[i], kCustomEscapeMap, next);
       continue;
     }
+    result += EscapeString(grammar_expr[i], kCustomEscapeMap);
     result += "-";
-    result += EscapeString(grammar_expr[i + 1], kCustomEscapeMap);
+    result += EscapeString(grammar_expr[i + 1], kCustomEscapeMap, next);
   }
   result += "]";
   return result;
@@ -209,12 +211,11 @@ std::string GrammarPrinter::PrintSubstring(const GrammarExpr& grammar_expr) {
       }
       auto [codepoint, length] = ParseNextUTF8(chunk.c_str() + offset);
       if (codepoint == CharHandlingError::kInvalidUTF8) {
-        result += EscapeString(static_cast<uint8_t>(chunk[offset]));
-        ++offset;
-        continue;
+        codepoint = static_cast<uint8_t>(chunk[offset]);
+        length = 1;
       }
-      result += EscapeString(codepoint);
       offset += static_cast<size_t>(length);
+      result += EscapeString(codepoint, {}, static_cast<uint8_t>(chunk[offset]));
     }
     return result + "\"";
   };

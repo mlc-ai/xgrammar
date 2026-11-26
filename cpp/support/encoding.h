@@ -93,11 +93,13 @@ std::optional<CharHandlingError> Latin1ToBytes(const std::string& latin1, std::s
  * \param codepoint The codepoint.
  * \param additional_escape_map A map from codepoint to escape sequence. If the codepoint is in
  * the map, it will be escaped using the corresponding escape sequence. e.g. {{'-', "\\-"}}.
+ * \param next_codepoint Following literal codepoint, or zero at the end of the sequence.
  * \return The printable string.
  */
 std::string EscapeString(
     TCodepoint codepoint,
-    const std::unordered_map<TCodepoint, std::string>& additional_escape_map = {}
+    const std::unordered_map<TCodepoint, std::string>& additional_escape_map = {},
+    TCodepoint next_codepoint = 0
 );
 
 /*!
@@ -380,7 +382,9 @@ inline int HexCharToInt(char c) {
 }
 
 inline std::string EscapeString(
-    TCodepoint codepoint, const std::unordered_map<TCodepoint, std::string>& additional_escape_map
+    TCodepoint codepoint,
+    const std::unordered_map<TCodepoint, std::string>& additional_escape_map,
+    TCodepoint next_codepoint
 ) {
   static const std::unordered_map<TCodepoint, std::string> kCodepointToEscape = {
       {'\'', "\\\'"},
@@ -410,9 +414,10 @@ inline std::string EscapeString(
     return std::string({static_cast<char>(codepoint)});
   }
 
-  // convert codepoint to hex
-  char prefix = codepoint <= 0xFF ? 'x' : codepoint <= 0xFFFF ? 'u' : 'U';
-  int width = codepoint <= 0xFF ? 2 : codepoint <= 0xFFFF ? 4 : 8;
+  // EBNF's \x escape consumes all following hex digits. Use \u00HH at that boundary.
+  bool next_is_hex = next_codepoint <= 0x7F && HexCharToInt(static_cast<char>(next_codepoint)) >= 0;
+  int width = codepoint <= 0xFF && !next_is_hex ? 2 : codepoint <= 0xFFFF ? 4 : 8;
+  char prefix = width == 2 ? 'x' : width == 4 ? 'u' : 'U';
   std::stringstream ss;
   ss << std::setfill('0') << std::setw(width) << std::hex << codepoint;
   auto hex = ss.str();
@@ -426,8 +431,8 @@ inline std::string EscapeString(uint8_t raw_char) {
 inline std::string EscapeString(std::string raw_str) {
   std::string res;
   auto codepoints = ParseUTF8(raw_str.c_str(), true);
-  for (auto c : codepoints) {
-    res += EscapeString(c);
+  for (size_t i = 0; i < codepoints.size(); ++i) {
+    res += EscapeString(codepoints[i], {}, i + 1 < codepoints.size() ? codepoints[i + 1] : 0);
   }
   return res;
 }
