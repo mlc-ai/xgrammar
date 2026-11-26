@@ -7,6 +7,35 @@
 
 using namespace xgrammar;
 
+TEST(XGrammarParserTest, Latin1LiteralFollowedByHexDigit) {
+  auto grammar = Grammar::FromEBNF(R"(root ::= "\u00f5e")");
+  auto reparsed = Grammar::FromEBNF(grammar.ToString());
+  TokenizerInfo tokenizer({"a"});
+  for (bool cache_enabled : {false, true}) {
+    GrammarCompiler compiler(tokenizer, 1, cache_enabled);
+    for (const auto& input : {grammar, reparsed}) {
+      auto compiled = compiler.CompileGrammar(input);
+      EXPECT_FALSE(GrammarMatcher(compiled).AcceptString(u8"\u0f5e"));
+      GrammarMatcher matcher(compiled);
+      ASSERT_TRUE(matcher.AcceptString(u8"\u00f5e"));
+      EXPECT_TRUE(matcher.IsCompleted());
+    }
+  }
+}
+
+TEST(XGrammarParserTest, HexEscapeBoundariesInPrintedExpressions) {
+  for (const char* ebnf : {
+           R"(root ::= [\u00f5e])",
+           R"(root ::= [\u00f0-\u00f5e])",
+           R"(root ::= Substring("\u00f5e"))",
+           R"(root ::= "\u0001A")",
+           R"(root ::= "\xf5e")",
+       }) {
+    auto printed = Grammar::FromEBNF(ebnf).ToString();
+    EXPECT_EQ(Grammar::FromEBNF(printed).ToString(), printed) << ebnf;
+  }
+}
+
 // Note: the inputs to the lexer tests may not be valid EBNF
 TEST(XGrammarLexerTest, BasicTokenization) {
   // Test basic token types
