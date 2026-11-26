@@ -263,6 +263,32 @@ void AddPackedUTF8RangeEdges(FSM& fsm, int from, int to, uint32_t min, uint32_t 
   return;
 }
 
+void AddCodepointRangeEdges(FSM& fsm, int from, int to, uint32_t low, uint32_t high) {
+  constexpr uint32_t kSurrogateLow = 0xD800;
+  constexpr uint32_t kSurrogateHigh = 0xDFFF;
+  if (low <= kSurrogateHigh && high >= kSurrogateLow) {
+    if (low < kSurrogateLow) {
+      AddCodepointRangeEdges(fsm, from, to, low, kSurrogateLow - 1);
+    }
+    if (high > kSurrogateHigh) {
+      AddCodepointRangeEdges(fsm, from, to, kSurrogateHigh + 1, high);
+    }
+    return;
+  }
+  // Do not bridge UTF-8 widths with the packed-byte range helper: its minimum byte sequences
+  // for each width (e.g. E0 80 80) are overlong encodings, not codepoints.
+  constexpr uint32_t width_ends[] = {0x7F, 0x7FF, 0xFFFF, 0x10FFFF};
+  for (uint32_t width_end : width_ends) {
+    if (low <= high && low <= width_end) {
+      auto end = std::min(high, width_end);
+      AddPackedUTF8RangeEdges(
+          fsm, from, to, CodepointToPackedUTF8(low), CodepointToPackedUTF8(end)
+      );
+      low = end + 1;
+    }
+  }
+}
+
 std::string RewriteRegexDots(const std::string& pattern, bool dot_matches_newline) {
   if (dot_matches_newline) {
     return pattern;
@@ -373,10 +399,7 @@ void AddCodepointRangesToFSM(
       fsm->AddEdge(from, to, low, std::min<uint32_t>(high, kMax1ByteUnicode));
     }
     if (high > kMax1ByteUnicode) {
-      uint32_t multi_byte_low = std::max<uint32_t>(low, kMax1ByteUnicode + 1);
-      AddPackedUTF8RangeEdges(
-          *fsm, from, to, CodepointToPackedUTF8(multi_byte_low), CodepointToPackedUTF8(high)
-      );
+      AddCodepointRangeEdges(*fsm, from, to, std::max<uint32_t>(low, kMax1ByteUnicode + 1), high);
     }
   }
 }

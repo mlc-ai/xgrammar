@@ -38,6 +38,14 @@ uint32_t CodepointToPackedUTF8(uint32_t codepoint);
 void AddPackedUTF8RangeEdges(FSM& fsm, int from, int to, uint32_t min, uint32_t max);
 
 /*!
+ * \brief Add FSM edges from `from` to `to` accepting the shortest-form UTF-8 encoding of every
+ * Unicode scalar value in the codepoint range [low, high]. The range is split at UTF-8 width
+ * boundaries, so no overlong encoding is accepted, and the UTF-16 surrogates U+D800 to U+DFFF,
+ * which have no UTF-8 encoding, are skipped.
+ */
+void AddCodepointRangeEdges(FSM& fsm, int from, int to, uint32_t low, uint32_t high);
+
+/*!
  * \brief Rewrite every unescaped '.' outside character classes to "[^\n]" unless
  * `dot_matches_newline` is true. Used to implement the standard regex dot semantics (and the
  * dot-all 's' flag) on top of the regex engine, whose '.' matches every codepoint.
