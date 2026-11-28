@@ -125,6 +125,52 @@ def test_apply_token_bitmask_inplace_shape_stride_mismatch(device: str):
     torch.testing.assert_close(logits, expected)
 
 
+# (storage shape, view of the storage used as logits): the logits rows are not contiguous.
+non_unit_element_stride_layouts = {
+    # Every other element of a wider buffer: stride (2 * vocab_size, 2).
+    "strided": ((3, 140), lambda storage: storage[:, ::2]),
+    # A (vocab_size, batch_size) buffer seen as (batch_size, vocab_size): stride (1, 3).
+    "transposed": ((70, 3), lambda storage: storage.t()),
+    # One column of a (vocab_size, 2) buffer: 1D with stride 2.
+    "strided_1d": ((70, 2), lambda storage: storage[:, 0]),
+}
+
+
+@pytest.mark.parametrize("logits_dtype", (torch.float32, torch.float16, torch.bfloat16))
+@pytest.mark.parametrize(
+    "layout, indices",
+    (
+        ("strided", None),
+        ("strided", [0, 2]),
+        ("transposed", None),
+        ("transposed", [0, 2]),
+        ("strided_1d", None),
+    ),
+)
+def test_apply_token_bitmask_inplace_cpu_non_unit_element_stride(
+    logits_dtype: torch.dtype, layout: str, indices: Optional[List[int]]
+):
+    storage_shape, make_view = non_unit_element_stride_layouts[layout]
+    storage = torch.full(storage_shape, 7.0, dtype=logits_dtype)
+    logits = make_view(storage)
+    assert logits.stride()[-1] != 1
+    logits.copy_(torch.arange(logits.numel(), dtype=torch.float32).reshape(logits.shape))
+
+    bool_mask = torch.rand(logits.shape, generator=torch.Generator().manual_seed(0)) < 0.5
+    bitmask = bool_mask_to_bitmask(bool_mask.reshape(-1, logits.shape[-1]))
+    if logits.dim() == 1:
+        bitmask = bitmask[0]
+
+    # The documented operation on the logits view; the rest of the buffer keeps its value.
+    expected = storage.clone()
+    expected_view = make_view(expected)
+    rows = slice(None) if indices is None else indices
+    expected_view[rows] = torch.where(bool_mask[rows], expected_view[rows], float("-inf"))
+
+    xgr.apply_token_bitmask_inplace(logits, bitmask, indices=indices, backend="cpu")
+    torch.testing.assert_close(storage, expected)
+
+
 def get_apply_token_bitmask_kernel(impl: str) -> Callable:
     if impl == "cpu":
         from xgrammar.kernels.apply_token_bitmask_inplace_cpu import apply_token_bitmask_inplace_cpu

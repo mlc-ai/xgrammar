@@ -28,7 +28,7 @@ def apply_token_bitmask_inplace_cpu(
     logits_shape = (1, logits.shape[0]) if logits.dim() == 1 else (logits.shape[0], logits.shape[1])
     logits_stride = logits.stride()
     logits_stride = (
-        (logits_stride[0], 1) if logits.dim() == 1 else (logits_stride[0], logits_stride[1])
+        (0, logits_stride[0]) if logits.dim() == 1 else (logits_stride[0], logits_stride[1])
     )
 
     bitmask_shape = (
