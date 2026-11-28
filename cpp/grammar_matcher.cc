@@ -226,6 +226,8 @@ void ApplyMask32Bits(
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
           : std::make_pair(1, static_cast<int>(logits->shape[0]));
   int logits_stride0 = logits->strides[0];
+  // Element stride of a logits row; a row of a 1D tensor uses strides[0].
+  int64_t logits_stride1 = logits->ndim == 2 ? logits->strides[1] : logits->strides[0];
   int bitmask_stride0 = bitmask.strides[0];
   if (indices.has_value()) {
     for (auto idx : indices.value()) {
@@ -233,7 +235,7 @@ void ApplyMask32Bits(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+        logits_ptr[i * logits_stride1] = -std::numeric_limits<float>::infinity();
       }
     }
   } else {
@@ -242,7 +244,7 @@ void ApplyMask32Bits(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<float*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = -std::numeric_limits<float>::infinity();
+        logits_ptr[i * logits_stride1] = -std::numeric_limits<float>::infinity();
       }
     }
   }
@@ -275,6 +277,8 @@ void ApplyMask16Bits(
           ? std::make_pair(static_cast<int>(logits->shape[0]), static_cast<int>(logits->shape[1]))
           : std::make_pair(1, static_cast<int>(logits->shape[0]));
   int logits_stride0 = logits->strides[0];
+  // Element stride of a logits row; a row of a 1D tensor uses strides[0].
+  int64_t logits_stride1 = logits->ndim == 2 ? logits->strides[1] : logits->strides[0];
   int bitmask_stride0 = bitmask.strides[0];
   if (indices.has_value()) {
     for (auto idx : indices.value()) {
@@ -282,7 +286,7 @@ void ApplyMask16Bits(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinity;
+        logits_ptr[i * logits_stride1] = kMinusInfinity;
       }
     }
   } else {
@@ -291,7 +295,7 @@ void ApplyMask16Bits(
       DynamicBitset bitset(vocab_size, data_ptr);
       auto logits_ptr = reinterpret_cast<uint16_t*>(logits->data) + idx * logits_stride0;
       for (int i = bitset.FindFirstZero(); i != -1; i = bitset.FindNextZero(i)) {
-        logits_ptr[i] = kMinusInfinity;
+        logits_ptr[i * logits_stride1] = kMinusInfinity;
       }
     }
   }
